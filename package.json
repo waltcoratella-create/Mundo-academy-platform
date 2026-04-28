@@ -1,0 +1,17 @@
+{
+  "name": "mundo-academy-platform",
+  "version": "1.0.0",
+  "description": "Mundo Academy Platform — powered by Ruflo",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "build": "echo 'Build step complete'",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["mundo", "academy", "ruflo", "lms", "elearning"],
+  "license": "MIT"
+}
