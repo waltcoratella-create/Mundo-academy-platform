@@ -1,0 +1,41 @@
+{
+  "swarmId": "swarm-moij23sr",
+  "objective": "Construir el scaffold completo de Mundo Academy Platform según spec v1.0: sidebar de navegación, páginas principales (Inicio, Descubrir, Crear, Venture AI, Shark Tank, Apps), dashboard con KPIs y gráficos, middleware de Clerk, layout de Next.js 14 App Router, API routes para Venture AI con Anthropic, e integración de Stripe webhook",
+  "strategy": "development",
+  "status": "initialized",
+  "agents": 8,
+  "agentPlan": [
+    {
+      "role": "Coordinator",
+      "type": "coordinator",
+      "count": 1,
+      "purpose": "Orchestrate workflow"
+    },
+    {
+      "role": "Architect",
+      "type": "architect",
+      "count": 1,
+      "purpose": "System design"
+    },
+    {
+      "role": "Coder",
+      "type": "coder",
+      "count": 3,
+      "purpose": "Implementation"
+    },
+    {
+      "role": "Tester",
+      "type": "tester",
+      "count": 2,
+      "purpose": "Quality assurance"
+    },
+    {
+      "role": "Reviewer",
+      "type": "reviewer",
+      "count": 1,
+      "purpose": "Code review"
+    }
+  ],
+  "startedAt": "2026-04-28T11:13:08.285Z",
+  "parallel": true
+}
