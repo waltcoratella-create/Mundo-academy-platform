@@ -86,6 +86,7 @@ function NavSection({ items, label }: { items: NavItem[]; label?: string }) {
 
 export function AppSidebar() {
   const { user } = useUser();
+  const pathname = usePathname();
   const [businessOpen, setBusinessOpen] = useState(true);
 
   return (
@@ -131,7 +132,7 @@ export function AppSidebar() {
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    className={cn("sidebar-item text-xs", usePathname() === item.href && "active")}
+                    className={cn("sidebar-item text-xs", pathname === item.href && "active")}
                   >
                     <item.icon className="w-3.5 h-3.5 shrink-0" />
                     {item.label}

@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 
-export default function RootPage() {
-  const { userId } = auth();
+export default async function RootPage() {
+  const { userId } = await auth();
   if (userId) redirect("/descubrir");
   redirect("/sign-in");
 }

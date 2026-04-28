@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { chatWithVentureAI } from "@/lib/ai/venture-ai";
 
 export async function POST(req: NextRequest) {
-  const { userId } = auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { messages, profile } = await req.json();
