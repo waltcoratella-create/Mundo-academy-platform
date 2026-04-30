@@ -1,3 +1,4 @@
+import { ProGate } from "@/components/pro-gate";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { RevenueChart, NewMembersChart } from "@/components/dashboard/revenue-chart";
 
@@ -17,6 +18,7 @@ const TRANSACTIONS = [
 
 export default function MisNegociosPage() {
   return (
+    <ProGate>
     <div className="p-8 max-w-7xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
@@ -70,5 +72,6 @@ export default function MisNegociosPage() {
         </table>
       </div>
     </div>
+    </ProGate>
   );
 }
