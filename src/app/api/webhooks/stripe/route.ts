@@ -26,15 +26,7 @@ async function grantProByEmail(clerk: ClerkInstance, email: string, subscription
   await grantProByUserId(clerk, user.id, subscriptionId);
 }
 
-async function resolveEmailFromInvoice(invoice: Stripe.Invoice): Promise<string | null> {
-  if (invoice.customer_email) return invoice.customer_email;
-
-  const customerId = typeof invoice.customer === "string"
-    ? invoice.customer
-    : invoice.customer?.id;
-
-  if (!customerId) return null;
-
+async function resolveEmailFromCustomerId(customerId: string): Promise<string | null> {
   try {
     const customer = await stripe.customers.retrieve(customerId);
     if (customer.deleted) return null;
@@ -43,6 +35,22 @@ async function resolveEmailFromInvoice(invoice: Stripe.Invoice): Promise<string 
     console.warn(`Failed to retrieve Stripe customer: ${customerId}`);
     return null;
   }
+}
+
+async function resolveEmailFromInvoice(invoice: Stripe.Invoice): Promise<string | null> {
+  if (invoice.customer_email) return invoice.customer_email;
+
+  const customerId = typeof invoice.customer === "string"
+    ? invoice.customer
+    : invoice.customer?.id;
+
+  if (!customerId) return null;
+  return resolveEmailFromCustomerId(customerId);
+}
+
+async function findClerkUserByEmail(clerk: ClerkInstance, email: string) {
+  const result = await clerk.users.getUserList({ emailAddress: [email] });
+  return result.data[0] ?? null;
 }
 
 export async function POST(req: NextRequest) {
@@ -102,12 +110,43 @@ export async function POST(req: NextRequest) {
       }
 
       case "customer.subscription.deleted": {
-        console.warn("subscription.deleted — access revocation not yet implemented");
+        const sub = event.data.object as Stripe.Subscription;
+        const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+        const email = await resolveEmailFromCustomerId(customerId);
+        if (email) {
+          const user = await findClerkUserByEmail(clerk, email);
+          if (user) {
+            console.log("Clerk user id:", user.id);
+            await clerk.users.updateUser(user.id, {
+              publicMetadata: { isPro: false, stripeSubscriptionId: null },
+            });
+            console.log("Subscription cancelled — Pro access revoked");
+          } else {
+            console.warn(`subscription.deleted — no Clerk user found for email: ${email}`);
+          }
+        } else {
+          console.warn("subscription.deleted — could not resolve customer email");
+        }
         break;
       }
 
       case "invoice.payment_failed": {
-        console.warn("invoice.payment_failed — notification not yet implemented");
+        const invoice = event.data.object as Stripe.Invoice;
+        const email = await resolveEmailFromInvoice(invoice);
+        console.log("Payment failed — customer email:", email ?? "unknown");
+        if (email) {
+          const user = await findClerkUserByEmail(clerk, email);
+          if (user) {
+            console.log("Clerk user id:", user.id);
+            await clerk.users.updateUser(user.id, {
+              publicMetadata: {
+                ...((user.publicMetadata as Record<string, unknown>) ?? {}),
+                paymentStatus: "failed",
+              },
+            });
+            console.log("Payment failed — paymentStatus recorded (Pro not revoked yet)");
+          }
+        }
         break;
       }
     }
