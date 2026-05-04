@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
-import Link from "next/link";
-import { Briefcase, Zap, Receipt } from "lucide-react";
+import { Briefcase, Receipt } from "lucide-react";
+import { CreateBusinessButton } from "@/components/create-business-button";
 import { ProGate } from "@/components/pro-gate";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { RevenueChart, NewMembersChart } from "@/components/dashboard/revenue-chart";
@@ -35,13 +35,7 @@ async function Dashboard() {
               Crea tu primer negocio para ver tu dashboard, ingresos y miembros aquí.
             </p>
           </div>
-          <Link
-            href="/crear"
-            className="inline-flex items-center justify-center gap-2 w-full px-4 py-3 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-xl transition-colors"
-          >
-            <Zap className="w-4 h-4" />
-            Crear mi primer negocio
-          </Link>
+          <CreateBusinessButton />
         </div>
       </div>
     );
