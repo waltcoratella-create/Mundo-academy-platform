@@ -3,7 +3,6 @@ import { createAdminClient } from "./admin";
 export interface Business {
   id: string;
   name: string;
-  slug: string;
   type: string;
   status: string;
 }
@@ -30,7 +29,7 @@ export async function getUserBusiness(userId: string): Promise<Business | null> 
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("businesses")
-      .select("id, name, slug, type, status")
+      .select("id, name, type, status")
       .eq("owner_id", userId)
       .order("created_at", { ascending: false })
       .limit(1)

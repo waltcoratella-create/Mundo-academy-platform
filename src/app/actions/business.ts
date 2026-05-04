@@ -28,18 +28,9 @@ export async function createFirstBusiness(
     { onConflict: "id" }
   );
 
-  // Generate unique slug
-  const base = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 40);
-  const slug = `${base}-${userId.slice(-6)}-${Date.now().toString(36)}`;
-
   const { error } = await supabase.from("businesses").insert({
     owner_id: userId,
     name,
-    slug,
     type,
     status: "draft",
   });
