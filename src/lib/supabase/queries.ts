@@ -3,8 +3,6 @@ import { createAdminClient } from "./admin";
 export interface Business {
   id: string;
   name: string;
-  type: string;
-  status: string;
 }
 
 export interface DashboardKPIs {
@@ -29,7 +27,7 @@ export async function getUserBusiness(userId: string): Promise<Business | null> 
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("businesses")
-      .select("id, name, type, status")
+      .select("id, name")
       .eq("owner_id", userId)
       .order("created_at", { ascending: false })
       .limit(1)

@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function createFirstBusiness(
   name: string = "Mi negocio",
-  type: string = "course"
+  _type: string = "course"
 ) {
   const { userId } = await auth();
   if (!userId) throw new Error("No autenticado");
@@ -31,8 +31,6 @@ export async function createFirstBusiness(
   const { error } = await supabase.from("businesses").insert({
     owner_id: userId,
     name,
-    type,
-    status: "draft",
   });
 
   if (error) throw new Error(error.message);
