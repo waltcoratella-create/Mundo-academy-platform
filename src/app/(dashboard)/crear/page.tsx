@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { GraduationCap, Users, Wrench, CreditCard, Target, FileText, Building, Cpu, ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useState, useTransition } from "react";
+import { GraduationCap, Users, Wrench, CreditCard, Target, FileText, Building, Cpu, ArrowRight, Loader2 } from "lucide-react";
 import type { BusinessType } from "@/types";
+import { createFirstBusiness } from "@/app/actions/business";
 
 const BUSINESS_TYPES: { type: BusinessType; icon: React.ElementType; label: string; desc: string; price: string }[] = [
   { type: "course",          icon: GraduationCap, label: "Curso",             desc: "Contenido estructurado en módulos",           price: "Pago único / suscripción" },
@@ -26,6 +26,17 @@ const SUGGESTIONS = [
 export default function CrearPage() {
   const [selected, setSelected] = useState<BusinessType | null>(null);
   const [query, setQuery] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  const selectedLabel = BUSINESS_TYPES.find((b) => b.type === selected)?.label;
+
+  function handleCreate() {
+    const name = query.trim() || selectedLabel || "Mi negocio";
+    const type = selected ?? "course";
+    startTransition(() => createFirstBusiness(name, type));
+  }
+
+  const canCreate = query.trim().length > 0 || selected !== null;
 
   return (
     <div className="p-8 max-w-4xl mx-auto space-y-8">
@@ -47,9 +58,13 @@ export default function CrearPage() {
             placeholder="💡 Escribe tu idea o elige una opción..."
             className="w-full px-4 py-3 rounded-xl bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm"
           />
-          {query && (
-            <button className="absolute right-3 top-1/2 -translate-y-1/2 bg-white text-brand-600 rounded-lg px-3 py-1 text-xs font-semibold flex items-center gap-1">
-              Generar <ArrowRight className="w-3 h-3" />
+          {query.trim() && (
+            <button
+              disabled={isPending}
+              onClick={handleCreate}
+              className="absolute right-3 top-1/2 -translate-y-1/2 bg-white text-brand-600 rounded-lg px-3 py-1 text-xs font-semibold flex items-center gap-1 disabled:opacity-60"
+            >
+              {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <>Crear <ArrowRight className="w-3 h-3" /></>}
             </button>
           )}
         </div>
@@ -93,12 +108,25 @@ export default function CrearPage() {
         ))}
       </div>
 
-      {selected && (
+      {canCreate && (
         <div className="flex justify-end">
-          <Button size="lg">
-            Continuar con {BUSINESS_TYPES.find((b) => b.type === selected)?.label}
-            <ArrowRight className="w-4 h-4" />
-          </Button>
+          <button
+            disabled={isPending}
+            onClick={handleCreate}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
+          >
+            {isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Creando negocio…
+              </>
+            ) : (
+              <>
+                Continuar{selectedLabel && !query.trim() ? ` con ${selectedLabel}` : ""}
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
         </div>
       )}
     </div>

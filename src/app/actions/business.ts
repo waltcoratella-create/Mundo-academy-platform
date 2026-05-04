@@ -4,7 +4,10 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export async function createFirstBusiness(name: string = "Mi negocio") {
+export async function createFirstBusiness(
+  name: string = "Mi negocio",
+  type: string = "course"
+) {
   const { userId } = await auth();
   if (!userId) throw new Error("No autenticado");
 
@@ -37,7 +40,7 @@ export async function createFirstBusiness(name: string = "Mi negocio") {
     owner_id: userId,
     name,
     slug,
-    type: "course",
+    type,
     status: "draft",
   });
 
