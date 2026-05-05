@@ -22,13 +22,23 @@ export interface Transaction {
   user_email: string | null;
 }
 
-export async function getUserBusiness(userId: string): Promise<Business | null> {
+export async function getUserBusiness(clerkUserId: string): Promise<Business | null> {
   try {
     const supabase = createAdminClient();
+
+    // Resolve Supabase UUID from clerk_id
+    const { data: userData } = await supabase
+      .from("users")
+      .select("id")
+      .eq("clerk_id", clerkUserId)
+      .maybeSingle();
+
+    if (!userData) return null;
+
     const { data, error } = await supabase
       .from("businesses")
       .select("id, name")
-      .eq("owner_id", userId)
+      .eq("owner_id", userData.id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
