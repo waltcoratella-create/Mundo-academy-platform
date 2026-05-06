@@ -17,7 +17,7 @@ export default async function BusinessLayout({
   if (!business) notFound();
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full">
       <BusinessSidebar businessId={params.businessId} businessName={business.name} />
       <main className="flex-1 overflow-y-auto">
         {children}
