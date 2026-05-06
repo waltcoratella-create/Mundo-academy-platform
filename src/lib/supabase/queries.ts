@@ -22,25 +22,70 @@ export interface Transaction {
   user_email: string | null;
 }
 
+async function resolveSupabaseUserId(clerkUserId: string): Promise<string | null> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("users")
+    .select("id")
+    .eq("clerk_id", clerkUserId)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
 export async function getUserBusiness(clerkUserId: string): Promise<Business | null> {
   try {
     const supabase = createAdminClient();
-
-    // Resolve Supabase UUID from clerk_id
-    const { data: userData } = await supabase
-      .from("users")
-      .select("id")
-      .eq("clerk_id", clerkUserId)
-      .maybeSingle();
-
-    if (!userData) return null;
+    const supabaseUserId = await resolveSupabaseUserId(clerkUserId);
+    if (!supabaseUserId) return null;
 
     const { data, error } = await supabase
       .from("businesses")
       .select("id, name")
-      .eq("owner_id", userData.id)
+      .eq("owner_id", supabaseUserId)
       .order("created_at", { ascending: false })
       .limit(1)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data as Business;
+  } catch {
+    return null;
+  }
+}
+
+export async function getUserBusinesses(clerkUserId: string): Promise<Business[]> {
+  try {
+    const supabase = createAdminClient();
+    const supabaseUserId = await resolveSupabaseUserId(clerkUserId);
+    if (!supabaseUserId) return [];
+
+    const { data, error } = await supabase
+      .from("businesses")
+      .select("id, name")
+      .eq("owner_id", supabaseUserId)
+      .order("created_at", { ascending: false });
+
+    if (error || !data) return [];
+    return data as Business[];
+  } catch {
+    return [];
+  }
+}
+
+export async function getBusinessById(
+  businessId: string,
+  clerkUserId: string
+): Promise<Business | null> {
+  try {
+    const supabase = createAdminClient();
+    const supabaseUserId = await resolveSupabaseUserId(clerkUserId);
+    if (!supabaseUserId) return null;
+
+    const { data, error } = await supabase
+      .from("businesses")
+      .select("id, name")
+      .eq("id", businessId)
+      .eq("owner_id", supabaseUserId)
       .maybeSingle();
 
     if (error || !data) return null;

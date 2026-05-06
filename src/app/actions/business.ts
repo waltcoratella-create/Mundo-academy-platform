@@ -34,12 +34,13 @@ export async function createFirstBusiness(
   if (userError) throw new Error(userError.message);
 
   // owner_id expects the UUID from users.id, not the Clerk text id
-  const { error } = await supabase.from("businesses").insert({
-    owner_id: userData.id,
-    name,
-  });
+  const { data: businessData, error } = await supabase
+    .from("businesses")
+    .insert({ owner_id: userData.id, name })
+    .select("id")
+    .single();
 
   if (error) throw new Error(error.message);
 
-  redirect("/mis-negocios");
+  redirect(`/mis-negocios/${businessData.id}`);
 }
