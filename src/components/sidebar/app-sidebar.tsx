@@ -73,7 +73,7 @@ export function AppSidebar() {
   const { user } = useUser();
 
   return (
-    <aside className="w-60 shrink-0 h-screen flex flex-col bg-slate-900 overflow-y-auto">
+    <aside className="w-60 shrink-0 h-full flex flex-col bg-slate-900 overflow-y-auto">
       <div className="px-4 py-4 border-b border-white/10">
         <p className="text-base font-bold text-white tracking-tight">🌍 MUNDO ACADEMY</p>
       </div>
