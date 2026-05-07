@@ -160,6 +160,26 @@ export interface Product {
   created_at: string;
 }
 
+export async function getProductById(
+  productId: string,
+  businessId: string
+): Promise<Product | null> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("products")
+      .select("id, name, description, price, type, status, created_at")
+      .eq("id", productId)
+      .eq("business_id", businessId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data as Product;
+  } catch {
+    return null;
+  }
+}
+
 export async function getBusinessProducts(businessId: string): Promise<Product[]> {
   try {
     const supabase = createAdminClient();

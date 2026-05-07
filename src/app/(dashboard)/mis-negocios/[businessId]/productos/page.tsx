@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Plus, Package, Pencil } from "lucide-react";
+import { Plus, Package } from "lucide-react";
 import { getBusinessById, getBusinessProducts } from "@/lib/supabase/queries";
 import type { Product } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/utils";
@@ -15,60 +15,65 @@ const TYPE_LABELS: Record<string, string> = {
   servicio:  "Servicio",
 };
 
-const TYPE_COLORS: Record<string, string> = {
-  curso:     "bg-blue-50 text-blue-700",
-  comunidad: "bg-purple-50 text-purple-700",
-  ebook:     "bg-green-50 text-green-700",
-  mentoria:  "bg-orange-50 text-orange-700",
-  evento:    "bg-red-50 text-red-700",
-  servicio:  "bg-gray-100 text-gray-600",
+const TYPE_GRADIENTS: Record<string, string> = {
+  curso:     "from-blue-500 to-blue-700",
+  comunidad: "from-purple-500 to-purple-700",
+  ebook:     "from-green-500 to-green-700",
+  mentoria:  "from-orange-400 to-orange-600",
+  evento:    "from-red-500 to-red-700",
+  servicio:  "from-slate-500 to-slate-700",
 };
 
 function ProductCard({ product, businessId }: { product: Product; businessId: string }) {
   const typeLabel = TYPE_LABELS[product.type] ?? product.type;
-  const typeColor = TYPE_COLORS[product.type] ?? "bg-gray-100 text-gray-600";
+  const gradient = TYPE_GRADIENTS[product.type] ?? "from-gray-500 to-gray-700";
   const isPublished = product.status === "published";
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow">
-      {/* Card header gradient */}
-      <div className="h-24 bg-gradient-to-br from-brand-500 to-brand-700 relative px-4 pt-3">
-        <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/20 text-white backdrop-blur-sm`}>
+    <Link
+      href={`/mis-negocios/${businessId}/productos/${product.id}`}
+      className="group bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col hover:shadow-lg hover:border-gray-200 transition-all duration-200"
+    >
+      {/* Gradient banner */}
+      <div className={`h-28 bg-gradient-to-br ${gradient} relative flex items-end px-4 pb-3`}>
+        <div className="absolute inset-0 opacity-10"
+          style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "20px 20px" }}
+        />
+        <span className="relative z-10 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/25 text-white backdrop-blur-sm">
           {typeLabel}
         </span>
       </div>
 
-      <div className="p-4 flex-1 flex flex-col gap-2">
+      <div className="p-4 flex-1 flex flex-col gap-1.5">
+        {/* Name + status */}
         <div className="flex items-start justify-between gap-2">
-          <h3 className="text-sm font-semibold text-gray-900 leading-snug">{product.name}</h3>
-          <span
-            className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
-              isPublished ? "bg-green-50 text-green-700" : "bg-yellow-50 text-yellow-700"
-            }`}
-          >
+          <h3 className="text-sm font-semibold text-gray-900 leading-snug group-hover:text-brand-700 transition-colors">
+            {product.name}
+          </h3>
+          <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+            isPublished
+              ? "bg-green-50 text-green-700 border-green-100"
+              : "bg-amber-50 text-amber-700 border-amber-100"
+          }`}>
             {isPublished ? "Publicado" : "Borrador"}
           </span>
         </div>
 
-        {product.description && (
+        {/* Description */}
+        {product.description ? (
           <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">{product.description}</p>
+        ) : (
+          <p className="text-xs text-gray-300 italic">Sin descripción</p>
         )}
 
-        <div className="mt-auto pt-2 flex items-center justify-between">
+        {/* Price */}
+        <div className="mt-auto pt-2 border-t border-gray-50">
           <span className="text-sm font-bold text-gray-900">
             {product.price === 0 ? "Gratis" : formatCurrency(product.price)}
           </span>
-          <button
-            disabled
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-400 cursor-not-allowed"
-            title="Próximamente"
-          >
-            <Pencil className="w-3 h-3" />
-            Editar
-          </button>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -98,7 +103,7 @@ export default async function ProductosPage({ params }: { params: { businessId: 
       </div>
 
       {products.length === 0 ? (
-        <div className="bg-white rounded-xl border border-dashed border-gray-200 py-20 flex flex-col items-center gap-3 text-center">
+        <div className="bg-white rounded-2xl border border-dashed border-gray-200 py-20 flex flex-col items-center gap-3 text-center">
           <div className="w-14 h-14 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center">
             <Package className="w-6 h-6 text-gray-300" />
           </div>
