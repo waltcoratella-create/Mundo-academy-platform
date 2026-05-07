@@ -36,13 +36,13 @@ const DISABLED_TABS = [
   { label: "Configuración", icon: Settings },
 ];
 
-function ContentItem({ item }: { item: ProductContent }) {
+function ContentItem({ item, href }: { item: ProductContent; href: string }) {
   const Icon       = CONTENT_ICONS[item.type]  ?? FileType;
   const typeLabel  = CONTENT_LABELS[item.type] ?? item.type;
   const typeColor  = CONTENT_COLORS[item.type] ?? "bg-gray-100 text-gray-600";
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors group">
+    <Link href={href} className="flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors group">
       <GripVertical className="w-4 h-4 text-gray-300 shrink-0 cursor-grab" />
       <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${typeColor}`}>
         <Icon className="w-3.5 h-3.5" />
@@ -59,7 +59,7 @@ function ContentItem({ item }: { item: ProductContent }) {
         </span>
         <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-colors" />
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -168,7 +168,7 @@ export default async function ContenidoPage({
         ) : (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
             {contents.map((item) => (
-              <ContentItem key={item.id} item={item} />
+              <ContentItem key={item.id} item={item} href={`${base}/contenido/${item.id}`} />
             ))}
           </div>
         )}

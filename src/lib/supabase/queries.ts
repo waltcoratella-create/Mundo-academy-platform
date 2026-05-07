@@ -206,6 +206,26 @@ export interface ProductContent {
   created_at: string;
 }
 
+export async function getContentById(
+  contentId: string,
+  productId: string
+): Promise<ProductContent | null> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("product_content")
+      .select("id, product_id, title, type, content, position, created_at")
+      .eq("id", contentId)
+      .eq("product_id", productId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data as ProductContent;
+  } catch {
+    return null;
+  }
+}
+
 export async function getProductContent(productId: string): Promise<ProductContent[]> {
   try {
     const supabase = createAdminClient();
