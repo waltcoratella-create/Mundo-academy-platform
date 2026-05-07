@@ -150,6 +150,32 @@ export async function getDashboardKPIs(businessId: string): Promise<DashboardKPI
   }
 }
 
+export interface Product {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  type: string;
+  status: string;
+  created_at: string;
+}
+
+export async function getBusinessProducts(businessId: string): Promise<Product[]> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("products")
+      .select("id, name, description, price, type, status, created_at")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false });
+
+    if (error || !data) return [];
+    return data as Product[];
+  } catch {
+    return [];
+  }
+}
+
 export async function getRecentTransactions(
   businessId: string,
   limit = 10
