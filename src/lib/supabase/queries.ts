@@ -157,6 +157,8 @@ export interface Product {
   price: number;
   type: string;
   status: string;
+  access_type: string;
+  is_public: boolean;
   created_at: string;
 }
 
@@ -168,7 +170,7 @@ export async function getProductById(
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("products")
-      .select("id, name, description, price, type, status, created_at")
+      .select("id, name, description, price, type, status, access_type, is_public, created_at")
       .eq("id", productId)
       .eq("business_id", businessId)
       .maybeSingle();
@@ -185,7 +187,7 @@ export async function getBusinessProducts(businessId: string): Promise<Product[]
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("products")
-      .select("id, name, description, price, type, status, created_at")
+      .select("id, name, description, price, type, status, access_type, is_public, created_at")
       .eq("business_id", businessId)
       .order("created_at", { ascending: false });
 

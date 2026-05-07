@@ -128,3 +128,35 @@ export async function updateProductContent(
     `/mis-negocios/${businessId}/productos/${productId}/contenido/${contentId}?updated=1`
   );
 }
+
+export async function updateProductAccess(
+  _prev: ProductFormState,
+  formData: FormData
+): Promise<ProductFormState> {
+  const { userId } = await auth();
+  if (!userId) return { error: "No autenticado" };
+
+  const businessId = formData.get("businessId") as string;
+  const productId  = formData.get("productId") as string;
+  if (!businessId || !productId) return { error: "Parámetros requeridos" };
+
+  const business = await getBusinessById(businessId, userId);
+  if (!business) return { error: "Negocio no encontrado o sin permisos" };
+
+  const product = await getProductById(productId, businessId);
+  if (!product) return { error: "Producto no encontrado" };
+
+  const access_type = (formData.get("access_type") as string) || "manual";
+  const is_public   = formData.get("is_public") === "true";
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("products")
+    .update({ access_type, is_public })
+    .eq("id", productId)
+    .eq("business_id", businessId);
+
+  if (error) return { error: error.message };
+
+  redirect(`/mis-negocios/${businessId}/productos/${productId}/acceso?updated=1`);
+}
