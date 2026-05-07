@@ -125,7 +125,7 @@ export async function getDashboardKPIs(businessId: string): Promise<DashboardKPI
         .from("products")
         .select("id", { count: "exact", head: true })
         .eq("business_id", businessId)
-        .eq("active", true),
+        .eq("status", "published"),
     ]);
 
     const revenue = (current.data ?? []).reduce(

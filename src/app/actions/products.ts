@@ -36,7 +36,6 @@ export async function createProduct(
     price,
     type,
     status,
-    active: status === "published",
   });
 
   if (error) return { error: error.message };
