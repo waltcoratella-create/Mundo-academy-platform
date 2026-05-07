@@ -196,6 +196,32 @@ export async function getBusinessProducts(businessId: string): Promise<Product[]
   }
 }
 
+export interface ProductContent {
+  id: string;
+  product_id: string;
+  title: string;
+  type: string;
+  content: string | null;
+  position: number;
+  created_at: string;
+}
+
+export async function getProductContent(productId: string): Promise<ProductContent[]> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("product_content")
+      .select("id, product_id, title, type, content, position, created_at")
+      .eq("product_id", productId)
+      .order("position", { ascending: true });
+
+    if (error || !data) return [];
+    return data as ProductContent[];
+  } catch {
+    return [];
+  }
+}
+
 export async function getRecentTransactions(
   businessId: string,
   limit = 10

@@ -3,7 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getBusinessById } from "@/lib/supabase/queries";
+import { getBusinessById, getProductById } from "@/lib/supabase/queries";
 
 export type ProductFormState = { error: string | null };
 
@@ -41,4 +41,49 @@ export async function createProduct(
   if (error) return { error: error.message };
 
   redirect(`/mis-negocios/${businessId}/productos`);
+}
+
+export type ContentFormState = { error: string | null };
+
+export async function createProductContent(
+  _prev: ContentFormState,
+  formData: FormData
+): Promise<ContentFormState> {
+  const { userId } = await auth();
+  if (!userId) return { error: "No autenticado" };
+
+  const businessId = formData.get("businessId") as string;
+  const productId  = formData.get("productId") as string;
+  if (!businessId || !productId) return { error: "Parámetros requeridos" };
+
+  const business = await getBusinessById(businessId, userId);
+  if (!business) return { error: "Negocio no encontrado o sin permisos" };
+
+  const product = await getProductById(productId, businessId);
+  if (!product) return { error: "Producto no encontrado" };
+
+  const title = (formData.get("title") as string)?.trim();
+  if (!title) return { error: "El título es requerido" };
+
+  const type    = (formData.get("type") as string) || "texto";
+  const content = (formData.get("content") as string)?.trim() || null;
+
+  const supabase = createAdminClient();
+
+  const { count } = await supabase
+    .from("product_content")
+    .select("id", { count: "exact", head: true })
+    .eq("product_id", productId);
+
+  const { error } = await supabase.from("product_content").insert({
+    product_id: productId,
+    title,
+    type,
+    content,
+    position: count ?? 0,
+  });
+
+  if (error) return { error: error.message };
+
+  redirect(`/mis-negocios/${businessId}/productos/${productId}/contenido`);
 }

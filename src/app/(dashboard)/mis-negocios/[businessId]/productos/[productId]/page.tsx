@@ -26,12 +26,10 @@ const TYPE_GRADIENTS: Record<string, string> = {
   servicio:  "from-slate-500 to-slate-700",
 };
 
-const TABS = [
-  { label: "Información", icon: FileText,   active: true  },
-  { label: "Contenido",   icon: BookOpen,   active: false },
-  { label: "Precio",      icon: DollarSign, active: false },
-  { label: "Acceso",      icon: Lock,       active: false },
-  { label: "Configuración", icon: Settings, active: false },
+const DISABLED_TABS = [
+  { label: "Precio", icon: DollarSign },
+  { label: "Acceso", icon: Lock },
+  { label: "Configuración", icon: Settings },
 ];
 
 export default async function ProductDetailPage({
@@ -108,18 +106,22 @@ export default async function ProductDetailPage({
 
         {/* Tabs */}
         <div className="flex items-center gap-0.5 border-b border-gray-200 mb-6">
-          {TABS.map(({ label, icon: Icon, active }) => (
-            <button
-              key={label}
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 transition-colors ${
-                active
-                  ? "border-gray-900 text-gray-900"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
+          <span className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 border-gray-900 text-gray-900">
+            <FileText className="w-3.5 h-3.5" />
+            Información
+          </span>
+          <Link
+            href={`/mis-negocios/${params.businessId}/productos/${params.productId}/contenido`}
+            className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors"
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            Contenido
+          </Link>
+          {DISABLED_TABS.map(({ label, icon: Icon }) => (
+            <span key={label} className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 border-transparent text-gray-300 cursor-not-allowed select-none">
               <Icon className="w-3.5 h-3.5" />
               {label}
-            </button>
+            </span>
           ))}
         </div>
 
@@ -182,12 +184,6 @@ export default async function ProductDetailPage({
             </div>
           </div>
 
-          {/* Placeholder sections for other tabs */}
-          <div className="bg-white rounded-xl border border-dashed border-gray-200 p-8 text-center">
-            <p className="text-sm text-gray-400">
-              Las secciones de Contenido, Precio, Acceso y Configuración estarán disponibles próximamente.
-            </p>
-          </div>
         </div>
       </div>
     </div>
