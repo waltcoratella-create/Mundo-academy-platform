@@ -200,6 +200,30 @@ export async function getBusinessProducts(businessId: string): Promise<Product[]
   }
 }
 
+export interface CheckoutProduct extends Product {
+  business_id: string;
+}
+
+export async function getPublicProductById(
+  productId: string
+): Promise<CheckoutProduct | null> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("products")
+      .select(
+        "id, name, description, price, type, status, access_type, is_public, currency, billing_period, created_at, business_id"
+      )
+      .eq("id", productId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data as CheckoutProduct;
+  } catch {
+    return null;
+  }
+}
+
 export interface ProductContent {
   id: string;
   product_id: string;

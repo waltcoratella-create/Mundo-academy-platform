@@ -1,9 +1,69 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { clerkClient } from "@clerk/nextjs/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type Stripe from "stripe";
 
 type ClerkInstance = Awaited<ReturnType<typeof clerkClient>>;
+
+async function handleProductPurchase(session: Stripe.Checkout.Session): Promise<void> {
+  const { productId, clerkUserId, businessId } = session.metadata ?? {};
+  if (!productId || !clerkUserId || !businessId) return;
+
+  const supabase = createAdminClient();
+
+  const { data: userRow } = await supabase
+    .from("users")
+    .select("id")
+    .eq("clerk_id", clerkUserId)
+    .maybeSingle();
+  const supabaseUserId = userRow?.id ?? null;
+
+  const paymentIntentId =
+    typeof session.payment_intent === "string" ? session.payment_intent : null;
+  const subscriptionId =
+    typeof session.subscription === "string" ? session.subscription : null;
+  const amount   = (session.amount_total ?? 0) / 100;
+  const currency = (session.currency ?? "usd").toUpperCase();
+
+  const { data: purchase } = await supabase
+    .from("purchases")
+    .insert({
+      business_id: businessId,
+      product_id: productId,
+      user_id: supabaseUserId,
+      stripe_session_id: session.id,
+      stripe_payment_intent_id: paymentIntentId,
+      stripe_subscription_id: subscriptionId,
+      amount,
+      currency,
+      status: "succeeded",
+    })
+    .select("id")
+    .single();
+
+  if (supabaseUserId) {
+    await supabase.from("product_members").upsert(
+      {
+        product_id: productId,
+        business_id: businessId,
+        user_id: supabaseUserId,
+        purchase_id: purchase?.id ?? null,
+        status: "active",
+      },
+      { onConflict: "product_id,user_id" }
+    );
+  }
+
+  await supabase.from("transactions").insert({
+    business_id: businessId,
+    product_id: productId,
+    user_id: supabaseUserId,
+    amount,
+    currency,
+    status: "succeeded",
+  });
+}
 
 async function grantProByUserId(clerk: ClerkInstance, userId: string, subscriptionId?: string) {
   console.log("Clerk user id:", userId);
@@ -74,6 +134,14 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        // Product purchase (metadata.productId set by /api/checkout/product)
+        if (session.metadata?.productId) {
+          await handleProductPurchase(session);
+          break;
+        }
+
+        // Platform subscription (existing logic)
         const subscriptionId = typeof session.subscription === "string"
           ? session.subscription
           : undefined;
