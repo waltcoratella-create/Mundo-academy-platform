@@ -5,20 +5,21 @@ import {
   ChevronLeft, FileText, BookOpen, Lock, DollarSign, Settings, CheckCircle2,
 } from "lucide-react";
 import { getBusinessById, getProductById } from "@/lib/supabase/queries";
-import { AccessForm } from "./access-form";
+import { formatCurrency } from "@/lib/utils";
+import { PricingForm } from "./pricing-form";
 
 const ACCESS_LABELS: Record<string, string> = {
-  gratis:     "Gratis",
-  pago_unico: "Pago único",
+  gratis:      "Gratis",
+  pago_unico:  "Pago único",
   suscripcion: "Suscripción",
-  manual:     "Invitación",
+  manual:      "Invitación",
 };
 
 const DISABLED_TABS = [
   { label: "Configuración", icon: Settings },
 ];
 
-export default async function AccesoPage({
+export default async function PrecioPage({
   params,
   searchParams,
 }: {
@@ -34,9 +35,16 @@ export default async function AccesoPage({
   const product = await getProductById(params.productId, params.businessId);
   if (!product) notFound();
 
-  const base = `/mis-negocios/${params.businessId}/productos/${params.productId}`;
+  const base    = `/mis-negocios/${params.businessId}/productos/${params.productId}`;
   const updated = searchParams.updated === "1";
-  const currentLabel = ACCESS_LABELS[product.access_type] ?? "Invitación";
+
+  const accessLabel  = ACCESS_LABELS[product.access_type] ?? "Invitación";
+  const isFree       = product.access_type === "gratis";
+  const priceDisplay = isFree
+    ? "Gratis"
+    : product.price > 0
+      ? formatCurrency(product.price)
+      : "Sin precio";
 
   return (
     <div className="min-h-full bg-gray-50">
@@ -54,17 +62,25 @@ export default async function AccesoPage({
           {product.name}
         </Link>
         <span className="text-gray-300">/</span>
-        <span className="text-gray-700 font-medium">Acceso</span>
+        <span className="text-gray-700 font-medium">Precio</span>
       </div>
 
       <div className="max-w-2xl mx-auto px-6 pt-6 pb-12">
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-xl font-bold text-gray-900">Acceso</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {product.name} · {business.name} ·{" "}
-            <span className="font-medium text-gray-700">{currentLabel}</span>
-          </p>
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Precio</h1>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {product.name} · {business.name}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-gray-400">Acceso:</span>
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">
+              {accessLabel}
+            </span>
+            <span className="text-xs font-bold text-gray-900">{priceDisplay}</span>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -83,17 +99,17 @@ export default async function AccesoPage({
             <BookOpen className="w-3.5 h-3.5" />
             Contenido
           </Link>
-          <span className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 border-gray-900 text-gray-900">
-            <Lock className="w-3.5 h-3.5" />
-            Acceso
-          </span>
           <Link
-            href={`${base}/precio`}
+            href={`${base}/acceso`}
             className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors"
           >
+            <Lock className="w-3.5 h-3.5" />
+            Acceso
+          </Link>
+          <span className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 border-gray-900 text-gray-900">
             <DollarSign className="w-3.5 h-3.5" />
             Precio
-          </Link>
+          </span>
           {DISABLED_TABS.map(({ label, icon: Icon }) => (
             <span
               key={label}
@@ -108,15 +124,17 @@ export default async function AccesoPage({
         {updated && (
           <div className="flex items-center gap-2 px-4 py-3 mb-5 rounded-lg bg-green-50 border border-green-100 text-sm text-green-700">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
-            Configuración de acceso guardada correctamente.
+            Configuración de precio guardada correctamente.
           </div>
         )}
 
-        <AccessForm
+        <PricingForm
           businessId={params.businessId}
           productId={params.productId}
-          initialAccessType={product.access_type ?? "manual"}
-          initialIsPublic={product.is_public ?? false}
+          accessType={product.access_type ?? "manual"}
+          initialPrice={product.price ?? 0}
+          initialCurrency={product.currency ?? "USD"}
+          initialBillingPeriod={product.billing_period ?? "one_time"}
         />
       </div>
     </div>

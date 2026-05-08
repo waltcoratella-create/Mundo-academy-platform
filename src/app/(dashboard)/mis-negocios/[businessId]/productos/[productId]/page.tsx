@@ -27,7 +27,6 @@ const TYPE_GRADIENTS: Record<string, string> = {
 };
 
 const DISABLED_TABS = [
-  { label: "Precio", icon: DollarSign },
   { label: "Configuración", icon: Settings },
 ];
 
@@ -122,6 +121,13 @@ export default async function ProductDetailPage({
           >
             <Lock className="w-3.5 h-3.5" />
             Acceso
+          </Link>
+          <Link
+            href={`/mis-negocios/${params.businessId}/productos/${params.productId}/precio`}
+            className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors"
+          >
+            <DollarSign className="w-3.5 h-3.5" />
+            Precio
           </Link>
           {DISABLED_TABS.map(({ label, icon: Icon }) => (
             <span key={label} className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 border-transparent text-gray-300 cursor-not-allowed select-none">

@@ -160,3 +160,36 @@ export async function updateProductAccess(
 
   redirect(`/mis-negocios/${businessId}/productos/${productId}/acceso?updated=1`);
 }
+
+export async function updateProductPricing(
+  _prev: ProductFormState,
+  formData: FormData
+): Promise<ProductFormState> {
+  const { userId } = await auth();
+  if (!userId) return { error: "No autenticado" };
+
+  const businessId = formData.get("businessId") as string;
+  const productId  = formData.get("productId") as string;
+  if (!businessId || !productId) return { error: "Parámetros requeridos" };
+
+  const business = await getBusinessById(businessId, userId);
+  if (!business) return { error: "Negocio no encontrado o sin permisos" };
+
+  const product = await getProductById(productId, businessId);
+  if (!product) return { error: "Producto no encontrado" };
+
+  const price          = parseFloat(formData.get("price") as string) || 0;
+  const currency       = (formData.get("currency") as string) || "USD";
+  const billing_period = (formData.get("billing_period") as string) || "one_time";
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("products")
+    .update({ price, currency, billing_period })
+    .eq("id", productId)
+    .eq("business_id", businessId);
+
+  if (error) return { error: error.message };
+
+  redirect(`/mis-negocios/${businessId}/productos/${productId}/precio?updated=1`);
+}
