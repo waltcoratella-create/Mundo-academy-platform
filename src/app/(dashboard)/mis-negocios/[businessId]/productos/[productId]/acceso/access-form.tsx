@@ -7,7 +7,7 @@ import { updateProductAccess } from "@/app/actions/products";
 
 const ACCESS_TYPES = [
   {
-    value: "gratis",
+    value: "free",
     label: "Gratis",
     description: "Cualquier persona puede acceder sin pagar.",
     icon: Gift,
@@ -16,7 +16,7 @@ const ACCESS_TYPES = [
     border: "border-green-500",
   },
   {
-    value: "pago_unico",
+    value: "one_time",
     label: "Pago único",
     description: "Acceso de por vida con un solo pago.",
     icon: CreditCard,
@@ -25,7 +25,7 @@ const ACCESS_TYPES = [
     border: "border-blue-500",
   },
   {
-    value: "suscripcion",
+    value: "subscription",
     label: "Suscripción",
     description: "Acceso recurrente con cobro mensual o anual.",
     icon: RefreshCw,

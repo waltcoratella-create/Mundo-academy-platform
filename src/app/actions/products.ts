@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBusinessById, getProductById, getContentById } from "@/lib/supabase/queries";
+import { normalizeAccessType, normalizeBillingPeriod } from "@/lib/constants/products";
 
 export type ProductFormState = { error: string | null };
 export type ContentFormState = { error: string | null };
@@ -236,7 +237,7 @@ export async function updateProductAccess(
 
     if (fetchErr || !existingProduct) return { error: "Producto no encontrado" };
 
-    const access_type = (formData.get("access_type") as string) || "manual";
+    const access_type = normalizeAccessType(formData.get("access_type") as string);
     const is_public   = formData.get("is_public") === "true";
 
     const { error } = await supabase
@@ -290,7 +291,7 @@ export async function updateProductPricing(
     if (isNaN(price) || price < 0) return { error: "Precio inválido" };
 
     const currency       = (formData.get("currency") as string) || "USD";
-    const billing_period = (formData.get("billing_period") as string) || "one_time";
+    const billing_period = normalizeBillingPeriod(formData.get("billing_period") as string);
 
     const { error } = await supabase
       .from("products")

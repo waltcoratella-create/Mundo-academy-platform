@@ -9,10 +9,10 @@ import { formatCurrency } from "@/lib/utils";
 import { PricingForm } from "./pricing-form";
 
 const ACCESS_LABELS: Record<string, string> = {
-  gratis:      "Gratis",
-  pago_unico:  "Pago único",
-  suscripcion: "Suscripción",
-  manual:      "Invitación",
+  free:         "Gratis",
+  one_time:     "Pago único",
+  subscription: "Suscripción",
+  manual:       "Invitación",
 };
 
 const DISABLED_TABS = [
@@ -39,7 +39,7 @@ export default async function PrecioPage({
   const updated = searchParams.updated === "1";
 
   const accessLabel  = ACCESS_LABELS[product.access_type] ?? "Invitación";
-  const isFree       = product.access_type === "gratis";
+  const isFree       = product.access_type === "free";
   const priceDisplay = isFree
     ? "Gratis"
     : product.price > 0

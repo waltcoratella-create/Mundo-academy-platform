@@ -1,4 +1,5 @@
 import { createAdminClient } from "./admin";
+import { normalizeAccessType, normalizeBillingPeriod } from "@/lib/constants/products";
 
 export interface Business {
   id: string;
@@ -172,10 +173,10 @@ function withProductDefaults(row: Record<string, unknown>): Product {
     price:          Number(row.price ?? 0),
     type:           (row.type as string) ?? "curso",
     status:         (row.status as string) ?? "draft",
-    access_type:    (row.access_type as string) ?? "manual",
+    access_type:    normalizeAccessType(row.access_type as string | undefined),
     is_public:      Boolean(row.is_public ?? false),
     currency:       (row.currency as string) ?? "USD",
-    billing_period: (row.billing_period as string) ?? "one_time",
+    billing_period: normalizeBillingPeriod(row.billing_period as string | undefined),
     created_at:     row.created_at as string,
   };
 }

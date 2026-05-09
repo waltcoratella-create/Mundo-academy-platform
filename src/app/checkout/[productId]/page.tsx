@@ -38,10 +38,10 @@ const TYPE_GRADIENTS: Record<string, string> = {
 };
 
 const ACCESS_LABELS: Record<string, string> = {
-  gratis:     "Acceso gratuito",
-  pago_unico: "Pago único · acceso de por vida",
-  suscripcion: "Suscripción recurrente",
-  manual:     "Solo por invitación",
+  free:         "Acceso gratuito",
+  one_time:     "Pago único · acceso de por vida",
+  subscription: "Suscripción recurrente",
+  manual:       "Solo por invitación",
 };
 
 const BILLING_LABELS: Record<string, string> = {
@@ -75,8 +75,8 @@ export default async function CheckoutPage({
   const typeLabel    = TYPE_LABELS[product.type] ?? product.type;
   const TypeIcon     = TYPE_ICONS[product.type] ?? BookOpen;
   const gradient     = TYPE_GRADIENTS[product.type] ?? "from-gray-500 to-gray-700";
-  const isFree       = product.access_type === "gratis";
-  const isSubscription = product.access_type === "suscripcion";
+  const isFree         = product.access_type === "free";
+  const isSubscription = product.access_type === "subscription";
   const billingLabel = isSubscription ? (BILLING_LABELS[product.billing_period] ?? "") : "";
   const accessLabel  = ACCESS_LABELS[product.access_type] ?? "";
 

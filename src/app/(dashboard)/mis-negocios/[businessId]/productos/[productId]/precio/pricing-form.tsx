@@ -53,8 +53,8 @@ export function PricingForm({
     initialPrice > 0 ? String(initialPrice) : ""
   );
 
-  const isFree       = accessType === "gratis";
-  const isSubscription = accessType === "suscripcion";
+  const isFree         = accessType === "free";
+  const isSubscription = accessType === "subscription";
   const currencySymbol = CURRENCIES.find(c => c.value === currency)?.symbol ?? "$";
 
   const billingOptions = isSubscription

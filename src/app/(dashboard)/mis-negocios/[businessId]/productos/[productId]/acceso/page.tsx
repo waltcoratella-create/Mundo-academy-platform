@@ -8,10 +8,10 @@ import { getBusinessById, getProductById } from "@/lib/supabase/queries";
 import { AccessForm } from "./access-form";
 
 const ACCESS_LABELS: Record<string, string> = {
-  gratis:     "Gratis",
-  pago_unico: "Pago único",
-  suscripcion: "Suscripción",
-  manual:     "Invitación",
+  free:         "Gratis",
+  one_time:     "Pago único",
+  subscription: "Suscripción",
+  manual:       "Invitación",
 };
 
 const DISABLED_TABS = [

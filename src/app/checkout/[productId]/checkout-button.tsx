@@ -18,7 +18,7 @@ export function CheckoutButton({
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
-  const isFree = accessType === "gratis";
+  const isFree = accessType === "free";
 
   if (!isSignedIn) {
     return (

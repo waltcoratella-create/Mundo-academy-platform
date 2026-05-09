@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const cancelUrl  = `${appUrl}/checkout/${productId}`;
 
   // Free product — grant access directly, skip Stripe
-  if (product.access_type === "gratis") {
+  if (product.access_type === "free") {
     const supabase = createAdminClient();
     const { data: userRow } = await supabase
       .from("users")
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     ...(product.description ? { description: product.description } : {}),
   };
 
-  const isSubscription = product.access_type === "suscripcion";
+  const isSubscription = product.access_type === "subscription";
 
   let sessionUrl: string | null;
 
