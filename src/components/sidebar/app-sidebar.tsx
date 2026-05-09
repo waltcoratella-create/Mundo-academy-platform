@@ -6,7 +6,7 @@ import { UserButton, useUser } from "@clerk/nextjs";
 import {
   Home, Search, Zap, Briefcase, Brain, GraduationCap,
   Calendar, Target, ShoppingBag, Fish, Settings, Crown, Puzzle,
-  HelpCircle, Users,
+  HelpCircle, Users, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,10 +17,11 @@ interface NavItem {
 }
 
 const CORE: NavItem[] = [
-  { label: "Inicio",        href: "/inicio",       icon: Home },
-  { label: "Descubrir",     href: "/descubrir",    icon: Search },
-  { label: "Crear negocio", href: "/crear",        icon: Zap },
-  { label: "Mis negocios",  href: "/mis-negocios", icon: Briefcase },
+  { label: "Inicio",         href: "/inicio",          icon: Home },
+  { label: "Descubrir",      href: "/descubrir",       icon: Search },
+  { label: "Mis productos",  href: "/mis-productos",   icon: BookOpen },
+  { label: "Crear negocio",  href: "/crear",           icon: Zap },
+  { label: "Mis negocios",   href: "/mis-negocios",    icon: Briefcase },
 ];
 
 const ECOSYSTEM: NavItem[] = [

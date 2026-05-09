@@ -291,6 +291,85 @@ export async function getProductContent(productId: string): Promise<ProductConte
   }
 }
 
+// ─── Student / consumer queries ──────────────────────────────────────────────
+
+export interface ProductMembership {
+  id: string;
+  product_id: string;
+  status: string;
+  joined_at: string;
+  product_name: string;
+  product_description: string | null;
+  product_type: string;
+  product_access_type: string;
+  business_id: string;
+  business_name: string;
+}
+
+export async function getUserProductMemberships(
+  clerkUserId: string
+): Promise<ProductMembership[]> {
+  try {
+    const supabase = createAdminClient();
+    const supabaseUserId = await resolveSupabaseUserId(clerkUserId);
+    if (!supabaseUserId) return [];
+
+    const { data, error } = await supabase
+      .from("product_members")
+      .select(
+        "id, product_id, status, created_at, products(id, name, description, type, access_type, business_id, businesses(id, name))"
+      )
+      .eq("user_id", supabaseUserId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false });
+
+    if (error || !data) return [];
+
+    return (data as Record<string, unknown>[]).map((row) => {
+      const product = (row.products ?? {}) as Record<string, unknown>;
+      const business = (product.businesses ?? {}) as Record<string, unknown>;
+      return {
+        id:                   row.id as string,
+        product_id:           row.product_id as string,
+        status:               row.status as string,
+        joined_at:            row.created_at as string,
+        product_name:         (product.name as string) ?? "",
+        product_description:  (product.description as string | null) ?? null,
+        product_type:         (product.type as string) ?? "curso",
+        product_access_type:  normalizeAccessType(product.access_type as string | undefined),
+        business_id:          (product.business_id as string) ?? "",
+        business_name:        (business.name as string) ?? "Mundo Academy",
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function getUserProductMembership(
+  clerkUserId: string,
+  productId: string
+): Promise<{ id: string; status: string } | null> {
+  try {
+    const supabase = createAdminClient();
+    const supabaseUserId = await resolveSupabaseUserId(clerkUserId);
+    if (!supabaseUserId) return null;
+
+    const { data, error } = await supabase
+      .from("product_members")
+      .select("id, status")
+      .eq("user_id", supabaseUserId)
+      .eq("product_id", productId)
+      .eq("status", "active")
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data as { id: string; status: string };
+  } catch {
+    return null;
+  }
+}
+
 export async function getRecentTransactions(
   businessId: string,
   limit = 10
