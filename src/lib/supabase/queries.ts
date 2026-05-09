@@ -164,6 +164,22 @@ export interface Product {
   created_at: string;
 }
 
+function withProductDefaults(row: Record<string, unknown>): Product {
+  return {
+    id:             row.id as string,
+    name:           row.name as string,
+    description:    (row.description as string | null) ?? null,
+    price:          Number(row.price ?? 0),
+    type:           (row.type as string) ?? "curso",
+    status:         (row.status as string) ?? "draft",
+    access_type:    (row.access_type as string) ?? "manual",
+    is_public:      Boolean(row.is_public ?? false),
+    currency:       (row.currency as string) ?? "USD",
+    billing_period: (row.billing_period as string) ?? "one_time",
+    created_at:     row.created_at as string,
+  };
+}
+
 export async function getProductById(
   productId: string,
   businessId: string
@@ -178,7 +194,7 @@ export async function getProductById(
       .maybeSingle();
 
     if (error || !data) return null;
-    return data as Product;
+    return withProductDefaults(data as Record<string, unknown>);
   } catch {
     return null;
   }
@@ -194,7 +210,7 @@ export async function getBusinessProducts(businessId: string): Promise<Product[]
       .order("created_at", { ascending: false });
 
     if (error || !data) return [];
-    return data as Product[];
+    return (data as Record<string, unknown>[]).map(withProductDefaults);
   } catch {
     return [];
   }
@@ -218,7 +234,11 @@ export async function getPublicProductById(
       .maybeSingle();
 
     if (error || !data) return null;
-    return data as CheckoutProduct;
+    const row = data as Record<string, unknown>;
+    return {
+      ...withProductDefaults(row),
+      business_id: row.business_id as string,
+    };
   } catch {
     return null;
   }

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { getBusinessById, getProductById } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/utils";
+import { DeleteProductButton } from "./delete-button";
 
 const TYPE_LABELS: Record<string, string> = {
   curso:     "Curso",
@@ -78,13 +79,11 @@ export default async function ProductDetailPage({
           }`}>
             {isPublished ? "Publicado" : "Borrador"}
           </span>
-          <button
-            disabled
-            className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-400 cursor-not-allowed"
-            title="Próximamente"
-          >
-            Editar
-          </button>
+          <DeleteProductButton
+            businessId={params.businessId}
+            productId={params.productId}
+            productName={product.name}
+          />
         </div>
       </div>
 
