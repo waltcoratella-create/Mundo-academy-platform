@@ -33,12 +33,18 @@ export async function POST(req: NextRequest) {
 
   // Free product — grant access directly, skip Stripe
   if (product.access_type === "free") {
+    const user  = await currentUser();
+    const email = user?.emailAddresses?.[0]?.emailAddress ?? "";
+    const name  = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || null;
+
     const supabase = createAdminClient();
+
+    // Upsert buyer — they may not have a business and therefore no users row yet
     const { data: userRow } = await supabase
       .from("users")
+      .upsert({ clerk_id: userId, email, name }, { onConflict: "clerk_id" })
       .select("id")
-      .eq("clerk_id", userId)
-      .maybeSingle();
+      .single();
 
     if (userRow) {
       await supabase.from("product_members").upsert(

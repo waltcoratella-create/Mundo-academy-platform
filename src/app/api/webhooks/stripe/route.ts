@@ -6,18 +6,79 @@ import type Stripe from "stripe";
 
 type ClerkInstance = Awaited<ReturnType<typeof clerkClient>>;
 
-async function handleProductPurchase(session: Stripe.Checkout.Session): Promise<void> {
-  const { productId, clerkUserId, businessId } = session.metadata ?? {};
-  if (!productId || !clerkUserId || !businessId) return;
-
+async function resolveOrCreateSupabaseUser(
+  clerk: ClerkInstance,
+  clerkUserId: string,
+  fallbackEmail: string | null
+): Promise<string | null> {
   const supabase = createAdminClient();
 
-  const { data: userRow } = await supabase
+  // Fast path: user already exists in Supabase
+  const { data: existingUser } = await supabase
     .from("users")
     .select("id")
     .eq("clerk_id", clerkUserId)
     .maybeSingle();
-  const supabaseUserId = userRow?.id ?? null;
+
+  if (existingUser) {
+    console.log("[purchase] buyer supabase id (existing):", existingUser.id);
+    return existingUser.id;
+  }
+
+  // Slow path: buyer has never created a business — fetch from Clerk and upsert
+  console.log("[purchase] buyer not in supabase, upserting from clerk:", clerkUserId);
+  try {
+    const clerkUser = await clerk.users.getUser(clerkUserId);
+    const email = clerkUser.emailAddresses[0]?.emailAddress ?? fallbackEmail ?? "";
+    const name  = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || null;
+
+    console.log("[purchase] clerk buyer email:", email);
+
+    const { data: newUser, error } = await supabase
+      .from("users")
+      .upsert({ clerk_id: clerkUserId, email, name }, { onConflict: "clerk_id" })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("[purchase] upsert user error:", error.message);
+      return null;
+    }
+
+    console.log("[purchase] buyer supabase id (created):", newUser.id);
+    return newUser.id;
+  } catch (err) {
+    console.error("[purchase] failed to fetch clerk user:", err);
+    return null;
+  }
+}
+
+async function handleProductPurchase(
+  session: Stripe.Checkout.Session,
+  clerk: ClerkInstance
+): Promise<void> {
+  const { productId, clerkUserId, businessId } = session.metadata ?? {};
+
+  console.log("[purchase] session.id:", session.id);
+  console.log("[purchase] productId:", productId);
+  console.log("[purchase] clerkUserId (buyer):", clerkUserId);
+  console.log("[purchase] businessId:", businessId);
+  console.log("[purchase] customer_email:", session.customer_email);
+
+  if (!productId || !clerkUserId || !businessId) {
+    console.error("[purchase] missing metadata — aborting");
+    return;
+  }
+
+  const supabaseUserId = await resolveOrCreateSupabaseUser(
+    clerk,
+    clerkUserId,
+    session.customer_email ?? null
+  );
+
+  console.log("[purchase] final supabaseUserId:", supabaseUserId);
+
+  const supabase = createAdminClient();
 
   const paymentIntentId =
     typeof session.payment_intent === "string" ? session.payment_intent : null;
@@ -26,7 +87,7 @@ async function handleProductPurchase(session: Stripe.Checkout.Session): Promise<
   const amount   = (session.amount_total ?? 0) / 100;
   const currency = (session.currency ?? "usd").toUpperCase();
 
-  const { data: purchase } = await supabase
+  const { data: purchase, error: purchaseError } = await supabase
     .from("purchases")
     .insert({
       business_id: businessId,
@@ -42,17 +103,32 @@ async function handleProductPurchase(session: Stripe.Checkout.Session): Promise<
     .select("id")
     .single();
 
-  if (supabaseUserId) {
-    await supabase.from("product_members").upsert(
-      {
-        product_id: productId,
-        business_id: businessId,
-        user_id: supabaseUserId,
-        purchase_id: purchase?.id ?? null,
-        status: "active",
-      },
-      { onConflict: "product_id,user_id" }
-    );
+  if (purchaseError) {
+    console.error("[purchase] insert purchase error:", purchaseError.message);
+  } else {
+    console.log("[purchase] purchase row created:", purchase?.id);
+  }
+
+  if (!supabaseUserId) {
+    console.error("[purchase] no supabaseUserId — product_members NOT inserted");
+    return;
+  }
+
+  const { error: memberError } = await supabase.from("product_members").upsert(
+    {
+      product_id: productId,
+      business_id: businessId,
+      user_id: supabaseUserId,
+      purchase_id: purchase?.id ?? null,
+      status: "active",
+    },
+    { onConflict: "product_id,user_id" }
+  );
+
+  if (memberError) {
+    console.error("[purchase] product_members upsert error:", memberError.message);
+  } else {
+    console.log("[purchase] product_members upserted — user has access");
   }
 
   await supabase.from("transactions").insert({
@@ -137,7 +213,7 @@ export async function POST(req: NextRequest) {
 
         // Product purchase (metadata.productId set by /api/checkout/product)
         if (session.metadata?.productId) {
-          await handleProductPurchase(session);
+          await handleProductPurchase(session, clerk);
           break;
         }
 

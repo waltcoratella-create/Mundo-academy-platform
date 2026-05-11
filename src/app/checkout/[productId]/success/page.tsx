@@ -52,11 +52,11 @@ export default async function CheckoutSuccessPage({
 
             <div className="space-y-3">
               <Link
-                href="/mis-negocios"
+                href="/mis-productos"
                 className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition-colors"
               >
                 <BookOpen className="w-4 h-4" />
-                Ir a mi panel
+                Ver mis productos
               </Link>
               <Link
                 href={`/checkout/${params.productId}`}
