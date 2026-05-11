@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBusinessById, getProductById, getContentById } from "@/lib/supabase/queries";
 import { normalizeAccessType, normalizeBillingPeriod } from "@/lib/constants/products";
+import { generateSlug } from "@/lib/utils";
 
 export type ProductFormState = { error: string | null };
 export type ContentFormState = { error: string | null };
@@ -43,6 +44,22 @@ export async function createProduct(
     const status         = (formData.get("status") as string) || "draft";
 
     const supabase = createAdminClient();
+
+    // Generate a unique slug from the product name
+    const baseSlug = generateSlug(name);
+    let slug = baseSlug;
+    let attempt = 2;
+    while (attempt < 100) {
+      const { data: existing } = await supabase
+        .from("products")
+        .select("id")
+        .eq("slug", slug)
+        .maybeSingle();
+      if (!existing) break;
+      slug = `${baseSlug}-${attempt}`;
+      attempt++;
+    }
+
     const { error } = await supabase.from("products").insert({
       business_id: businessId,
       name,
@@ -50,6 +67,7 @@ export async function createProduct(
       price,
       type,
       status,
+      slug: slug || null,
     });
 
     if (error) return { error: error.message };

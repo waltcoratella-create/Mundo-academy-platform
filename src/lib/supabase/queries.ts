@@ -406,3 +406,113 @@ export async function getRecentTransactions(
     return [];
   }
 }
+
+// ─── Public marketplace queries ───────────────────────────────────────────────
+
+export interface PublicProduct {
+  id: string;
+  slug: string | null;
+  name: string;
+  description: string | null;
+  price: number;
+  type: string;
+  access_type: string;
+  currency: string;
+  billing_period: string;
+  business_id: string;
+  business_name: string;
+  created_at: string;
+}
+
+export interface PublicProductFull extends PublicProduct {
+  content_count: number;
+}
+
+export async function getPublicProducts(): Promise<PublicProduct[]> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("products")
+      .select(
+        "id, slug, name, description, price, type, access_type, currency, billing_period, business_id, created_at, businesses(id, name)"
+      )
+      .eq("status", "published")
+      .eq("is_public", true)
+      .neq("access_type", "manual")
+      .order("created_at", { ascending: false });
+
+    if (error || !data) return [];
+
+    return (data as Record<string, unknown>[]).map((row) => {
+      const biz = (row.businesses ?? {}) as Record<string, unknown>;
+      return {
+        id:            row.id as string,
+        slug:          (row.slug as string | null) ?? null,
+        name:          row.name as string,
+        description:   (row.description as string | null) ?? null,
+        price:         Number(row.price ?? 0),
+        type:          (row.type as string) ?? "curso",
+        access_type:   normalizeAccessType(row.access_type as string | undefined),
+        currency:      (row.currency as string) ?? "USD",
+        billing_period: normalizeBillingPeriod(row.billing_period as string | undefined),
+        business_id:   (row.business_id as string) ?? "",
+        business_name: (biz.name as string) ?? "Mundo Academy",
+        created_at:    row.created_at as string,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function getPublicProductFull(
+  slugOrId: string
+): Promise<PublicProductFull | null> {
+  try {
+    const supabase = createAdminClient();
+
+    const baseSelect =
+      "id, slug, name, description, price, type, access_type, currency, billing_period, business_id, created_at, businesses(id, name)";
+
+    const buildQuery = () =>
+      supabase
+        .from("products")
+        .select(baseSelect)
+        .eq("status", "published")
+        .eq("is_public", true);
+
+    // Try slug first, then fall back to UUID
+    const { data: bySlug } = await buildQuery().eq("slug", slugOrId).maybeSingle();
+    const { data: byId }   = bySlug
+      ? { data: null }
+      : await buildQuery().eq("id", slugOrId).maybeSingle();
+
+    const row = (bySlug ?? byId) as Record<string, unknown> | null;
+    if (!row) return null;
+
+    const { count } = await supabase
+      .from("product_content")
+      .select("id", { count: "exact", head: true })
+      .eq("product_id", row.id as string);
+
+    const biz = (row.businesses ?? {}) as Record<string, unknown>;
+
+    return {
+      id:            row.id as string,
+      slug:          (row.slug as string | null) ?? null,
+      name:          row.name as string,
+      description:   (row.description as string | null) ?? null,
+      price:         Number(row.price ?? 0),
+      type:          (row.type as string) ?? "curso",
+      access_type:   normalizeAccessType(row.access_type as string | undefined),
+      currency:      (row.currency as string) ?? "USD",
+      billing_period: normalizeBillingPeriod(row.billing_period as string | undefined),
+      business_id:   (row.business_id as string) ?? "",
+      business_name: (biz.name as string) ?? "Mundo Academy",
+      created_at:    row.created_at as string,
+      content_count: count ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}

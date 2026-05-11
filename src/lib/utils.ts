@@ -28,3 +28,17 @@ export function formatPercent(n: number, locale = "es-MX") {
     maximumFractionDigits: 1,
   }).format(n / 100);
 }
+
+// Generates a URL-safe slug from any string.
+// Strips accents, special chars; collapses spaces to hyphens.
+export function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/̀-ͯ/g, "")   // strip combining diacritical marks
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 80);
+}
