@@ -3,14 +3,14 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
-  ChevronLeft, ChevronRight, Search, X, Star, Users,
+  ChevronLeft, ChevronRight, Search, X, Star, Users, Eye,
   TrendingUp, Sparkles, Gift, BookOpen, Bot, Briefcase,
-  Megaphone, Zap, Package, PlusCircle, DollarSign, Flame,
+  Megaphone, Zap, Package, PlusCircle, DollarSign, Flame, ArrowRight,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import type { PublicProduct } from "@/lib/supabase/queries";
 
-// ─── Deterministic mock metrics ───────────────────────────────────────────────
+// ─── Mock metrics ─────────────────────────────────────────────────────────────
 
 function hashStr(s: string): number {
   let h = 0;
@@ -20,6 +20,7 @@ function hashStr(s: string): number {
 const fakeRating  = (id: string) => (4.2 + (hashStr(id) % 16) / 20).toFixed(1);
 const fakeReviews = (id: string) => 3  + (hashStr(id + "r") % 497);
 const fakeMembers = (id: string) => 20 + (hashStr(id + "m") % 49980);
+const fakeViews   = (id: string) => 300 + (hashStr(id + "v") % 299700);
 const fakeSales   = (id: string) => 5  + (hashStr(id + "s") % 995);
 
 function fmt(n: number): string {
@@ -32,17 +33,14 @@ function fmt(n: number): string {
 
 const NOW = Date.now();
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1_000;
-
-function isNew(p: PublicProduct): boolean {
-  return !!p.created_at && NOW - new Date(p.created_at).getTime() < TWO_WEEKS_MS;
-}
+function isNew(p: PublicProduct) { return !!p.created_at && NOW - new Date(p.created_at).getTime() < TWO_WEEKS_MS; }
 function timeAgo(d: string): string {
   const days = Math.floor((NOW - new Date(d).getTime()) / 86_400_000);
   if (days < 1)   return "hoy";
-  if (days < 7)   return `${days}d`;
-  if (days < 30)  return `${Math.floor(days / 7)}sem`;
-  if (days < 365) return `${Math.floor(days / 30)}mo`;
-  return `${Math.floor(days / 365)}y`;
+  if (days < 7)   return `${days}d ago`;
+  if (days < 30)  return `${Math.floor(days / 7)}sem ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
 }
 
 // ─── Keyword filter ───────────────────────────────────────────────────────────
@@ -56,14 +54,17 @@ function kw(...words: string[]) {
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
-const GRADIENTS: Record<string, string> = {
-  curso:     "from-blue-500 to-indigo-600",
-  comunidad: "from-violet-500 to-purple-700",
-  ebook:     "from-emerald-500 to-teal-600",
-  mentoria:  "from-orange-400 to-orange-600",
-  evento:    "from-rose-500 to-rose-700",
-  servicio:  "from-slate-500 to-slate-700",
+const GRADIENTS: Record<string, [string, string]> = {
+  // [tailwind gradient classes, hex fallback]
+  curso:     ["from-blue-600 via-blue-500 to-indigo-700",       "#3b82f6"],
+  comunidad: ["from-violet-600 via-purple-500 to-fuchsia-700",  "#8b5cf6"],
+  ebook:     ["from-emerald-600 via-teal-500 to-green-700",     "#10b981"],
+  mentoria:  ["from-amber-500 via-orange-500 to-orange-600",    "#f59e0b"],
+  evento:    ["from-rose-600 via-red-500 to-pink-600",          "#e11d48"],
+  servicio:  ["from-slate-700 via-slate-600 to-slate-800",      "#475569"],
 };
+const GRAD_DEFAULT: [string, string] = ["from-gray-500 via-gray-600 to-gray-700", "#6b7280"];
+
 const TYPE_LABELS: Record<string, string> = {
   curso: "Curso", comunidad: "Comunidad", ebook: "Ebook",
   mentoria: "Mentoría", evento: "Evento", servicio: "Servicio",
@@ -84,332 +85,212 @@ function priceStr(p: PublicProduct): string {
     ? f + (p.billing_period === "monthly" ? "/mes" : "/año") : f;
 }
 
-// ─── Shared banner background ─────────────────────────────────────────────────
-
-function BannerBg({ type, initial, className }: { type: string; initial: string; className?: string }) {
-  const grad = GRADIENTS[type] ?? "from-gray-400 to-gray-600";
-  return (
-    <div className={`bg-gradient-to-br ${grad} relative overflow-hidden ${className ?? ""}`}>
-      {/* Grid texture */}
-      <div className="absolute inset-0 opacity-[0.06]"
-        style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px)", backgroundSize: "22px 22px" }} />
-      {/* Decorative letter */}
-      <div className="absolute -bottom-4 -right-2 font-black text-white/10 leading-none select-none"
-        style={{ fontSize: "5.5rem" }}>
-        {initial}
-      </div>
-      {/* Bottom scrim */}
-      <div className="absolute bottom-0 inset-x-0 h-2/3 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// CARD VARIANTS
+//  PRODUCT CARD — Whop-identical structure
+//  w-80 (320px) | banner h-44 (176px) | info below | white bg
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── CardHero: 320 × total ~280px — full image with overlay text ───────────────
-
-function CardHero({ product }: { product: PublicProduct }) {
-  const grad    = GRADIENTS[product.type] ?? "from-gray-400 to-gray-600";
-  const label   = TYPE_LABELS[product.type] ?? product.type;
-  const accCls  = ACCESS_CLS[product.access_type]  ?? "";
-  const accLbl  = ACCESS_LBL[product.access_type]  ?? product.access_type;
-  const href    = `/produto/${product.slug ?? product.id}`;
-  const initial = product.name.charAt(0).toUpperCase();
-  const showNew = isNew(product);
-  const rating  = fakeRating(product.id);
-  const members = fmt(fakeMembers(product.id));
-  const isFree  = product.access_type === "free";
+function ProductCard({ product }: { product: PublicProduct }) {
+  const [gradCls]  = GRADIENTS[product.type] ?? GRAD_DEFAULT;
+  const typeLabel  = TYPE_LABELS[product.type] ?? product.type;
+  const accCls     = ACCESS_CLS[product.access_type]  ?? "";
+  const accLbl     = ACCESS_LBL[product.access_type]  ?? product.access_type;
+  const href       = `/produto/${product.slug ?? product.id}`;
+  const initial    = product.name.charAt(0).toUpperCase();
+  const showNew    = isNew(product);
+  const rating     = fakeRating(product.id);
+  const reviews    = fakeReviews(product.id);
+  const members    = fmt(fakeMembers(product.id));
+  const views      = fmt(fakeViews(product.id));
+  const ago        = product.created_at ? timeAgo(product.created_at) : "";
+  const isFree     = product.access_type === "free";
 
   return (
-    <Link href={href}
-      className="group flex-none w-80 rounded-2xl overflow-hidden border border-gray-100 hover:border-gray-200 hover:shadow-xl hover:shadow-gray-100 transition-all duration-200 cursor-pointer relative flex flex-col bg-white">
-      {/* Banner — image dominates */}
-      <div className="relative h-48 shrink-0">
-        <BannerBg type={product.type} initial={initial} className="absolute inset-0" />
+    <Link
+      href={href}
+      className="group flex-none w-80 rounded-2xl overflow-hidden bg-white border border-gray-100 hover:border-gray-200 hover:shadow-xl hover:shadow-gray-200/60 transition-all duration-200 cursor-pointer flex flex-col"
+    >
+      {/* ── Banner ── */}
+      <div className={`relative h-44 overflow-hidden bg-gradient-to-br ${gradCls} shrink-0`}>
+        {/* Grid texture overlay */}
+        <div className="absolute inset-0 opacity-[0.07]"
+          style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px)", backgroundSize: "24px 24px" }}
+        />
+        {/* Radial vignette for depth */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_30%,rgba(255,255,255,0.12),transparent_70%)]" />
+        {/* Bottom scrim so text overlays read cleanly */}
+        <div className="absolute bottom-0 inset-x-0 h-1/2 bg-gradient-to-t from-black/25 to-transparent" />
+
+        {/* Centered frosted-glass logo — simulates real product thumbnail */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 shadow-2xl flex items-center justify-center ring-1 ring-white/20">
+            <span className="text-3xl font-black text-white drop-shadow-lg select-none">{initial}</span>
+          </div>
+        </div>
+
         {/* Top badges */}
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-10">
           {showNew
-            ? <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-400 text-black"><Sparkles className="w-2.5 h-2.5" />Nuevo</span>
-            : <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border bg-white/90 ${accCls}`}>{accLbl}</span>}
-          <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-black/30 text-white backdrop-blur-sm">{label}</span>
+            ? <span className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400 text-black shadow-sm">
+                <Sparkles className="w-2.5 h-2.5" />Nuevo
+              </span>
+            : <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-white/90 ${accCls}`}>{accLbl}</span>
+          }
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-black/30 text-white backdrop-blur-sm">{typeLabel}</span>
         </div>
-        {/* Overlay info — bottom of banner */}
-        <div className="absolute bottom-0 inset-x-0 p-3 z-10">
-          <h3 className="text-sm font-bold text-white line-clamp-2 leading-snug group-hover:text-white/90 transition-colors">
-            {product.name}
-          </h3>
-          <div className="flex items-center justify-between mt-1">
-            <p className="text-[10px] text-white/70 truncate max-w-[60%]">por {product.business_name}</p>
-            <div className="flex items-center gap-1.5 text-[10px] text-white/70">
-              <span className="flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400 stroke-amber-400" />{rating}</span>
-              <span className="flex items-center gap-0.5"><Users className="w-2.5 h-2.5" />{members}</span>
+      </div>
+
+      {/* ── Info section — all text BELOW banner, like Whop ── */}
+      <div className="p-4 flex-1 flex flex-col gap-2.5">
+
+        {/* Icon + name + creator row */}
+        <div className="flex items-start gap-3">
+          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradCls} flex items-center justify-center shrink-0 shadow-md`}>
+            <span className="text-base font-black text-white select-none">{initial}</span>
+          </div>
+          <div className="flex-1 min-w-0 pt-0.5">
+            <h3 className="text-sm font-bold text-gray-900 line-clamp-1 leading-tight group-hover:text-orange-600 transition-colors duration-150">
+              {product.name}
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5 truncate">por {product.business_name}</p>
+          </div>
+          <span className={`shrink-0 text-[10px] font-bold ${isFree ? "text-emerald-600" : "text-gray-900"} pt-0.5`}>
+            {priceStr(product)}
+          </span>
+        </div>
+
+        {/* Description */}
+        {product.description
+          ? <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{product.description}</p>
+          : <p className="text-xs text-gray-300 italic">Sin descripción disponible</p>
+        }
+
+        {/* Stats line — ⭐ · 👥 · 👁 · time */}
+        <div className="mt-auto flex items-center gap-2 text-[11px] text-gray-400 flex-wrap">
+          <span className="flex items-center gap-0.5">
+            <Star className="w-3 h-3 fill-amber-400 stroke-amber-400" />
+            {rating}
+            <span className="text-gray-300 ml-0.5">({reviews})</span>
+          </span>
+          <span className="text-gray-200">·</span>
+          <span className="flex items-center gap-0.5">
+            <Users className="w-3 h-3 text-gray-300" />{members}
+          </span>
+          <span className="text-gray-200">·</span>
+          <span className="flex items-center gap-0.5">
+            <Eye className="w-3 h-3 text-gray-300" />{views}
+          </span>
+          {ago && (
+            <>
+              <span className="text-gray-200">·</span>
+              <span className="text-gray-300 ml-auto">Lanzado {ago}</span>
+            </>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  FEATURED CARD — landscape, ~180px, full gradient, like Whop "Empezando"
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FeaturedCard({ product }: { product: PublicProduct }) {
+  const [gradCls] = GRADIENTS[product.type] ?? GRAD_DEFAULT;
+  const href      = `/produto/${product.slug ?? product.id}`;
+  const initial   = product.name.charAt(0).toUpperCase();
+
+  return (
+    <Link href={href}
+      className="group relative overflow-hidden rounded-2xl cursor-pointer"
+      style={{ height: 180 }}>
+      {/* Full-bleed gradient */}
+      <div className={`absolute inset-0 bg-gradient-to-br ${gradCls}`} />
+      {/* Texture */}
+      <div className="absolute inset-0 opacity-[0.06]"
+        style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,.8) 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
+      {/* Glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_20%_30%,rgba(255,255,255,0.15),transparent_60%)]" />
+      {/* Large decorative letter */}
+      <div className="absolute -bottom-4 -right-4 text-[120px] font-black text-white/10 leading-none select-none">{initial}</div>
+      {/* Bottom scrim */}
+      <div className="absolute bottom-0 inset-x-0 h-2/3 bg-gradient-to-t from-black/50 to-transparent" />
+
+      {/* Content */}
+      <div className="relative h-full flex flex-col justify-between p-4">
+        <div /> {/* spacer */}
+        <div>
+          {/* Icon chip + name */}
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="w-7 h-7 rounded-lg bg-white/25 backdrop-blur-sm border border-white/30 flex items-center justify-center">
+              <span className="text-xs font-black text-white">{initial}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-bold text-white">{product.name}</span>
+              <ArrowRight className="w-3.5 h-3.5 text-white/70 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
             </div>
           </div>
+          {product.description && (
+            <p className="text-xs text-white/70 line-clamp-1">{product.description}</p>
+          )}
         </div>
-      </div>
-      {/* Compact footer strip */}
-      <div className="px-3 py-2 flex items-center justify-between bg-white">
-        <div className="flex items-center gap-1.5">
-          <div className={`w-5 h-5 rounded-md bg-gradient-to-br ${grad} flex items-center justify-center`}>
-            <span className="text-[8px] font-black text-white">{initial}</span>
-          </div>
-          <span className="text-[10px] text-gray-500 truncate max-w-[160px]">{product.business_name}</span>
-        </div>
-        <span className={`text-xs font-extrabold ${isFree ? "text-emerald-600" : "text-gray-900"}`}>{priceStr(product)}</span>
       </div>
     </Link>
   );
 }
 
-function SkeletonHero() {
+// ─────────────────────────────────────────────────────────────────────────────
+//  SKELETON
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SkeletonCard() {
   return (
     <div className="flex-none w-80 rounded-2xl overflow-hidden bg-white border border-gray-100 animate-pulse">
-      <div className="h-48 bg-gray-100" />
-      <div className="px-3 py-2 flex items-center justify-between">
-        <div className="h-3 bg-gray-100 rounded w-24" />
-        <div className="h-3 bg-gray-100 rounded w-12" />
-      </div>
-    </div>
-  );
-}
-
-// ── CardTall: 160 × total ~240px — Netflix portrait rail ──────────────────────
-
-function CardTall({ product }: { product: PublicProduct }) {
-  const grad    = GRADIENTS[product.type] ?? "from-gray-400 to-gray-600";
-  const href    = `/produto/${product.slug ?? product.id}`;
-  const initial = product.name.charAt(0).toUpperCase();
-  const showNew = isNew(product);
-  const rating  = fakeRating(product.id);
-  const isFree  = product.access_type === "free";
-
-  return (
-    <Link href={href}
-      className="group flex-none w-40 rounded-xl overflow-hidden bg-white border border-gray-100 hover:border-gray-200 hover:shadow-lg hover:shadow-gray-100 transition-all duration-200 cursor-pointer flex flex-col">
-      {/* Banner — very tall, image forward */}
-      <div className="relative h-44 shrink-0">
-        <BannerBg type={product.type} initial={initial} className="absolute inset-0" />
-        {showNew && (
-          <div className="absolute top-2 left-2 z-10">
-            <span className="text-[8px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-amber-400 text-black">New</span>
-          </div>
-        )}
-        {/* Overlay title at bottom */}
-        <div className="absolute bottom-0 inset-x-0 p-2 z-10">
-          <h3 className="text-[11px] font-bold text-white line-clamp-2 leading-tight group-hover:text-white/90">{product.name}</h3>
-        </div>
-      </div>
-      {/* Minimal info strip */}
-      <div className="p-2 flex items-center justify-between gap-1">
-        <div className="flex items-center gap-1 min-w-0">
-          <div className={`w-4 h-4 rounded-sm bg-gradient-to-br ${grad} flex items-center justify-center shrink-0`}>
-            <span className="text-[7px] font-black text-white">{initial}</span>
-          </div>
-          <span className="text-[9px] text-gray-400 truncate">{product.business_name}</span>
-        </div>
-        <div className="flex items-center gap-0.5 shrink-0">
-          <Star className="w-2.5 h-2.5 fill-amber-400 stroke-amber-400" />
-          <span className="text-[9px] font-semibold text-gray-600">{rating}</span>
-        </div>
-      </div>
-      <div className="px-2 pb-2">
-        <span className={`text-[10px] font-extrabold ${isFree ? "text-emerald-600" : "text-gray-900"}`}>{priceStr(product)}</span>
-      </div>
-    </Link>
-  );
-}
-
-function SkeletonTall() {
-  return (
-    <div className="flex-none w-40 rounded-xl overflow-hidden bg-white border border-gray-100 animate-pulse">
       <div className="h-44 bg-gray-100" />
-      <div className="p-2 space-y-1.5">
-        <div className="h-2.5 bg-gray-100 rounded w-3/4" />
-        <div className="h-2.5 bg-gray-100 rounded w-1/2" />
-      </div>
-    </div>
-  );
-}
-
-// ── CardWide: 288 × total ~220px — App Store landscape ───────────────────────
-
-function CardWide({ product }: { product: PublicProduct }) {
-  const grad    = GRADIENTS[product.type] ?? "from-gray-400 to-gray-600";
-  const label   = TYPE_LABELS[product.type] ?? product.type;
-  const accCls  = ACCESS_CLS[product.access_type]  ?? "";
-  const accLbl  = ACCESS_LBL[product.access_type]  ?? product.access_type;
-  const href    = `/produto/${product.slug ?? product.id}`;
-  const initial = product.name.charAt(0).toUpperCase();
-  const showNew = isNew(product);
-  const rating  = fakeRating(product.id);
-  const reviews = fakeReviews(product.id);
-  const members = fmt(fakeMembers(product.id));
-  const isFree  = product.access_type === "free";
-  const ago     = product.created_at ? timeAgo(product.created_at) : "";
-
-  return (
-    <Link href={href}
-      className="group flex-none w-72 rounded-2xl overflow-hidden bg-white border border-gray-100 hover:border-gray-200 hover:shadow-xl hover:shadow-gray-100 transition-all duration-200 cursor-pointer flex flex-col">
-      {/* Banner */}
-      <div className="relative h-36 shrink-0">
-        <BannerBg type={product.type} initial={initial} className="absolute inset-0" />
-        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
-          {showNew
-            ? <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-amber-400 text-black">Nuevo</span>
-            : <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border bg-white/90 ${accCls}`}>{accLbl}</span>}
-          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-black/25 text-white backdrop-blur-sm">{label}</span>
-        </div>
-      </div>
-      {/* Body — App Store style with icon */}
-      <div className="p-3 flex items-start gap-2.5 flex-1">
-        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center shrink-0 shadow-sm`}>
-          <span className="text-sm font-black text-white">{initial}</span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="text-xs font-bold text-gray-900 line-clamp-1 group-hover:text-orange-600 transition-colors">{product.name}</h3>
-          <p className="text-[10px] text-gray-400 truncate">por {product.business_name}</p>
-          <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-gray-400">
-            <span className="flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400 stroke-amber-400" />{rating}<span className="text-gray-300">({reviews})</span></span>
-            <span className="text-gray-200">·</span>
-            <span className="flex items-center gap-0.5"><Users className="w-2.5 h-2.5 text-gray-300" />{members}</span>
-            {ago && <><span className="text-gray-200">·</span><span className="text-gray-300">{ago}</span></>}
+      <div className="p-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <div className="w-12 h-12 rounded-xl bg-gray-100 shrink-0" />
+          <div className="flex-1 space-y-1.5 pt-0.5">
+            <div className="h-3.5 bg-gray-100 rounded w-3/4" />
+            <div className="h-3 bg-gray-100 rounded w-1/2" />
           </div>
+          <div className="h-3.5 bg-gray-100 rounded w-10 shrink-0" />
         </div>
-        <span className={`text-xs font-extrabold shrink-0 ${isFree ? "text-emerald-600" : "text-gray-900"}`}>{priceStr(product)}</span>
-      </div>
-    </Link>
-  );
-}
-
-function SkeletonWide() {
-  return (
-    <div className="flex-none w-72 rounded-2xl overflow-hidden bg-white border border-gray-100 animate-pulse">
-      <div className="h-36 bg-gray-100" />
-      <div className="p-3 flex gap-2.5">
-        <div className="w-10 h-10 rounded-xl bg-gray-100 shrink-0" />
-        <div className="flex-1 space-y-1.5">
-          <div className="h-3 bg-gray-100 rounded w-3/4" />
-          <div className="h-2.5 bg-gray-100 rounded w-1/2" />
-          <div className="h-2.5 bg-gray-100 rounded w-2/3" />
+        <div className="h-3 bg-gray-100 rounded w-full" />
+        <div className="h-3 bg-gray-100 rounded w-4/5" />
+        <div className="flex gap-2 pt-1">
+          <div className="h-3 bg-gray-100 rounded w-14" />
+          <div className="h-3 bg-gray-100 rounded w-10" />
+          <div className="h-3 bg-gray-100 rounded w-12" />
         </div>
       </div>
     </div>
   );
 }
 
-// ── CardStandard: 208 × total ~175px — compact dense ─────────────────────────
-
-function CardStandard({ product }: { product: PublicProduct }) {
-  const grad    = GRADIENTS[product.type] ?? "from-gray-400 to-gray-600";
-  const label   = TYPE_LABELS[product.type] ?? product.type;
-  const accCls  = ACCESS_CLS[product.access_type]  ?? "";
-  const accLbl  = ACCESS_LBL[product.access_type]  ?? product.access_type;
-  const href    = `/produto/${product.slug ?? product.id}`;
-  const initial = product.name.charAt(0).toUpperCase();
-  const showNew = isNew(product);
-  const rating  = fakeRating(product.id);
-  const members = fmt(fakeMembers(product.id));
-  const isFree  = product.access_type === "free";
-
-  return (
-    <Link href={href}
-      className="group flex-none w-52 rounded-xl overflow-hidden bg-white border border-gray-100 hover:border-gray-200 hover:shadow-lg hover:shadow-gray-100 transition-all duration-150 cursor-pointer flex flex-col">
-      {/* Banner */}
-      <div className="relative h-28 shrink-0">
-        <BannerBg type={product.type} initial={initial} className="absolute inset-0" />
-        <div className="absolute top-2 left-2 right-2 flex items-center justify-between z-10">
-          {showNew
-            ? <span className="text-[8px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-amber-400 text-black">New</span>
-            : <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full border bg-white/90 ${accCls}`}>{accLbl}</span>}
-          <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-black/25 text-white backdrop-blur-sm">{label}</span>
-        </div>
-      </div>
-      {/* Compact body */}
-      <div className="p-2.5 flex-1 flex flex-col gap-1">
-        <div className="flex items-start gap-1.5">
-          <div className={`w-5 h-5 rounded-md bg-gradient-to-br ${grad} flex items-center justify-center shrink-0 mt-0.5`}>
-            <span className="text-[7px] font-black text-white">{initial}</span>
-          </div>
-          <h3 className="text-[11px] font-bold text-gray-900 line-clamp-2 leading-snug group-hover:text-orange-600 transition-colors flex-1">{product.name}</h3>
-        </div>
-        <p className="text-[10px] text-gray-400 truncate pl-6.5">por {product.business_name}</p>
-        <div className="mt-auto pt-1.5 border-t border-gray-50 flex items-center justify-between gap-1">
-          <span className={`text-[11px] font-extrabold ${isFree ? "text-emerald-600" : "text-gray-900"}`}>{priceStr(product)}</span>
-          <div className="flex items-center gap-1 text-[9px] text-gray-400">
-            <Star className="w-2.5 h-2.5 fill-amber-400 stroke-amber-400" />{rating}
-            <span className="text-gray-200">·</span>
-            <Users className="w-2.5 h-2.5 text-gray-300" />{members}
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function SkeletonStandard() {
-  return (
-    <div className="flex-none w-52 rounded-xl overflow-hidden bg-white border border-gray-100 animate-pulse">
-      <div className="h-28 bg-gray-100" />
-      <div className="p-2.5 space-y-1.5">
-        <div className="h-3 bg-gray-100 rounded w-3/4" />
-        <div className="h-2.5 bg-gray-100 rounded w-1/2" />
-        <div className="flex justify-between pt-1"><div className="h-3 bg-gray-100 rounded w-14" /><div className="h-2.5 bg-gray-100 rounded w-14" /></div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Card + Skeleton dispatch ─────────────────────────────────────────────────
-
-type Variant = "hero" | "tall" | "wide" | "standard";
-
-function Card({ product, variant }: { product: PublicProduct; variant: Variant }) {
-  if (variant === "hero")     return <CardHero product={product} />;
-  if (variant === "tall")     return <CardTall product={product} />;
-  if (variant === "wide")     return <CardWide product={product} />;
-  return <CardStandard product={product} />;
-}
-
-function Skeleton({ variant }: { variant: Variant }) {
-  if (variant === "hero")     return <SkeletonHero />;
-  if (variant === "tall")     return <SkeletonTall />;
-  if (variant === "wide")     return <SkeletonWide />;
-  return <SkeletonStandard />;
-}
-
-// ─── Section icon map ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  SECTION ICON MAP
+// ─────────────────────────────────────────────────────────────────────────────
 
 const ICONS: Record<string, React.ElementType> = {
-  trending:    Flame,
-  vendidos:    TrendingUp,
-  new:         Sparkles,
-  free:        Gift,
-  ai:          Bot,
-  negocios:    Briefcase,
-  marketing:   Megaphone,
-  wealth:      DollarSign,
-  cursos:      BookOpen,
-  comunidades: Users,
-  mentoria:    Zap,
-  recursos:    BookOpen,
+  trending: Flame, vendidos: TrendingUp, new: Sparkles, free: Gift,
+  ai: Bot, negocios: Briefcase, marketing: Megaphone, wealth: DollarSign,
+  cursos: BookOpen, comunidades: Users, mentoria: Zap, recursos: BookOpen,
 };
 
-// ─── Carousel section ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  CAROUSEL SECTION
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface SectionDef {
   id: string;
   title: string;
-  variant: Variant;
+  subtitle?: string;
   filter: (p: PublicProduct) => boolean;
   sort?: (a: PublicProduct, b: PublicProduct) => number;
   maxItems: number;
 }
-
-const SCROLL_AMOUNT: Record<Variant, number> = {
-  hero: 360, tall: 220, wide: 320, standard: 260,
-};
 
 function CarouselSection({ def, products }: { def: SectionDef; products: PublicProduct[] }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -424,8 +305,8 @@ function CarouselSection({ def, products }: { def: SectionDef; products: PublicP
   }, []);
 
   const scroll = useCallback((d: "l" | "r") => {
-    ref.current?.scrollBy({ left: d === "l" ? -SCROLL_AMOUNT[def.variant] : SCROLL_AMOUNT[def.variant], behavior: "smooth" });
-  }, [def.variant]);
+    ref.current?.scrollBy({ left: d === "l" ? -340 : 340, behavior: "smooth" });
+  }, []);
 
   const items = useMemo(() => {
     let list = products.filter(def.filter);
@@ -437,54 +318,86 @@ function CarouselSection({ def, products }: { def: SectionDef; products: PublicP
   const Icon  = ICONS[def.id] ?? Package;
 
   return (
-    <section className="space-y-2" aria-label={def.title}>
+    <section aria-label={def.title}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 lg:px-6">
-        <div className="flex items-center gap-1.5">
-          <Icon className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-          <span className="text-xs font-bold text-gray-900">{def.title}</span>
+      <div className="flex items-start justify-between px-4 lg:px-6 mb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Icon className="w-4 h-4 text-orange-500 shrink-0" />
+            <h2 className="text-base font-bold text-gray-900 leading-tight">{def.title}</h2>
+          </div>
+          {def.subtitle && <p className="text-sm text-gray-400 mt-0.5 pl-6">{def.subtitle}</p>}
         </div>
         {!empty && (
-          <div className="flex gap-0.5">
+          <div className="flex gap-1 shrink-0 pt-0.5">
             <button onClick={() => scroll("l")} disabled={atStart} aria-label="Atrás"
-              className="w-6 h-6 rounded-full border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-sm">
-              <ChevronLeft className="w-3 h-3 text-gray-500" />
+              className="w-7 h-7 rounded-full border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-sm">
+              <ChevronLeft className="w-3.5 h-3.5 text-gray-500" />
             </button>
             <button onClick={() => scroll("r")} disabled={atEnd} aria-label="Adelante"
-              className="w-6 h-6 rounded-full border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-sm">
-              <ChevronRight className="w-3 h-3 text-gray-500" />
+              className="w-7 h-7 rounded-full border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-sm">
+              <ChevronRight className="w-3.5 h-3.5 text-gray-500" />
             </button>
           </div>
         )}
       </div>
+
       {/* Track */}
       <div ref={ref} onScroll={onScroll}
-        className="flex gap-2.5 overflow-x-auto px-4 lg:px-6 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex gap-3 overflow-x-auto px-4 lg:px-6 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         style={{ scrollSnapType: "x mandatory" }}>
         {empty
-          ? [1, 2, 3, 4, 5].map((i) => (
-              <div key={i} style={{ scrollSnapAlign: "start" }}>
-                <Skeleton variant={def.variant} />
-              </div>
-            ))
-          : items.map((p) => (
-              <div key={p.id} style={{ scrollSnapAlign: "start" }}>
-                <Card product={p} variant={def.variant} />
-              </div>
-            ))
+          ? [1,2,3,4].map((i) => <div key={i} style={{ scrollSnapAlign: "start" }}><SkeletonCard /></div>)
+          : items.map((p) => <div key={p.id} style={{ scrollSnapAlign: "start" }}><ProductCard product={p} /></div>)
         }
       </div>
+
       {empty && (
-        <p className="px-4 lg:px-6 text-[10px] text-gray-300">
+        <p className="px-4 lg:px-6 mt-2 text-xs text-gray-300">
           Próximamente ·{" "}
-          <Link href="/mis-negocios" className="text-orange-400 hover:text-orange-500 cursor-pointer">Publicar aquí</Link>
+          <Link href="/mis-negocios" className="text-orange-500 hover:text-orange-600 cursor-pointer font-medium">
+            Publicar aquí
+          </Link>
         </p>
       )}
     </section>
   );
 }
 
-// ─── Search results ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  FEATURED SECTION — 2 landscape cards like Whop "Empezando"
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FeaturedSection({ products }: { products: PublicProduct[] }) {
+  const featured = products.slice(0, 2);
+  if (featured.length === 0) return null;
+
+  return (
+    <section className="px-4 lg:px-6">
+      <div className="flex items-center gap-2 mb-4">
+        <Sparkles className="w-4 h-4 text-orange-500" />
+        <h2 className="text-base font-bold text-gray-900">Para empezar</h2>
+      </div>
+      <div className={`grid gap-3 ${featured.length >= 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+        {featured.map((p) => <FeaturedCard key={p.id} product={p} />)}
+        {featured.length === 1 && (
+          <Link href="/mis-negocios"
+            className="rounded-2xl border-2 border-dashed border-gray-100 hover:border-orange-200 hover:bg-orange-50/40 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer group"
+            style={{ height: 180 }}>
+            <div className="w-10 h-10 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <PlusCircle className="w-5 h-5 text-orange-500" />
+            </div>
+            <p className="text-sm font-semibold text-gray-500">Publica tu producto</p>
+          </Link>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SEARCH RESULTS
+// ─────────────────────────────────────────────────────────────────────────────
 
 function SearchResults({ products, query }: { products: PublicProduct[]; query: string }) {
   const q = query.toLowerCase().trim();
@@ -498,30 +411,35 @@ function SearchResults({ products, query }: { products: PublicProduct[]; query: 
   );
 
   return (
-    <div className="px-4 lg:px-6 space-y-3">
-      <p className="text-xs text-gray-400">
+    <div className="px-4 lg:px-6 space-y-4">
+      <p className="text-sm text-gray-400">
         <b className="text-gray-900">{results.length}</b> resultado{results.length !== 1 ? "s" : ""} para{" "}
         <span className="text-orange-500">&ldquo;{query}&rdquo;</span>
       </p>
       {results.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-gray-100 py-16 flex flex-col items-center gap-4 text-center">
-          <Package className="w-8 h-8 text-gray-200" />
-          <p className="text-sm font-bold text-gray-500">Sin resultados</p>
+        <div className="rounded-2xl border-2 border-dashed border-gray-100 py-20 flex flex-col items-center gap-4 text-center">
+          <Package className="w-10 h-10 text-gray-200" />
+          <div>
+            <p className="font-bold text-gray-500">Sin resultados</p>
+            <p className="text-sm text-gray-300 mt-1">Intenta con otro término.</p>
+          </div>
           <Link href="/mis-negocios"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition-colors cursor-pointer">
-            <PlusCircle className="w-3.5 h-3.5" />Crear producto
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold transition-colors cursor-pointer">
+            <PlusCircle className="w-4 h-4" />Crear producto
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5">
-          {results.map((p) => <CardStandard key={p.id} product={p} />)}
+        <div className="flex flex-wrap gap-3">
+          {results.map((p) => <ProductCard key={p.id} product={p} />)}
         </div>
       )}
     </div>
   );
 }
 
-// ─── Category pills ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  CATEGORY PILLS
+// ─────────────────────────────────────────────────────────────────────────────
 
 const PILLS = [
   { label: "Todo",        value: "" },
@@ -533,76 +451,85 @@ const PILLS = [
   { label: "Eventos",     value: "evento" },
 ];
 
-// ─── Compact hero bar ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  HERO BAR (compact)
+// ─────────────────────────────────────────────────────────────────────────────
 
-function HeroBar({
-  query, setQuery, activeTab, setActiveTab, totalProducts,
-}: {
+function HeroBar({ query, setQuery, activeTab, setActiveTab, totalProducts }: {
   query: string; setQuery: (v: string) => void;
   activeTab: "discover" | "create"; setActiveTab: (v: "discover" | "create") => void;
   totalProducts: number;
 }) {
   return (
-    <div className="bg-white border-b border-gray-100 px-4 lg:px-6 py-3">
-      <div className="max-w-5xl mx-auto flex items-center gap-3">
-        <span className="text-sm font-extrabold text-gray-900 tracking-tight shrink-0 hidden sm:block">Mundo Academy</span>
+    <div className="bg-white border-b border-gray-100">
+      <div className="px-4 lg:px-6 py-3 flex items-center gap-3 max-w-6xl mx-auto">
+        {/* Brand */}
+        <span className="text-sm font-extrabold text-gray-900 tracking-tight shrink-0 hidden sm:block">
+          Mundo Academy
+        </span>
+
+        {/* Tab switcher */}
         <div className="flex gap-0.5 p-0.5 rounded-lg border border-gray-200 bg-gray-50 shrink-0">
-          <button onClick={() => setActiveTab("discover")}
-            className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${activeTab === "discover" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}>
-            Descubrir
-          </button>
-          <button onClick={() => setActiveTab("create")}
-            className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${activeTab === "create" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}>
-            Lanzar
-          </button>
+          {(["discover", "create"] as const).map((tab) => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${tab === activeTab ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-700"}`}>
+              {tab === "discover" ? "Descubrir" : "Lanzar"}
+            </button>
+          ))}
         </div>
+
+        {/* Search */}
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar cursos, comunidades, creadores..."
-            className="w-full pl-8 pr-8 py-2 text-xs rounded-xl border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-400/30 focus:border-orange-400 transition-all" />
+            className="w-full pl-9 pr-9 py-2 text-sm rounded-xl border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-400/30 focus:border-orange-400 transition-all" />
           {query && (
             <button onClick={() => setQuery("")} aria-label="Limpiar"
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 cursor-pointer">
-              <X className="w-3 h-3" />
+              <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
-        <div className="hidden lg:flex items-center gap-1 text-[10px] shrink-0">
-          <b className="text-gray-900">{totalProducts > 0 ? `${totalProducts}+` : "—"}</b>
-          <span className="text-gray-400">productos</span>
+
+        {/* Stats */}
+        <div className="hidden lg:flex items-center gap-1.5 text-xs shrink-0 text-gray-400">
+          <b className="text-gray-900">{totalProducts > 0 ? `${totalProducts}+` : "—"}</b> productos
           <span className="text-gray-200 mx-0.5">·</span>
-          <b className="text-gray-900">2.4k+</b>
-          <span className="text-gray-400">usuarios</span>
+          <b className="text-gray-900">2.4k+</b> usuarios
         </div>
+
+        {/* CTA */}
         <Link href="/mis-negocios"
-          className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-bold transition-colors cursor-pointer shrink-0">
-          <PlusCircle className="w-3 h-3" />Lanzar
+          className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition-colors cursor-pointer shrink-0 shadow-sm shadow-orange-100">
+          <PlusCircle className="w-3.5 h-3.5" />Lanzar
         </Link>
       </div>
     </div>
   );
 }
 
-// ─── Launch view ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  LAUNCH VIEW
+// ─────────────────────────────────────────────────────────────────────────────
 
 function LaunchView() {
   return (
-    <div className="px-4 lg:px-6 py-12 flex flex-col items-center text-center gap-5 max-w-sm mx-auto">
-      <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center">
-        <PlusCircle className="w-7 h-7 text-orange-500" />
+    <div className="px-4 lg:px-6 py-16 flex flex-col items-center text-center gap-6 max-w-sm mx-auto">
+      <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center">
+        <PlusCircle className="w-8 h-8 text-orange-500" />
       </div>
       <div>
-        <h2 className="text-xl font-extrabold text-gray-900">Publica tu producto</h2>
-        <p className="text-sm text-gray-400 mt-1.5 leading-relaxed">Crea un curso, comunidad, ebook o servicio y empieza a monetizar.</p>
+        <h2 className="text-2xl font-extrabold text-gray-900">Publica tu producto</h2>
+        <p className="text-sm text-gray-400 mt-2 leading-relaxed">Crea un curso, comunidad, ebook o servicio y empieza a monetizar hoy.</p>
       </div>
-      <div className="flex flex-col sm:flex-row gap-2 w-full justify-center">
+      <div className="flex flex-col sm:flex-row gap-2.5 w-full justify-center">
         <Link href="/mis-negocios"
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold transition-colors cursor-pointer">
+          className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold transition-colors cursor-pointer shadow-sm shadow-orange-100">
           <PlusCircle className="w-4 h-4" />Crear negocio
         </Link>
         <Link href="/descubrir"
-          className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold transition-colors cursor-pointer">
+          className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold transition-colors cursor-pointer">
           Ver marketplace
         </Link>
       </div>
@@ -610,31 +537,33 @@ function LaunchView() {
   );
 }
 
-// ─── Sections — alternating visual rhythm ─────────────────────────────────────
-// hero → tall → hero → standard → wide → tall → wide → hero → standard → wide → hero → tall
+// ─────────────────────────────────────────────────────────────────────────────
+//  SECTIONS CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
 
 const SECTIONS: SectionDef[] = [
-  { id: "trending",    title: "Tendencias",               variant: "hero",     filter: () => true,                                                                 maxItems: 10 },
-  { id: "vendidos",    title: "Más vendidos",              variant: "tall",     filter: () => true,       sort: (a, b) => fakeSales(b.id) - fakeSales(a.id),        maxItems: 12 },
-  { id: "new",         title: "Nuevos lanzamientos",       variant: "hero",     filter: isNew,                                                                      maxItems: 8  },
-  { id: "free",        title: "Gratis",                    variant: "standard", filter: (p) => p.access_type === "free",                                            maxItems: 12 },
-  { id: "ai",          title: "IA & Automatización",       variant: "wide",     filter: kw("ia", "inteligencia artificial", "automatización", "chatgpt", "ai ", "gpt", "openai", "automation"), maxItems: 8 },
-  { id: "negocios",    title: "Negocios & Emprendimiento", variant: "tall",     filter: kw("negocio", "emprendimiento", "empresa", "startup", "pyme", "emprender"), maxItems: 10 },
-  { id: "marketing",   title: "Marketing Digital",         variant: "wide",     filter: kw("marketing", "redes sociales", "seo", "publicidad", "instagram", "tiktok", "ads"), maxItems: 8 },
-  { id: "wealth",      title: "Wealth & Finanzas",         variant: "hero",     filter: kw("inversión", "inversion", "finanzas", "trading", "crypto", "dinero", "riqueza"), maxItems: 8 },
-  { id: "cursos",      title: "Cursos",                    variant: "standard", filter: (p) => p.type === "curso",                                                  maxItems: 12 },
-  { id: "comunidades", title: "Comunidades",               variant: "wide",     filter: (p) => p.type === "comunidad",                                             maxItems: 8  },
-  { id: "mentoria",    title: "Mentorías & Servicios",     variant: "hero",     filter: (p) => p.type === "mentoria" || p.type === "servicio",                     maxItems: 8  },
-  { id: "recursos",    title: "Ebooks & Recursos",         variant: "tall",     filter: (p) => p.type === "ebook",                                                 maxItems: 12 },
+  { id: "trending",    title: "Tendencias",               subtitle: "Los productos más populares del ecosistema",               filter: () => true,                                                                                    maxItems: 10 },
+  { id: "vendidos",    title: "Más vendidos",              subtitle: "Los que más negocios han generado",                        filter: () => true,       sort: (a, b) => fakeSales(b.id) - fakeSales(a.id),                        maxItems: 10 },
+  { id: "new",         title: "Nuevos lanzamientos",       subtitle: "Publicados recientemente",                                 filter: isNew,                                                                                         maxItems: 8  },
+  { id: "free",        title: "Gratis",                    subtitle: "Empieza sin gastar un peso",                               filter: (p) => p.access_type === "free",                                                               maxItems: 10 },
+  { id: "ai",          title: "IA & Automatización",       subtitle: "Tecnología que multiplica tu productividad",               filter: kw("ia", "inteligencia artificial", "automatización", "chatgpt", "ai ", "gpt", "openai"),      maxItems: 8  },
+  { id: "negocios",    title: "Negocios & Emprendimiento", subtitle: "De la idea al negocio rentable",                          filter: kw("negocio", "emprendimiento", "empresa", "startup", "pyme", "emprender"),                    maxItems: 8  },
+  { id: "marketing",   title: "Marketing Digital",         subtitle: "Atrae clientes y escala tu marca",                        filter: kw("marketing", "redes sociales", "seo", "publicidad", "instagram", "tiktok", "ads"),          maxItems: 8  },
+  { id: "wealth",      title: "Wealth & Finanzas",         subtitle: "Construye riqueza y libertad financiera",                  filter: kw("inversión", "inversion", "finanzas", "trading", "crypto", "dinero", "riqueza"),            maxItems: 8  },
+  { id: "cursos",      title: "Cursos",                    subtitle: "Aprende con los mejores a tu ritmo",                      filter: (p) => p.type === "curso",                                                                     maxItems: 10 },
+  { id: "comunidades", title: "Comunidades",               subtitle: "Conecta con personas que piensan como tú",                filter: (p) => p.type === "comunidad",                                                                 maxItems: 8  },
+  { id: "mentoria",    title: "Mentorías & Servicios",     subtitle: "Acelera con acompañamiento experto",                      filter: (p) => p.type === "mentoria" || p.type === "servicio",                                         maxItems: 8  },
+  { id: "recursos",    title: "Ebooks & Recursos",         subtitle: "Descarga, lee y aplica hoy",                              filter: (p) => p.type === "ebook",                                                                     maxItems: 10 },
 ];
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  MAIN
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function DiscoverClient({ products }: { products: PublicProduct[] }) {
   const [query,      setQuery]      = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [activeTab,  setActiveTab]  = useState<"discover" | "create">("discover");
-
   const isSearching = query.trim().length > 0;
 
   const displayProducts = useMemo(
@@ -644,13 +573,15 @@ export function DiscoverClient({ products }: { products: PublicProduct[] }) {
 
   return (
     <div className="min-h-screen bg-gray-50 -m-8">
+      {/* Hero nav bar */}
       <HeroBar query={query} setQuery={setQuery} activeTab={activeTab} setActiveTab={setActiveTab} totalProducts={products.length} />
 
+      {/* Sticky category pills */}
       {activeTab === "discover" && !isSearching && (
-        <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-4 lg:px-6 py-2 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-4 lg:px-6 py-2.5 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {PILLS.map(({ label, value }) => (
             <button key={value} onClick={() => setTypeFilter(value)}
-              className={`flex-none px-3 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
+              className={`flex-none px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                 typeFilter === value ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-800"
               }`}>
               {label}
@@ -659,19 +590,27 @@ export function DiscoverClient({ products }: { products: PublicProduct[] }) {
         </div>
       )}
 
+      {/* Launch tab */}
       {activeTab === "create" && <LaunchView />}
 
+      {/* Discovery feed */}
       {activeTab === "discover" && (
-        <div className="py-4 space-y-5">
-          {isSearching
-            ? <SearchResults products={displayProducts} query={query} />
-            : SECTIONS.map((def) => <CarouselSection key={def.id} def={def} products={displayProducts} />)
-          }
+        <div className="py-6 space-y-10">
+          {isSearching ? (
+            <SearchResults products={displayProducts} query={query} />
+          ) : (
+            <>
+              <FeaturedSection products={displayProducts} />
+              {SECTIONS.map((def) => (
+                <CarouselSection key={def.id} def={def} products={displayProducts} />
+              ))}
+            </>
+          )}
         </div>
       )}
 
-      <footer className="border-t border-gray-100 bg-white py-5 text-center mt-2">
-        <p className="text-[10px] text-gray-300">© {new Date().getFullYear()} Mundo Academy · Todos los derechos reservados</p>
+      <footer className="border-t border-gray-100 bg-white py-6 text-center mt-4">
+        <p className="text-xs text-gray-300">© {new Date().getFullYear()} Mundo Academy · Todos los derechos reservados</p>
       </footer>
     </div>
   );
