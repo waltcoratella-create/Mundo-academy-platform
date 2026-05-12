@@ -3,9 +3,10 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
-  ChevronLeft, ChevronRight, Search, X, Star, Users, Eye,
+  ChevronLeft, ChevronRight, X, Star, Users, Eye,
   TrendingUp, Sparkles, Gift, BookOpen, Bot, Briefcase,
   Megaphone, Zap, Package, PlusCircle, DollarSign, Flame, ArrowRight,
+  Plus, Mic, ArrowUp,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import type { PublicProduct } from "@/lib/supabase/queries";
@@ -452,58 +453,95 @@ const PILLS = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  HERO BAR (compact)
+//  WHOP-STYLE HERO
+//  Centered editorial layout: tab switch → massive headline → subtitle →
+//  AI search bar (2-row pill) → platform metrics
 // ─────────────────────────────────────────────────────────────────────────────
 
-function HeroBar({ query, setQuery, activeTab, setActiveTab, totalProducts }: {
+function WhopHero({
+  query, setQuery, activeTab, setActiveTab,
+}: {
   query: string; setQuery: (v: string) => void;
   activeTab: "discover" | "create"; setActiveTab: (v: "discover" | "create") => void;
-  totalProducts: number;
 }) {
   return (
-    <div className="bg-white border-b border-gray-100">
-      <div className="px-4 lg:px-6 py-3 flex items-center gap-3 max-w-6xl mx-auto">
-        {/* Brand */}
-        <span className="text-sm font-extrabold text-gray-900 tracking-tight shrink-0 hidden sm:block">
-          Mundo Academy
-        </span>
+    <div className="bg-white pt-10 pb-16 flex flex-col items-center text-center px-4">
 
-        {/* Tab switcher */}
-        <div className="flex gap-0.5 p-0.5 rounded-lg border border-gray-200 bg-gray-50 shrink-0">
-          {(["discover", "create"] as const).map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${tab === activeTab ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-700"}`}>
-              {tab === "discover" ? "Descubrir" : "Lanzar"}
+      {/* ── Tab switcher pill ── */}
+      <div className="inline-flex items-center p-1 rounded-full bg-gray-100 mb-10">
+        {(["create", "discover"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-5 py-1.5 rounded-full text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              tab === activeTab
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {tab === "create" ? "Lanzar" : "Descubrir"}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Headline ── */}
+      <h1 className="text-[52px] sm:text-[68px] lg:text-[80px] font-black text-gray-950 leading-[1.05] tracking-[-0.03em] max-w-3xl mx-auto mb-5">
+        Donde los negocios despegan.
+      </h1>
+
+      {/* ── Subtitle ── */}
+      <p className="text-base sm:text-lg text-gray-400 max-w-sm mx-auto leading-relaxed mb-10">
+        Descubre y lanza productos digitales con más de 21M de emprendedores en Mundo Academy.
+      </p>
+
+      {/* ── AI Search bar ── */}
+      <div className="w-full max-w-xl sm:max-w-2xl mx-auto mb-10">
+        <div className="flex flex-col gap-4 rounded-[28px] bg-[#f3f4f6] border border-gray-200/60 px-6 pt-5 pb-4">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar cursos, mentorías, comunidades..."
+            className="bg-transparent text-gray-800 placeholder-gray-400 outline-none text-base w-full"
+          />
+          <div className="flex items-center justify-between">
+            <button
+              aria-label="Opciones"
+              className="w-7 h-7 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4 text-gray-500" />
             </button>
-          ))}
+            <div className="flex items-center gap-2.5">
+              {query && (
+                <button
+                  onClick={() => setQuery("")}
+                  aria-label="Limpiar búsqueda"
+                  className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+              <button aria-label="Buscar por voz" className="text-gray-400 hover:text-gray-600 transition-colors cursor-pointer">
+                <Mic className="w-5 h-5" />
+              </button>
+              <button
+                aria-label="Buscar"
+                className="w-7 h-7 rounded-full bg-gray-800 hover:bg-gray-900 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <ArrowUp className="w-3.5 h-3.5 text-white" />
+              </button>
+            </div>
+          </div>
         </div>
+      </div>
 
-        {/* Search */}
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-          <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar cursos, comunidades, creadores..."
-            className="w-full pl-9 pr-9 py-2 text-sm rounded-xl border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-400/30 focus:border-orange-400 transition-all" />
-          {query && (
-            <button onClick={() => setQuery("")} aria-label="Limpiar"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 cursor-pointer">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-
-        {/* Stats */}
-        <div className="hidden lg:flex items-center gap-1.5 text-xs shrink-0 text-gray-400">
-          <b className="text-gray-900">{totalProducts > 0 ? `${totalProducts}+` : "—"}</b> productos
-          <span className="text-gray-200 mx-0.5">·</span>
-          <b className="text-gray-900">2.4k+</b> usuarios
-        </div>
-
-        {/* CTA */}
-        <Link href="/mis-negocios"
-          className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition-colors cursor-pointer shrink-0 shadow-sm shadow-orange-100">
-          <PlusCircle className="w-3.5 h-3.5" />Lanzar
-        </Link>
+      {/* ── Platform metrics ── */}
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm text-gray-400">
+        <span><span className="text-gray-700 font-semibold">3.4M US$</span> earned</span>
+        <span className="text-gray-300">·</span>
+        <span><span className="text-gray-700 font-semibold">22M</span> users</span>
+        <span className="text-gray-300">·</span>
+        <span><span className="text-gray-700 font-semibold">2.9M</span> businesses</span>
       </div>
     </div>
   );
@@ -572,9 +610,9 @@ export function DiscoverClient({ products }: { products: PublicProduct[] }) {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 -m-8">
-      {/* Hero nav bar */}
-      <HeroBar query={query} setQuery={setQuery} activeTab={activeTab} setActiveTab={setActiveTab} totalProducts={products.length} />
+    <div className="min-h-screen bg-white -m-8">
+      {/* Whop-style hero */}
+      <WhopHero query={query} setQuery={setQuery} activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {/* Sticky category pills */}
       {activeTab === "discover" && !isSearching && (
