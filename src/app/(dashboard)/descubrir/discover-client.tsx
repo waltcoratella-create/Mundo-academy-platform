@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ChevronLeft, ChevronRight, X, Star, Users, Eye,
   TrendingUp, Sparkles, Gift, BookOpen, Bot, Briefcase,
@@ -485,7 +486,7 @@ function WhopHero({
       </div>
 
       {/* ── Headline ── */}
-      <h1 className="text-[52px] sm:text-[68px] lg:text-[80px] font-black text-gray-950 leading-[1.05] tracking-[-0.03em] max-w-3xl mx-auto mb-5">
+      <h1 className="font-sans text-[52px] sm:text-[68px] lg:text-[80px] font-black text-gray-950 leading-[1.05] tracking-[-0.03em] max-w-3xl mx-auto mb-5">
         Donde los negocios despegan.
       </h1>
 
@@ -576,6 +577,68 @@ function LaunchView() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  EMPEZANDO — 4 branded banners, 2-col desktop / 1-col mobile
+//  Place image files in: public/discover/banners/
+// ─────────────────────────────────────────────────────────────────────────────
+
+const BANNERS = [
+  {
+    id: "b1",
+    src: "/discover/banners/banner-mundo-academy-stars.png",
+    alt: "Mundo Academy — Aprende de los que ya lo lograron",
+    href: "/descubrir",
+  },
+  {
+    id: "b2",
+    src: "/discover/banners/banner-mundo-ejecutivo-noticias.png",
+    alt: "Mundo Ejecutivo Noticias — Noticias que impulsan líderes",
+    href: "/descubrir",
+  },
+  {
+    id: "b3",
+    src: "/discover/banners/banner-galeria-mundo-ejecutivo.png",
+    alt: "Galería Mundo Ejecutivo — Explora nuestras revistas y contenido exclusivo",
+    href: "/descubrir",
+  },
+  {
+    id: "b4",
+    src: "/discover/banners/banner-mundo-academy-logo.png",
+    alt: "Mundo Academy — Aprende, crea y crece con mundo academy",
+    href: "/descubrir",
+  },
+];
+
+function EmpezandoSection() {
+  return (
+    <section className="px-4 lg:px-6">
+      <div className="flex items-center gap-2 mb-4">
+        <Sparkles className="w-4 h-4 text-orange-500" />
+        <h2 className="text-base font-bold text-gray-900">Empezando</h2>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {BANNERS.map((banner) => (
+          <Link
+            key={banner.id}
+            href={banner.href}
+            className="group relative block rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 cursor-pointer"
+          >
+            <div className="relative w-full aspect-[16/6]">
+              <Image
+                src={banner.src}
+                alt={banner.alt}
+                fill
+                className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                sizes="(max-width: 640px) 100vw, 50vw"
+              />
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  SECTIONS CONFIG
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -638,6 +701,7 @@ export function DiscoverClient({ products }: { products: PublicProduct[] }) {
             <SearchResults products={displayProducts} query={query} />
           ) : (
             <>
+              <EmpezandoSection />
               <FeaturedSection products={displayProducts} />
               {SECTIONS.map((def) => (
                 <CarouselSection key={def.id} def={def} products={displayProducts} />
