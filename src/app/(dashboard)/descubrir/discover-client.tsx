@@ -489,7 +489,7 @@ function WhopHero({
       </div>
 
       {/* ── Headline ── */}
-      <h1 className="font-jakarta text-[48px] sm:text-[56px] lg:text-[64px] font-extrabold text-gray-950 leading-[1.1] tracking-[-0.04em] max-w-3xl mx-auto mb-5">
+      <h1 className="font-jakarta text-[48px] sm:text-[56px] lg:text-[64px] font-bold text-gray-950 leading-[1.1] tracking-[-0.04em] max-w-3xl mx-auto mb-5">
         Donde los negocios despegan.
       </h1>
 
