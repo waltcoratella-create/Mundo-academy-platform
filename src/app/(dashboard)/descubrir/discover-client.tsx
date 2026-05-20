@@ -467,12 +467,12 @@ function WhopHero({
 }) {
   return (
     <div
-      className="relative pt-10 pb-16 flex flex-col items-center text-center px-4"
+      className="relative pt-5 pb-8 flex flex-col items-center text-center px-4"
       style={{ background: "radial-gradient(ellipse 80% 55% at 50% -5%, rgba(99,102,241,0.08) 0%, rgba(168,85,247,0.05) 45%, transparent 70%), #ffffff" }}
     >
 
       {/* ── Tab switcher pill ── */}
-      <div className="inline-flex items-center p-1 rounded-full bg-white/80 backdrop-blur-md border border-gray-200/50 shadow-sm mb-10">
+      <div className="inline-flex items-center p-1 rounded-full bg-white/80 backdrop-blur-md border border-gray-200/50 shadow-sm mb-4">
         {(["create", "discover"] as const).map((tab) => (
           <button
             key={tab}
@@ -489,18 +489,18 @@ function WhopHero({
       </div>
 
       {/* ── Headline ── */}
-      <h1 className="font-jakarta text-[48px] sm:text-[56px] lg:text-[64px] font-bold text-gray-950 leading-[1.1] tracking-[-0.04em] max-w-3xl mx-auto mb-5">
+      <h1 className="font-jakarta text-[34px] sm:text-[42px] lg:text-[52px] font-semibold text-gray-950 leading-[1.1] tracking-[-0.03em] max-w-2xl mx-auto mb-3">
         Donde los negocios despegan.
       </h1>
 
       {/* ── Subtitle ── */}
-      <p className="text-base sm:text-lg text-gray-400 max-w-sm mx-auto leading-relaxed mb-10">
+      <p className="text-sm sm:text-base text-gray-400 max-w-sm mx-auto leading-relaxed mb-5">
         Descubre y lanza productos digitales con más de 21M de emprendedores en Mundo Academy.
       </p>
 
       {/* ── AI Search bar ── */}
-      <div className="w-full max-w-xl sm:max-w-2xl mx-auto mb-10">
-        <div className="flex flex-col gap-4 rounded-[28px] bg-white/90 backdrop-blur-xl border border-gray-100 shadow-[0_8px_40px_rgba(0,0,0,0.06)] px-6 pt-5 pb-4">
+      <div className="w-full max-w-xl sm:max-w-2xl mx-auto mb-5">
+        <div className="flex flex-col gap-3 rounded-[28px] bg-white/90 backdrop-blur-xl border border-gray-100 shadow-[0_8px_40px_rgba(0,0,0,0.06)] px-5 pt-4 pb-3">
           <input
             type="text"
             value={query}
@@ -699,7 +699,7 @@ export function DiscoverClient({ products }: { products: PublicProduct[] }) {
 
       {/* Discovery feed */}
       {activeTab === "discover" && (
-        <div className="py-6 space-y-10">
+        <div className="py-4 space-y-8">
           {isSearching ? (
             <SearchResults products={displayProducts} query={query} />
           ) : (
