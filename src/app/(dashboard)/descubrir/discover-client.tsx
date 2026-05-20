@@ -489,7 +489,7 @@ function WhopHero({
       </div>
 
       {/* ── Headline ── */}
-      <h1 className="text-[52px] sm:text-[68px] lg:text-[80px] font-black text-gray-950 leading-[1.05] tracking-[-0.03em] max-w-3xl mx-auto mb-5">
+      <h1 className="font-jakarta text-[48px] sm:text-[56px] lg:text-[64px] font-extrabold text-gray-950 leading-[1.1] tracking-[-0.04em] max-w-3xl mx-auto mb-5">
         Donde los negocios despegan.
       </h1>
 
@@ -676,7 +676,7 @@ export function DiscoverClient({ products }: { products: PublicProduct[] }) {
   );
 
   return (
-    <div className="min-h-screen bg-white -m-8">
+    <div className="min-h-screen bg-white -m-8 font-jakarta">
       {/* Whop-style hero */}
       <WhopHero query={query} setQuery={setQuery} activeTab={activeTab} setActiveTab={setActiveTab} />
 
