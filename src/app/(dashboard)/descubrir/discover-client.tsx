@@ -110,7 +110,7 @@ function ProductCard({ product }: { product: PublicProduct }) {
   return (
     <Link
       href={href}
-      className="group flex-none w-80 rounded-2xl overflow-hidden bg-white border border-gray-100 hover:border-gray-200 hover:shadow-xl hover:shadow-gray-200/60 transition-all duration-200 cursor-pointer flex flex-col"
+      className="group flex-none w-80 rounded-2xl overflow-hidden bg-white/95 border border-gray-100/80 shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.09)] hover:border-gray-200 transition-all duration-300 cursor-pointer flex flex-col"
     >
       {/* ── Banner ── */}
       <div className={`relative h-44 overflow-hidden bg-gradient-to-br ${gradCls} shrink-0`}>
@@ -326,7 +326,7 @@ function CarouselSection({ def, products }: { def: SectionDef; products: PublicP
         <div>
           <div className="flex items-center gap-2">
             <Icon className="w-4 h-4 text-orange-500 shrink-0" />
-            <h2 className="text-base font-bold text-gray-900 leading-tight">{def.title}</h2>
+            <h2 className="text-base font-bold text-gray-900 leading-tight font-jakarta">{def.title}</h2>
           </div>
           {def.subtitle && <p className="text-sm text-gray-400 mt-0.5 pl-6">{def.subtitle}</p>}
         </div>
@@ -378,7 +378,7 @@ function FeaturedSection({ products }: { products: PublicProduct[] }) {
     <section className="px-4 lg:px-6">
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="w-4 h-4 text-orange-500" />
-        <h2 className="text-base font-bold text-gray-900">Para empezar</h2>
+        <h2 className="text-base font-bold text-gray-900 font-jakarta">Para empezar</h2>
       </div>
       <div className={`grid gap-3 ${featured.length >= 2 ? "grid-cols-2" : "grid-cols-1"}`}>
         {featured.map((p) => <FeaturedCard key={p.id} product={p} />)}
@@ -466,10 +466,13 @@ function WhopHero({
   activeTab: "discover" | "create"; setActiveTab: (v: "discover" | "create") => void;
 }) {
   return (
-    <div className="bg-white pt-10 pb-16 flex flex-col items-center text-center px-4">
+    <div
+      className="relative pt-10 pb-16 flex flex-col items-center text-center px-4"
+      style={{ background: "radial-gradient(ellipse 80% 55% at 50% -5%, rgba(99,102,241,0.08) 0%, rgba(168,85,247,0.05) 45%, transparent 70%), #ffffff" }}
+    >
 
       {/* ── Tab switcher pill ── */}
-      <div className="inline-flex items-center p-1 rounded-full bg-gray-100 mb-10">
+      <div className="inline-flex items-center p-1 rounded-full bg-white/80 backdrop-blur-md border border-gray-200/50 shadow-sm mb-10">
         {(["create", "discover"] as const).map((tab) => (
           <button
             key={tab}
@@ -497,7 +500,7 @@ function WhopHero({
 
       {/* ── AI Search bar ── */}
       <div className="w-full max-w-xl sm:max-w-2xl mx-auto mb-10">
-        <div className="flex flex-col gap-4 rounded-[28px] bg-[#f3f4f6] border border-gray-200/60 px-6 pt-5 pb-4">
+        <div className="flex flex-col gap-4 rounded-[28px] bg-white/90 backdrop-blur-xl border border-gray-100 shadow-[0_8px_40px_rgba(0,0,0,0.06)] px-6 pt-5 pb-4">
           <input
             type="text"
             value={query}
@@ -559,7 +562,7 @@ function LaunchView() {
         <PlusCircle className="w-8 h-8 text-orange-500" />
       </div>
       <div>
-        <h2 className="text-2xl font-extrabold text-gray-900">Publica tu producto</h2>
+        <h2 className="text-2xl font-extrabold text-gray-900 font-jakarta">Publica tu producto</h2>
         <p className="text-sm text-gray-400 mt-2 leading-relaxed">Crea un curso, comunidad, ebook o servicio y empieza a monetizar hoy.</p>
       </div>
       <div className="flex flex-col sm:flex-row gap-2.5 w-full justify-center">
@@ -613,7 +616,7 @@ function EmpezandoSection() {
     <section className="px-4 lg:px-6">
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="w-4 h-4 text-orange-500" />
-        <h2 className="text-base font-bold text-gray-900">Empezando</h2>
+        <h2 className="text-base font-bold text-gray-900 font-jakarta">Empezando</h2>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {BANNERS.map((banner) => (
@@ -683,7 +686,7 @@ export function DiscoverClient({ products }: { products: PublicProduct[] }) {
           {PILLS.map(({ label, value }) => (
             <button key={value} onClick={() => setTypeFilter(value)}
               className={`flex-none px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                typeFilter === value ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-800"
+                typeFilter === value ? "bg-gray-900 text-white shadow-sm" : "bg-white/80 backdrop-blur-sm border border-gray-200/60 text-gray-500 hover:bg-white hover:border-gray-300 hover:text-gray-700"
               }`}>
               {label}
             </button>
