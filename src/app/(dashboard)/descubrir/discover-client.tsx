@@ -322,7 +322,7 @@ function CarouselSection({ def, products }: { def: SectionDef; products: PublicP
   return (
     <section aria-label={def.title}>
       {/* Header */}
-      <div className="flex items-start justify-between px-4 lg:px-6 mb-4">
+      <div className="flex items-start justify-between px-6 sm:px-8 lg:px-12 mb-4">
         <div>
           <div className="flex items-center gap-2">
             <Icon className="w-4 h-4 text-orange-500 shrink-0" />
@@ -346,7 +346,7 @@ function CarouselSection({ def, products }: { def: SectionDef; products: PublicP
 
       {/* Track */}
       <div ref={ref} onScroll={onScroll}
-        className="flex gap-3 overflow-x-auto px-4 lg:px-6 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex gap-4 overflow-x-auto px-6 sm:px-8 lg:px-12 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         style={{ scrollSnapType: "x mandatory" }}>
         {empty
           ? [1,2,3,4].map((i) => <div key={i} style={{ scrollSnapAlign: "start" }}><SkeletonCard /></div>)
@@ -355,7 +355,7 @@ function CarouselSection({ def, products }: { def: SectionDef; products: PublicP
       </div>
 
       {empty && (
-        <p className="px-4 lg:px-6 mt-2 text-xs text-gray-300">
+        <p className="px-6 sm:px-8 lg:px-12 mt-2 text-xs text-gray-300">
           Próximamente ·{" "}
           <Link href="/mis-negocios" className="text-orange-500 hover:text-orange-600 cursor-pointer font-medium">
             Publicar aquí
@@ -375,12 +375,12 @@ function FeaturedSection({ products }: { products: PublicProduct[] }) {
   if (featured.length === 0) return null;
 
   return (
-    <section className="px-4 lg:px-6">
+    <section className="px-6 sm:px-8 lg:px-12">
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="w-4 h-4 text-orange-500" />
         <h2 className="text-base font-bold text-gray-900 font-jakarta">Para empezar</h2>
       </div>
-      <div className={`grid gap-3 ${featured.length >= 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+      <div className={`grid gap-4 sm:gap-5 ${featured.length >= 2 ? "grid-cols-2" : "grid-cols-1"}`}>
         {featured.map((p) => <FeaturedCard key={p.id} product={p} />)}
         {featured.length === 1 && (
           <Link href="/mis-negocios"
@@ -413,7 +413,7 @@ function SearchResults({ products, query }: { products: PublicProduct[]; query: 
   );
 
   return (
-    <div className="px-4 lg:px-6 space-y-4">
+    <div className="px-6 sm:px-8 lg:px-12 space-y-4">
       <p className="text-sm text-gray-400">
         <b className="text-gray-900">{results.length}</b> resultado{results.length !== 1 ? "s" : ""} para{" "}
         <span className="text-orange-500">&ldquo;{query}&rdquo;</span>
@@ -431,7 +431,7 @@ function SearchResults({ products, query }: { products: PublicProduct[]; query: 
           </Link>
         </div>
       ) : (
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-4 sm:gap-5">
           {results.map((p) => <ProductCard key={p.id} product={p} />)}
         </div>
       )}
@@ -467,7 +467,7 @@ function WhopHero({
 }) {
   return (
     <div
-      className="relative pt-5 pb-8 flex flex-col items-center text-center px-4"
+      className="relative pt-8 pb-8 flex flex-col items-center text-center px-6 sm:px-8"
       style={{ background: "radial-gradient(ellipse 80% 55% at 50% -5%, rgba(99,102,241,0.08) 0%, rgba(168,85,247,0.05) 45%, transparent 70%), #ffffff" }}
     >
 
@@ -613,12 +613,12 @@ const BANNERS = [
 
 function EmpezandoSection() {
   return (
-    <section className="px-4 lg:px-6">
+    <section className="px-6 sm:px-8 lg:px-12">
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="w-4 h-4 text-orange-500" />
         <h2 className="text-base font-bold text-gray-900 font-jakarta">Empezando</h2>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
         {BANNERS.map((banner) => (
           <Link
             key={banner.id}
@@ -682,7 +682,7 @@ export function DiscoverClient({ products }: { products: PublicProduct[] }) {
 
       {/* Sticky category pills */}
       {activeTab === "discover" && !isSearching && (
-        <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-4 lg:px-6 py-2.5 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-6 sm:px-8 lg:px-12 py-3 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {PILLS.map(({ label, value }) => (
             <button key={value} onClick={() => setTypeFilter(value)}
               className={`flex-none px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
@@ -699,7 +699,7 @@ export function DiscoverClient({ products }: { products: PublicProduct[] }) {
 
       {/* Discovery feed */}
       {activeTab === "discover" && (
-        <div className="py-4 space-y-8">
+        <div className="py-5 space-y-8">
           {isSearching ? (
             <SearchResults products={displayProducts} query={query} />
           ) : (
