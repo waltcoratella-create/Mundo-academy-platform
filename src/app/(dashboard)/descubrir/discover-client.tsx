@@ -467,7 +467,7 @@ function WhopHero({
 }) {
   return (
     <div
-      className="relative pt-8 pb-8 flex flex-col items-center text-center px-6 sm:px-8"
+      className="relative pt-14 pb-10 flex flex-col items-center text-center px-6 sm:px-8"
       style={{ background: "radial-gradient(ellipse 80% 55% at 50% -5%, rgba(99,102,241,0.08) 0%, rgba(168,85,247,0.05) 45%, transparent 70%), #ffffff" }}
     >
 
@@ -680,19 +680,7 @@ export function DiscoverClient({ products }: { products: PublicProduct[] }) {
       {/* Whop-style hero */}
       <WhopHero query={query} setQuery={setQuery} activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {/* Sticky category pills */}
-      {activeTab === "discover" && !isSearching && (
-        <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-6 sm:px-8 lg:px-12 py-3 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {PILLS.map(({ label, value }) => (
-            <button key={value} onClick={() => setTypeFilter(value)}
-              className={`flex-none px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                typeFilter === value ? "bg-gray-900 text-white shadow-sm" : "bg-white/80 backdrop-blur-sm border border-gray-200/60 text-gray-500 hover:bg-white hover:border-gray-300 hover:text-gray-700"
-              }`}>
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Category pills removed — layout goes directly hero → feed */}
 
       {/* Launch tab */}
       {activeTab === "create" && <LaunchView />}
