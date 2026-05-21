@@ -407,6 +407,98 @@ export async function getRecentTransactions(
   }
 }
 
+// ─── Members queries ──────────────────────────────────────────────────────────
+
+export interface BusinessMember {
+  id: string;
+  product_id: string;
+  product_name: string;
+  product_type: string;
+  user_id: string | null;
+  user_email: string | null;
+  user_name: string | null;
+  status: string;
+  joined_at: string;
+  expires_at: string | null;
+  purchase_id: string | null;
+  origin: "purchase" | "manual";
+}
+
+export async function getBusinessMembers(
+  businessId: string,
+  limit = 500
+): Promise<BusinessMember[]> {
+  try {
+    const supabase = createAdminClient();
+
+    const { data, error } = await supabase
+      .from("product_members")
+      .select(
+        "id, product_id, user_id, purchase_id, status, created_at, products(id, name, type), users(id, email, name)"
+      )
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error || !data) return [];
+
+    return (data as Record<string, unknown>[]).map((row) => {
+      const product = (row.products ?? {}) as Record<string, unknown>;
+      const user = (row.users ?? {}) as Record<string, unknown>;
+      const purchaseId = (row.purchase_id as string | null) ?? null;
+      return {
+        id:           row.id as string,
+        product_id:   (row.product_id as string) ?? "",
+        product_name: (product.name as string) ?? "Sin producto",
+        product_type: (product.type as string) ?? "curso",
+        user_id:      (row.user_id as string | null) ?? null,
+        user_email:   (user.email as string | null) ?? null,
+        user_name:    (user.name as string | null) ?? null,
+        status:       (row.status as string) ?? "active",
+        joined_at:    row.created_at as string,
+        expires_at:   null,
+        purchase_id:  purchaseId,
+        origin:       purchaseId ? "purchase" : "manual",
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export interface MemberSummary {
+  activeCount: number;
+  newLast30d: number;
+  productsWithMembers: number;
+  purchaseCount: number;
+  manualCount: number;
+}
+
+export function summarizeMembers(members: BusinessMember[]): MemberSummary {
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  let activeCount = 0;
+  let newLast30d = 0;
+  let purchaseCount = 0;
+  let manualCount = 0;
+  const productSet = new Set<string>();
+
+  for (const m of members) {
+    if (m.status === "active") activeCount++;
+    if (new Date(m.joined_at).getTime() >= thirtyDaysAgo) newLast30d++;
+    if (m.origin === "purchase") purchaseCount++;
+    else manualCount++;
+    productSet.add(m.product_id);
+  }
+
+  return {
+    activeCount,
+    newLast30d,
+    productsWithMembers: productSet.size,
+    purchaseCount,
+    manualCount,
+  };
+}
+
 // ─── Payments queries ─────────────────────────────────────────────────────────
 
 export interface Payment {
