@@ -960,37 +960,54 @@ export interface PaymentLinksResult {
 export async function getBusinessPaymentLinks(
   businessId: string
 ): Promise<PaymentLinksResult> {
-  try {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("payment_links")
-      .select("id, business_id, product_id, title, slug, active, created_at, products(id, name)")
-      .eq("business_id", businessId)
-      .order("created_at", { ascending: false });
+  const supabase = createAdminClient();
 
-    if (error) {
-      // Table likely doesn't exist yet
-      return { links: [], tableExists: false };
-    }
+  // Step 1 — query payment_links without any join
+  const { data, error } = await supabase
+    .from("payment_links")
+    .select("id, business_id, product_id, title, slug, active, created_at")
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false });
 
-    const links: PaymentLink[] = (data as Record<string, unknown>[]).map((row) => {
-      const product = (row.products ?? {}) as Record<string, unknown>;
-      return {
-        id:           row.id as string,
-        business_id:  row.business_id as string,
-        product_id:   row.product_id as string,
-        product_name: (product.name as string) ?? "Sin producto",
-        title:        row.title as string,
-        slug:         row.slug as string,
-        active:       Boolean(row.active),
-        created_at:   row.created_at as string,
-      };
-    });
-
-    return { links, tableExists: true };
-  } catch {
-    return { links: [], tableExists: false };
+  if (error) {
+    // 42P01 = undefined_table; anything else is a real query error but table exists
+    const tableExists = error.code !== "42P01";
+    console.error("[payment_links] query error:", error.code, error.message);
+    return { links: [], tableExists };
   }
+
+  if (!data || data.length === 0) {
+    return { links: [], tableExists: true };
+  }
+
+  // Step 2 — resolve product names via a separate in-query (no FK required)
+  const rows = data as Array<{
+    id: string; business_id: string; product_id: string;
+    title: string; slug: string; active: boolean; created_at: string;
+  }>;
+
+  const productIds = [...new Set(rows.map((r) => r.product_id))];
+  const { data: productData } = await supabase
+    .from("products")
+    .select("id, name")
+    .in("id", productIds);
+
+  const productNameMap = new Map(
+    (productData ?? []).map((p) => [(p as Record<string, unknown>).id as string, (p as Record<string, unknown>).name as string])
+  );
+
+  const links: PaymentLink[] = rows.map((row) => ({
+    id:           row.id,
+    business_id:  row.business_id,
+    product_id:   row.product_id,
+    product_name: productNameMap.get(row.product_id) ?? "Sin producto",
+    title:        row.title,
+    slug:         row.slug,
+    active:       Boolean(row.active),
+    created_at:   row.created_at,
+  }));
+
+  return { links, tableExists: true };
 }
 
 export async function getPaymentLinkBySlug(
