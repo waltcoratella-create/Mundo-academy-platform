@@ -927,3 +927,85 @@ export async function getPublicProductFull(
     return null;
   }
 }
+
+// ─── Payment links queries ────────────────────────────────────────────────────
+
+export interface PaymentLink {
+  id: string;
+  business_id: string;
+  product_id: string;
+  product_name: string;
+  title: string;
+  slug: string;
+  active: boolean;
+  created_at: string;
+}
+
+export const PAYMENT_LINKS_MIGRATION_SQL = `-- Run in your Supabase SQL editor
+CREATE TABLE IF NOT EXISTS payment_links (
+  id           uuid         DEFAULT gen_random_uuid() PRIMARY KEY,
+  business_id  uuid         NOT NULL,
+  product_id   uuid         NOT NULL,
+  title        text         NOT NULL,
+  slug         text         UNIQUE NOT NULL,
+  active       boolean      DEFAULT true NOT NULL,
+  created_at   timestamptz  DEFAULT now() NOT NULL
+);`;
+
+export interface PaymentLinksResult {
+  links: PaymentLink[];
+  tableExists: boolean;
+}
+
+export async function getBusinessPaymentLinks(
+  businessId: string
+): Promise<PaymentLinksResult> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("payment_links")
+      .select("id, business_id, product_id, title, slug, active, created_at, products(id, name)")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      // Table likely doesn't exist yet
+      return { links: [], tableExists: false };
+    }
+
+    const links: PaymentLink[] = (data as Record<string, unknown>[]).map((row) => {
+      const product = (row.products ?? {}) as Record<string, unknown>;
+      return {
+        id:           row.id as string,
+        business_id:  row.business_id as string,
+        product_id:   row.product_id as string,
+        product_name: (product.name as string) ?? "Sin producto",
+        title:        row.title as string,
+        slug:         row.slug as string,
+        active:       Boolean(row.active),
+        created_at:   row.created_at as string,
+      };
+    });
+
+    return { links, tableExists: true };
+  } catch {
+    return { links: [], tableExists: false };
+  }
+}
+
+export async function getPaymentLinkBySlug(
+  slug: string
+): Promise<{ product_id: string; active: boolean } | null> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("payment_links")
+      .select("product_id, active")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error || !data) return null;
+    return { product_id: data.product_id as string, active: Boolean(data.active) };
+  } catch {
+    return null;
+  }
+}
