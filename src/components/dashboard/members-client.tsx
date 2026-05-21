@@ -5,6 +5,7 @@ import {
   Users, ShoppingBag, Eye, Ban, CalendarClock, Search,
   X, DollarSign, TrendingUp, Repeat, UserPlus, Package, CreditCard,
   Plus, Settings2, Download, Check, GripVertical, Mail, MessageCircle,
+  ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import type {
   BusinessMember, MemberSummary,
@@ -214,7 +215,14 @@ function MiembrosTab({
   const [lastAccessFilter, setLastAccessFilter] = useState<DateRangeOption>("all");
   const [spentFilter, setSpentFilter]           = useState<SpentOption>("all");
   const [ordersFilter, setOrdersFilter]         = useState<OrdersOption>("all");
+  const [sortCol, setSortCol]                   = useState<ColKey | "usuario" | null>(null);
+  const [sortDir, setSortDir]                   = useState<"asc" | "desc">("asc");
   const editRef = useRef<HTMLDivElement>(null);
+
+  function handleSort(col: ColKey | "usuario") {
+    if (sortCol === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortCol(col); setSortDir("asc"); }
+  }
 
   useEffect(() => {
     if (!editOpen) return;
@@ -268,6 +276,24 @@ function MiembrosTab({
     (lastAccessFilter !== "all" ? 1 : 0) +
     (spentFilter       !== "all" ? 1 : 0) +
     (ordersFilter      !== "all" ? 1 : 0);
+
+  const sorted = sortCol
+    ? [...filtered].sort((a, b) => {
+        const dir = sortDir === "asc" ? 1 : -1;
+        const ca = a.user_id ? customerMap.get(a.user_id) : undefined;
+        const cb = b.user_id ? customerMap.get(b.user_id) : undefined;
+        switch (sortCol) {
+          case "usuario":      return dir * (a.user_name ?? "").localeCompare(b.user_name ?? "");
+          case "email":        return dir * (a.user_email ?? "").localeCompare(b.user_email ?? "");
+          case "estado":       return dir * a.status.localeCompare(b.status);
+          case "gasto":        return dir * ((ca?.totalSpent ?? 0) - (cb?.totalSpent ?? 0));
+          case "seUnio":       return dir * (new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime());
+          case "ultimoAcceso": return dir * (new Date(ca?.lastPurchase ?? a.joined_at).getTime() - new Date(cb?.lastPurchase ?? b.joined_at).getTime());
+          case "pedidos":      return dir * ((ca?.totalOrders ?? 0) - (cb?.totalOrders ?? 0));
+          default:             return 0;
+        }
+      })
+    : filtered;
 
   return (
     <div className="space-y-5">
@@ -452,21 +478,21 @@ function MiembrosTab({
             <table className="w-full text-sm">
               <thead className="bg-white border-b border-gray-100">
                 <tr>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Usuario</th>
-                  {visibleCols.has("email")        && <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Correo electrónico</th>}
-                  {visibleCols.has("estado")       && <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Estado</th>}
-                  {visibleCols.has("pais")         && <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">País</th>}
-                  {visibleCols.has("ciudad")       && <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Ciudad</th>}
-                  {visibleCols.has("gasto")        && <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Gasto total</th>}
-                  {visibleCols.has("seUnio")       && <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Se unió el</th>}
-                  {visibleCols.has("ultimoAcceso") && <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Último acceso</th>}
-                  {visibleCols.has("pedidos")      && <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Pedidos</th>}
-                  {visibleCols.has("contacto")     && <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Contacto</th>}
-                  <th className="px-5 py-3" />
+                  <ColHeader label="Usuario"            col="usuario"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sortable />
+                  {visibleCols.has("email")        && <ColHeader label="Correo electrónico" col="email"       sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sortable />}
+                  {visibleCols.has("estado")       && <ColHeader label="Estado"             col="estado"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sortable />}
+                  {visibleCols.has("pais")         && <ColHeader label="País"               col="pais"        sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {visibleCols.has("ciudad")       && <ColHeader label="Ciudad"             col="ciudad"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  {visibleCols.has("gasto")        && <ColHeader label="Gasto total"        col="gasto"       sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sortable />}
+                  {visibleCols.has("seUnio")       && <ColHeader label="Se unió el"         col="seUnio"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sortable />}
+                  {visibleCols.has("ultimoAcceso") && <ColHeader label="Último acceso"      col="ultimoAcceso" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sortable />}
+                  {visibleCols.has("pedidos")      && <ColHeader label="Pedidos"            col="pedidos"     sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sortable />}
+                  {visibleCols.has("contacto")     && <ColHeader label="Contacto"           col="contacto"    sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />}
+                  <th className="w-[60px]" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filtered.map((m) => (
+                {sorted.map((m) => (
                   <MemberRow key={m.id} member={m} visibleCols={visibleCols} customer={m.user_id ? customerMap.get(m.user_id) : undefined} />
                 ))}
               </tbody>
@@ -1065,6 +1091,55 @@ function MemberRow({ member: m, visibleCols, customer: c }: {
         </div>
       </td>
     </tr>
+  );
+}
+
+// ── Column header with sort + drag handle ─────────────────────────────────────
+
+function ColHeader({
+  label, col, sortable = false, sortCol, sortDir, onSort,
+}: {
+  label: string;
+  col: ColKey | "usuario";
+  sortable?: boolean;
+  sortCol: ColKey | "usuario" | null;
+  sortDir: "asc" | "desc";
+  onSort: (col: ColKey | "usuario") => void;
+}) {
+  const isActive = sortCol === col;
+
+  return (
+    <th
+      onClick={sortable ? () => onSort(col) : undefined}
+      className={`group px-5 py-3 text-left whitespace-nowrap select-none transition-colors ${
+        sortable ? "cursor-pointer hover:bg-gray-50" : ""
+      }`}
+    >
+      <div className="flex items-center gap-1 min-w-0">
+        {/* Label */}
+        <span className={`text-xs font-medium transition-colors ${isActive ? "text-gray-900" : "text-gray-500"}`}>
+          {label}
+        </span>
+
+        {/* Sort arrow */}
+        {sortable && (
+          <span className={`transition-opacity shrink-0 ${isActive ? "opacity-100" : "opacity-0 group-hover:opacity-30"}`}>
+            {isActive && sortDir === "asc"  ? <ArrowUp   className="w-3 h-3 text-gray-700" /> :
+             isActive && sortDir === "desc" ? <ArrowDown  className="w-3 h-3 text-gray-700" /> :
+                                              <ArrowUpDown className="w-3 h-3 text-gray-400" />}
+          </span>
+        )}
+
+        {/* Drag handle — always present, visible on group hover */}
+        <span
+          title="Reordenar"
+          className="ml-auto pl-2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing shrink-0"
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <GripVertical className="w-3.5 h-3.5 text-gray-300" />
+        </span>
+      </div>
+    </th>
   );
 }
 
