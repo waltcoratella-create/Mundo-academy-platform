@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 import { getBusinessById, getBusinessSettings } from "@/lib/supabase/queries";
-import { SettingsForm } from "@/components/dashboard/settings-form";
+import { SettingsCenter } from "@/components/dashboard/settings-form";
 
 export default async function ConfiguracionesPage({
   params,
@@ -20,7 +20,7 @@ export default async function ConfiguracionesPage({
   if (!settings) notFound();
 
   return (
-    <SettingsForm
+    <SettingsCenter
       settings={settings}
       showSuccess={searchParams.updated === "1"}
     />
