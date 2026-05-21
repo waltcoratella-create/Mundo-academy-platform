@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Users, ShoppingBag, Eye, Ban, CalendarClock, Search,
   X, DollarSign, TrendingUp, Repeat, UserPlus, Package, CreditCard,
+  Plus, Settings2, Download, Check, GripVertical,
 } from "lucide-react";
 import type {
   BusinessMember, MemberSummary,
@@ -15,13 +16,30 @@ type StatusFilter = "all" | "active" | "expired";
 type CustomerFilter = "all" | "repeat" | "new";
 type CustomerSort = "revenue" | "recent" | "orders";
 
+// Column config for the Usuarios table
+const ALL_COLS = [
+  "email", "estado", "pais", "gasto", "seUnio", "ultimoAcceso", "pedidos", "contacto",
+] as const;
+type ColKey = (typeof ALL_COLS)[number];
+const DEFAULT_COLS = new Set<ColKey>(["email", "estado", "pais", "gasto", "seUnio"]);
+const COL_LABELS: Record<ColKey, string> = {
+  email:        "Correo electrónico",
+  estado:       "Estado",
+  pais:         "País",
+  gasto:        "Gasto total",
+  seUnio:       "Se unió el",
+  ultimoAcceso: "Último acceso",
+  pedidos:      "Pedidos",
+  contacto:     "Contacto",
+};
+
 const STATUS_STYLES: Record<string, string> = {
-  active:   "bg-green-100 text-green-700",
-  expired:  "bg-gray-100 text-gray-500",
-  inactive: "bg-red-100 text-red-600",
+  active:   "bg-gray-100 text-gray-600",
+  expired:  "bg-gray-100 text-gray-400",
+  inactive: "bg-red-50 text-red-500",
 };
 const STATUS_LABELS: Record<string, string> = {
-  active: "Activo", expired: "Expirado", inactive: "Inactivo",
+  active: "Unido", expired: "Expirado", inactive: "Inactivo",
 };
 const ORIGIN_STYLES: Record<string, string> = {
   purchase: "bg-brand-50 text-brand-600",
@@ -55,8 +73,8 @@ export function MembersClient({
       {/* Tab switcher */}
       <div className="flex items-center gap-1 border-b border-gray-100">
         {([
-          ["miembros", "Miembros", members.length],
-          ["clientes", "Clientes", customers.length],
+          ["miembros", "Usuarios",   members.length],
+          ["clientes", "Membresías", customers.length],
         ] as [Tab, string, number][]).map(([key, label, count]) => (
           <button
             key={key}
@@ -81,7 +99,7 @@ export function MembersClient({
   );
 }
 
-// ── Miembros tab ──────────────────────────────────────────────────────────────
+// ── Usuarios (Miembros) tab ───────────────────────────────────────────────────
 
 function MiembrosTab({
   members, summary,
@@ -91,6 +109,29 @@ function MiembrosTab({
 }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [productFilter, setProductFilter] = useState<string>("all");
+  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_COLS));
+  const [editOpen, setEditOpen] = useState(false);
+  const [dateJoinedActive, setDateJoinedActive] = useState(false);
+  const editRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (editRef.current && !editRef.current.contains(e.target as Node)) {
+        setEditOpen(false);
+      }
+    }
+    if (editOpen) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [editOpen]);
+
+  function toggleCol(col: ColKey) {
+    setVisibleCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(col)) next.delete(col);
+      else next.add(col);
+      return next;
+    });
+  }
 
   const products = Array.from(
     new Map(members.map((m) => [m.product_id, m.product_name])).entries()
@@ -103,11 +144,12 @@ function MiembrosTab({
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <SummaryCard label="Miembros activos"    value={String(summary.activeCount)}         sub="con acceso activo"      accent="blue" />
-        <SummaryCard label="Nuevos (30 días)"    value={String(summary.newLast30d)}           sub="últimas 4 semanas"      accent="indigo" />
-        <SummaryCard label="Productos activos"   value={String(summary.productsWithMembers)}  sub="con al menos 1 miembro" accent="green" />
+        <SummaryCard label="Activos"          value={String(summary.activeCount)}         sub="con acceso activo"      accent="blue"   />
+        <SummaryCard label="Nuevos (30 días)" value={String(summary.newLast30d)}           sub="últimas 4 semanas"      accent="indigo" />
+        <SummaryCard label="Productos"        value={String(summary.productsWithMembers)}  sub="con al menos 1 miembro" accent="green"  />
         <SummaryCard
           label="Origen"
           value={`${summary.purchaseCount} / ${summary.manualCount}`}
@@ -116,37 +158,111 @@ function MiembrosTab({
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1.5">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Left: filter pills */}
+        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+          {/* Date joined pill – dashed border style */}
+          <button
+            onClick={() => setDateJoinedActive((v) => !v)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
+              dateJoinedActive
+                ? "border border-brand-400 bg-brand-50 text-brand-700"
+                : "border border-dashed border-gray-300 bg-white text-gray-600 hover:border-gray-400 hover:bg-gray-50"
+            }`}
+          >
+            <span className="w-3.5 h-3.5 rounded-full border border-current flex items-center justify-center shrink-0">
+              <Plus className="w-2 h-2" />
+            </span>
+            Date joined
+          </button>
+
+          {/* Status filter pills */}
           {(["all", "active", "expired"] as StatusFilter[]).map((f) => (
             <button
               key={f}
               onClick={() => setStatusFilter(f)}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                statusFilter === f ? "bg-brand-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
+                statusFilter === f
+                  ? "bg-gray-900 text-white"
+                  : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
               }`}
             >
               {{ all: "Todos", active: "Activos", expired: "Expirados" }[f]}
             </button>
           ))}
+
+          {/* Product dropdown */}
+          {products.length > 1 && (
+            <select
+              value={productFilter}
+              onChange={(e) => setProductFilter(e.target.value)}
+              className="px-3 py-1.5 text-xs rounded-full border border-gray-200 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              <option value="all">Todos los productos</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          )}
+
+          <span className="text-xs text-gray-400 whitespace-nowrap">
+            {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
+          </span>
         </div>
-        {products.length > 1 && (
-          <select
-            value={productFilter}
-            onChange={(e) => setProductFilter(e.target.value)}
-            className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+
+        {/* Right: Exportar + Editar */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => alert("Exportación próximamente")}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
           >
-            <option value="all">Todos los productos</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        )}
-        <span className="ml-auto text-xs text-gray-400">
-          {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
-        </span>
+            <Download className="w-3.5 h-3.5" />
+            Exportar
+          </button>
+
+          <div className="relative" ref={editRef}>
+            <button
+              onClick={() => setEditOpen((v) => !v)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                editOpen
+                  ? "border-brand-300 bg-brand-50 text-brand-700"
+                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              Editar
+            </button>
+
+            {editOpen && (
+              <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl shadow-lg z-20 min-w-[220px] py-2">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-4 py-1.5">
+                  Columnas
+                </p>
+                {ALL_COLS.map((col) => (
+                  <button
+                    key={col}
+                    onClick={() => toggleCol(col)}
+                    className="w-full flex items-center justify-between px-4 py-2 hover:bg-gray-50 text-sm text-gray-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {visibleCols.has(col) ? (
+                        <Check className="w-3.5 h-3.5 text-brand-500 shrink-0" />
+                      ) : (
+                        <span className="w-3.5 h-3.5 shrink-0" />
+                      )}
+                      {COL_LABELS[col]}
+                    </div>
+                    <GripVertical className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
+      {/* Table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         {filtered.length === 0 ? (
           <div className="py-20 flex flex-col items-center gap-3 text-center">
@@ -157,23 +273,66 @@ function MiembrosTab({
                 : "No hay miembros con este filtro."}
             </p>
             {members.length === 0 && (
-              <p className="text-xs text-gray-400">Aparecerán aquí cuando alguien acceda a tus productos.</p>
+              <p className="text-xs text-gray-400">
+                Aparecerán aquí cuando alguien acceda a tus productos.
+              </p>
             )}
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
-              <thead className="bg-gray-50">
+            <table className="w-full text-sm">
+              <thead className="bg-white border-b border-gray-100">
                 <tr>
-                  {["Usuario", "Producto", "Estado", "Origen", "Acceso desde", "Expira", "Acciones"].map((h) => (
-                    <th key={h} className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">
-                      {h}
+                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                    Usuario
+                  </th>
+                  {visibleCols.has("email") && (
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                      Correo electrónico
                     </th>
-                  ))}
+                  )}
+                  {visibleCols.has("estado") && (
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                      Estado
+                    </th>
+                  )}
+                  {visibleCols.has("pais") && (
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                      País
+                    </th>
+                  )}
+                  {visibleCols.has("gasto") && (
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                      Gasto total
+                    </th>
+                  )}
+                  {visibleCols.has("seUnio") && (
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                      Se unió el
+                    </th>
+                  )}
+                  {visibleCols.has("ultimoAcceso") && (
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                      Último acceso
+                    </th>
+                  )}
+                  {visibleCols.has("pedidos") && (
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                      Pedidos
+                    </th>
+                  )}
+                  {visibleCols.has("contacto") && (
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                      Contacto
+                    </th>
+                  )}
+                  <th className="px-5 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filtered.map((m) => <MemberRow key={m.id} member={m} />)}
+                {filtered.map((m) => (
+                  <MemberRow key={m.id} member={m} visibleCols={visibleCols} />
+                ))}
               </tbody>
             </table>
           </div>
@@ -183,7 +342,7 @@ function MiembrosTab({
   );
 }
 
-// ── Clientes tab ──────────────────────────────────────────────────────────────
+// ── Membresías (Clientes) tab ─────────────────────────────────────────────────
 
 function ClientesTab({
   customers, summary,
@@ -223,11 +382,11 @@ function ClientesTab({
     <div className="space-y-6">
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-        <KpiCard icon={Users}     label="Total clientes"  value={String(summary.totalCustomers)} sub="compradores únicos"    />
-        <KpiCard icon={DollarSign} label="Ingresos"       value={fmtCurrency(summary.totalRevenue)} sub="suma de compras"   accent />
-        <KpiCard icon={TrendingUp} label="LTV promedio"   value={fmtCurrency(summary.avgLtv)}   sub="por cliente"           />
-        <KpiCard icon={Repeat}    label="Repetidos"       value={String(summary.repeatBuyers)}   sub="compraron 2+ veces"   />
-        <KpiCard icon={UserPlus}  label="Nuevos (30d)"    value={String(summary.newLast30d)}     sub="en últimas 4 semanas" />
+        <KpiCard icon={Users}      label="Total clientes" value={String(summary.totalCustomers)}    sub="compradores únicos"    />
+        <KpiCard icon={DollarSign} label="Ingresos"       value={fmtCurrency(summary.totalRevenue)} sub="suma de compras"       accent />
+        <KpiCard icon={TrendingUp} label="LTV promedio"   value={fmtCurrency(summary.avgLtv)}       sub="por cliente"           />
+        <KpiCard icon={Repeat}     label="Repetidos"      value={String(summary.repeatBuyers)}      sub="compraron 2+ veces"    />
+        <KpiCard icon={UserPlus}   label="Nuevos (30d)"   value={String(summary.newLast30d)}        sub="en últimas 4 semanas"  />
       </div>
 
       {/* Search + filters + sort */}
@@ -372,7 +531,9 @@ function CustomerRow({
               <span key={n} className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs truncate max-w-[80px]">{n}</span>
             ))}
             {c.activeProductNames.length > 2 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs">+{c.activeProductNames.length - 2}</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs">
+                +{c.activeProductNames.length - 2}
+              </span>
             )}
           </div>
         )}
@@ -554,54 +715,95 @@ function KpiCard({
   );
 }
 
-function MemberRow({ member: m }: { member: BusinessMember }) {
+function MemberRow({
+  member: m, visibleCols,
+}: {
+  member: BusinessMember;
+  visibleCols: Set<ColKey>;
+}) {
   const joined = new Date(m.joined_at).toLocaleDateString("es-MX", {
     day: "numeric", month: "short", year: "numeric",
   });
   const statusStyle = STATUS_STYLES[m.status] ?? "bg-gray-100 text-gray-500";
   const statusLabel = STATUS_LABELS[m.status] ?? m.status;
-  const originStyle = ORIGIN_STYLES[m.origin];
-  const originLabel = ORIGIN_LABELS[m.origin];
 
-  function mockAction(label: string) {
+  function mockAction(label: string, e: React.MouseEvent) {
+    e.stopPropagation();
     alert(`${label} — Próximamente disponible`);
   }
 
   return (
     <tr className="hover:bg-gray-50">
+      {/* Usuario — always visible */}
       <td className="px-5 py-3">
-        <div className="min-w-0">
-          {m.user_name && (
-            <p className="text-xs font-medium text-gray-900 truncate max-w-[150px]">{m.user_name}</p>
-          )}
-          <p className="text-xs text-gray-400 truncate max-w-[150px]">{m.user_email ?? "—"}</p>
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+            <span className="text-xs font-semibold text-gray-500">
+              {(m.user_name ?? m.user_email ?? "?")[0].toUpperCase()}
+            </span>
+          </div>
+          <p className="text-sm font-medium text-gray-900 truncate max-w-[130px]">
+            {m.user_name ?? "Sin nombre"}
+          </p>
         </div>
       </td>
-      <td className="px-5 py-3">
-        <p className="text-xs text-gray-700 truncate max-w-[160px]">{m.product_name}</p>
-        <p className="text-xs text-gray-400">{m.product_type}</p>
-      </td>
-      <td className="px-5 py-3">
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle}`}>
-          {statusLabel}
-        </span>
-      </td>
-      <td className="px-5 py-3">
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${originStyle}`}>
-          {originLabel}
-        </span>
-      </td>
-      <td className="px-5 py-3 text-xs text-gray-400 whitespace-nowrap">{joined}</td>
-      <td className="px-5 py-3 text-xs text-gray-400 whitespace-nowrap">
-        {m.expires_at
-          ? new Date(m.expires_at).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })
-          : <span className="text-gray-300">Sin límite</span>}
-      </td>
+
+      {visibleCols.has("email") && (
+        <td className="px-5 py-3 text-xs text-gray-500 truncate max-w-[180px]">
+          {m.user_email ?? "—"}
+        </td>
+      )}
+
+      {visibleCols.has("estado") && (
+        <td className="px-5 py-3">
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusStyle}`}>
+            {statusLabel}
+          </span>
+        </td>
+      )}
+
+      {visibleCols.has("pais") && (
+        <td className="px-5 py-3 text-xs text-gray-400">—</td>
+      )}
+
+      {visibleCols.has("gasto") && (
+        <td className="px-5 py-3 text-xs text-gray-400">—</td>
+      )}
+
+      {visibleCols.has("seUnio") && (
+        <td className="px-5 py-3 text-xs text-gray-400 whitespace-nowrap">{joined}</td>
+      )}
+
+      {visibleCols.has("ultimoAcceso") && (
+        <td className="px-5 py-3 text-xs text-gray-400 whitespace-nowrap">—</td>
+      )}
+
+      {visibleCols.has("pedidos") && (
+        <td className="px-5 py-3 text-xs text-gray-400">—</td>
+      )}
+
+      {visibleCols.has("contacto") && (
+        <td className="px-5 py-3 text-xs">
+          {m.user_email ? (
+            <a
+              href={`mailto:${m.user_email}`}
+              className="text-brand-500 hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {m.user_email}
+            </a>
+          ) : (
+            <span className="text-gray-300">—</span>
+          )}
+        </td>
+      )}
+
+      {/* Actions */}
       <td className="px-5 py-3">
         <div className="flex items-center gap-1">
-          <ActionButton icon={Eye}          label="Ver detalle"      onClick={() => mockAction("Ver detalle")} />
-          <ActionButton icon={CalendarClock} label="Extender acceso" onClick={() => mockAction("Extender acceso")} />
-          <ActionButton icon={Ban}          label="Revocar acceso"   onClick={() => mockAction("Revocar acceso")} danger />
+          <ActionButton icon={Eye}           label="Ver detalle"      onClick={(e) => mockAction("Ver detalle", e)} />
+          <ActionButton icon={CalendarClock} label="Extender acceso"  onClick={(e) => mockAction("Extender acceso", e)} />
+          <ActionButton icon={Ban}           label="Revocar acceso"   onClick={(e) => mockAction("Revocar acceso", e)} danger />
         </div>
       </td>
     </tr>
@@ -611,7 +813,10 @@ function MemberRow({ member: m }: { member: BusinessMember }) {
 function ActionButton({
   icon: Icon, label, onClick, danger = false,
 }: {
-  icon: React.ElementType; label: string; onClick: () => void; danger?: boolean;
+  icon: React.ElementType;
+  label: string;
+  onClick: (e: React.MouseEvent) => void;
+  danger?: boolean;
 }) {
   return (
     <button
