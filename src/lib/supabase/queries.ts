@@ -407,6 +407,91 @@ export async function getRecentTransactions(
   }
 }
 
+// ─── Payments queries ─────────────────────────────────────────────────────────
+
+export interface Payment {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  created_at: string;
+  stripe_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  product_id: string | null;
+  product_name: string | null;
+  buyer_email: string | null;
+  buyer_name: string | null;
+}
+
+export async function getBusinessPayments(
+  businessId: string,
+  limit = 200
+): Promise<Payment[]> {
+  try {
+    const supabase = createAdminClient();
+
+    const { data, error } = await supabase
+      .from("purchases")
+      .select(
+        "id, amount, currency, status, created_at, stripe_session_id, stripe_payment_intent_id, product_id, products(id, name), users(id, email, name)"
+      )
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error || !data) return [];
+
+    return (data as Record<string, unknown>[]).map((row) => {
+      const product = (row.products ?? {}) as Record<string, unknown>;
+      const user = (row.users ?? {}) as Record<string, unknown>;
+      return {
+        id:                          row.id as string,
+        amount:                      Number(row.amount ?? 0),
+        currency:                    (row.currency as string) ?? "USD",
+        status:                      (row.status as string) ?? "pending",
+        created_at:                  row.created_at as string,
+        stripe_session_id:           (row.stripe_session_id as string | null) ?? null,
+        stripe_payment_intent_id:    (row.stripe_payment_intent_id as string | null) ?? null,
+        product_id:                  (row.product_id as string | null) ?? null,
+        product_name:                (product.name as string | null) ?? null,
+        buyer_email:                 (user.email as string | null) ?? null,
+        buyer_name:                  (user.name as string | null) ?? null,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export interface PaymentSummary {
+  totalRevenue: number;
+  revenue30d: number;
+  successCount: number;
+  pendingOrFailedCount: number;
+}
+
+export function summarizePayments(payments: Payment[]): PaymentSummary {
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  let totalRevenue = 0;
+  let revenue30d = 0;
+  let successCount = 0;
+  let pendingOrFailedCount = 0;
+
+  for (const p of payments) {
+    if (p.status === "succeeded") {
+      totalRevenue += p.amount;
+      successCount++;
+      if (new Date(p.created_at).getTime() >= thirtyDaysAgo) {
+        revenue30d += p.amount;
+      }
+    } else {
+      pendingOrFailedCount++;
+    }
+  }
+
+  return { totalRevenue, revenue30d, successCount, pendingOrFailedCount };
+}
+
 // ─── Analytics queries ────────────────────────────────────────────────────────
 
 export interface DailyRevenue {
