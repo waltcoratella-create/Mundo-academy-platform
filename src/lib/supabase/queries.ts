@@ -96,6 +96,65 @@ export async function getBusinessById(
   }
 }
 
+export interface BusinessSettings {
+  id: string;
+  name: string;
+  description: string | null;
+  website: string | null;
+  support_email: string | null;
+  logo_url: string | null;
+  cover_url: string | null;
+  hasExtendedFields: boolean;
+}
+
+export async function getBusinessSettings(businessId: string): Promise<BusinessSettings | null> {
+  try {
+    const supabase = createAdminClient();
+
+    const { data, error } = await supabase
+      .from("businesses")
+      .select("id, name, description, website, support_email, logo_url, cover_url")
+      .eq("id", businessId)
+      .maybeSingle();
+
+    if (!error && data) {
+      const row = data as Record<string, unknown>;
+      return {
+        id:            row.id as string,
+        name:          row.name as string,
+        description:   (row.description as string | null) ?? null,
+        website:       (row.website as string | null) ?? null,
+        support_email: (row.support_email as string | null) ?? null,
+        logo_url:      (row.logo_url as string | null) ?? null,
+        cover_url:     (row.cover_url as string | null) ?? null,
+        hasExtendedFields: true,
+      };
+    }
+
+    // Extended columns may not exist yet — fall back to minimal
+    const { data: minimal } = await supabase
+      .from("businesses")
+      .select("id, name")
+      .eq("id", businessId)
+      .maybeSingle();
+
+    if (!minimal) return null;
+    const min = minimal as Record<string, unknown>;
+    return {
+      id: min.id as string,
+      name: min.name as string,
+      description: null,
+      website: null,
+      support_email: null,
+      logo_url: null,
+      cover_url: null,
+      hasExtendedFields: false,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function getDashboardKPIs(businessId: string): Promise<DashboardKPIs> {
   try {
     const supabase = createAdminClient();
