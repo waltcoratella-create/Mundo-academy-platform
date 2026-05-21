@@ -1026,3 +1026,176 @@ export async function getPaymentLinkBySlug(
     return null;
   }
 }
+
+// ─── Customer queries ─────────────────────────────────────────────────────────
+
+export interface BusinessCustomer {
+  user_id: string;
+  name: string | null;
+  email: string | null;
+  totalSpent: number;
+  totalOrders: number;
+  firstPurchase: string;
+  lastPurchase: string;
+  activeProductsCount: number;
+  activeProductNames: string[];
+  isRepeatBuyer: boolean;
+  stripeSessionIds: string[];
+}
+
+export interface CustomerSummary {
+  totalCustomers: number;
+  totalRevenue: number;
+  avgLtv: number;
+  repeatBuyers: number;
+  newLast30d: number;
+}
+
+export async function getBusinessCustomers(
+  businessId: string,
+  limit = 500
+): Promise<BusinessCustomer[]> {
+  try {
+    const supabase = createAdminClient();
+
+    // Step 1 — query purchases without nested joins
+    const { data: purchaseData, error } = await supabase
+      .from("purchases")
+      .select("id, user_id, amount, product_id, created_at, stripe_session_id")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error || !purchaseData || purchaseData.length === 0) return [];
+
+    type PurchaseRow = {
+      id: string;
+      user_id: string | null;
+      amount: number | null;
+      product_id: string | null;
+      created_at: string;
+      stripe_session_id: string | null;
+    };
+
+    const purchases = purchaseData as PurchaseRow[];
+    const userIds = [
+      ...new Set(purchases.map((p) => p.user_id).filter(Boolean)),
+    ] as string[];
+    if (userIds.length === 0) return [];
+
+    // Step 2 — resolve user names/emails via separate query (no FK required)
+    const { data: userData } = await supabase
+      .from("users")
+      .select("id, email, name")
+      .in("id", userIds);
+
+    const userMap = new Map(
+      (
+        (userData ?? []) as Array<{
+          id: string;
+          email: string | null;
+          name: string | null;
+        }>
+      ).map((u) => [u.id, { email: u.email, name: u.name }])
+    );
+
+    // Step 3 — resolve active product_members for these users via separate query
+    const { data: memberData } = await supabase
+      .from("product_members")
+      .select("user_id, product_id")
+      .eq("business_id", businessId)
+      .eq("status", "active")
+      .in("user_id", userIds);
+
+    const memberRows = (memberData ?? []) as Array<{
+      user_id: string;
+      product_id: string;
+    }>;
+    const activeProductIds = [...new Set(memberRows.map((m) => m.product_id))];
+
+    // Step 4 — resolve product names via separate query
+    const { data: productData } = activeProductIds.length
+      ? await supabase
+          .from("products")
+          .select("id, name")
+          .in("id", activeProductIds)
+      : { data: [] };
+
+    const productNameMap = new Map(
+      (
+        (productData ?? []) as Array<{ id: string; name: string }>
+      ).map((p) => [p.id, p.name])
+    );
+
+    // Step 5 — group purchases by user_id in memory
+    const byUser = new Map<
+      string,
+      { amounts: number[]; dates: string[]; stripeIds: string[] }
+    >();
+
+    for (const p of purchases) {
+      if (!p.user_id) continue;
+      if (!byUser.has(p.user_id)) {
+        byUser.set(p.user_id, { amounts: [], dates: [], stripeIds: [] });
+      }
+      const entry = byUser.get(p.user_id)!;
+      entry.amounts.push(Number(p.amount ?? 0));
+      entry.dates.push(p.created_at);
+      if (p.stripe_session_id) entry.stripeIds.push(p.stripe_session_id);
+    }
+
+    // Step 6 — build active product names per user
+    const userActiveProducts = new Map<string, string[]>();
+    for (const m of memberRows) {
+      if (!userActiveProducts.has(m.user_id))
+        userActiveProducts.set(m.user_id, []);
+      const pName = productNameMap.get(m.product_id);
+      if (pName) userActiveProducts.get(m.user_id)!.push(pName);
+    }
+
+    // Step 7 — assemble customer records
+    const customers: BusinessCustomer[] = [];
+    for (const [userId, agg] of byUser.entries()) {
+      const user = userMap.get(userId);
+      const sortedDates = [...agg.dates].sort();
+      const activeProductNames = userActiveProducts.get(userId) ?? [];
+      customers.push({
+        user_id: userId,
+        name: user?.name ?? null,
+        email: user?.email ?? null,
+        totalSpent: agg.amounts.reduce((s, a) => s + a, 0),
+        totalOrders: agg.amounts.length,
+        firstPurchase: sortedDates[0],
+        lastPurchase: sortedDates[sortedDates.length - 1],
+        activeProductsCount: activeProductNames.length,
+        activeProductNames,
+        isRepeatBuyer: agg.amounts.length > 1,
+        stripeSessionIds: agg.stripeIds,
+      });
+    }
+
+    customers.sort((a, b) => b.totalSpent - a.totalSpent);
+    return customers;
+  } catch {
+    return [];
+  }
+}
+
+export function summarizeCustomers(
+  customers: BusinessCustomer[]
+): CustomerSummary {
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const totalRevenue = customers.reduce((s, c) => s + c.totalSpent, 0);
+  const repeatBuyers = customers.filter((c) => c.isRepeatBuyer).length;
+  const newLast30d = customers.filter(
+    (c) => new Date(c.firstPurchase).getTime() >= thirtyDaysAgo
+  ).length;
+
+  return {
+    totalCustomers: customers.length,
+    totalRevenue,
+    avgLtv: customers.length > 0 ? totalRevenue / customers.length : 0,
+    repeatBuyers,
+    newLast30d,
+  };
+}
