@@ -407,6 +407,181 @@ export async function getRecentTransactions(
   }
 }
 
+// ─── Analytics queries ────────────────────────────────────────────────────────
+
+export interface DailyRevenue {
+  date: string;
+  revenue: number;
+}
+
+export interface DailyMembers {
+  date: string;
+  new_members: number;
+}
+
+export interface ProductSales {
+  product_id: string;
+  product_name: string;
+  sales: number;
+  revenue: number;
+}
+
+export interface BusinessAnalytics {
+  totalRevenue: number;
+  revenue30d: number;
+  revenueChange: number;
+  totalSales: number;
+  sales30d: number;
+  activeMembers: number;
+  publishedProducts: number;
+  avgTicket: number;
+  bestSellingProduct: string | null;
+  revenueByDay: DailyRevenue[];
+  membersByDay: DailyMembers[];
+  salesByProduct: ProductSales[];
+}
+
+export async function getBusinessAnalytics(businessId: string): Promise<BusinessAnalytics> {
+  const empty: BusinessAnalytics = {
+    totalRevenue: 0, revenue30d: 0, revenueChange: 0,
+    totalSales: 0, sales30d: 0, activeMembers: 0,
+    publishedProducts: 0, avgTicket: 0, bestSellingProduct: null,
+    revenueByDay: [], membersByDay: [], salesByProduct: [],
+  };
+
+  try {
+    const supabase = createAdminClient();
+    const now = Date.now();
+    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const sixtyDaysAgo = new Date(now - 60 * 24 * 60 * 60 * 1000).toISOString();
+
+    const [allTimeTx, thirtyDayTx, prevTx, memberRows, productRows, membersActive, productsPublished] =
+      await Promise.all([
+        supabase
+          .from("transactions")
+          .select("amount, product_id")
+          .eq("business_id", businessId)
+          .eq("status", "succeeded"),
+        supabase
+          .from("transactions")
+          .select("amount, product_id, created_at")
+          .eq("business_id", businessId)
+          .eq("status", "succeeded")
+          .gte("created_at", thirtyDaysAgo),
+        supabase
+          .from("transactions")
+          .select("amount")
+          .eq("business_id", businessId)
+          .eq("status", "succeeded")
+          .gte("created_at", sixtyDaysAgo)
+          .lt("created_at", thirtyDaysAgo),
+        supabase
+          .from("members")
+          .select("created_at")
+          .eq("business_id", businessId)
+          .gte("created_at", thirtyDaysAgo),
+        supabase
+          .from("products")
+          .select("id, name")
+          .eq("business_id", businessId),
+        supabase
+          .from("members")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .eq("status", "active"),
+        supabase
+          .from("products")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .eq("status", "published"),
+      ]);
+
+    type TxRow = { amount: number; product_id: string | null };
+    type TxRowFull = TxRow & { created_at: string };
+
+    const allTx = (allTimeTx.data ?? []) as TxRow[];
+    const recentTx = (thirtyDayTx.data ?? []) as TxRowFull[];
+    const previousTx = (prevTx.data ?? []) as { amount: number }[];
+    const members = (memberRows.data ?? []) as { created_at: string }[];
+    const products = (productRows.data ?? []) as { id: string; name: string }[];
+
+    const totalRevenue = allTx.reduce((s, t) => s + Number(t.amount), 0);
+    const totalSales = allTx.length;
+    const revenue30d = recentTx.reduce((s, t) => s + Number(t.amount), 0);
+    const sales30d = recentTx.length;
+    const prevRevenue = previousTx.reduce((s, t) => s + Number(t.amount), 0);
+    const revenueChange =
+      prevRevenue > 0 ? Math.round(((revenue30d - prevRevenue) / prevRevenue) * 1000) / 10 : 0;
+    const avgTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
+
+    const productNameMap = new Map(products.map((p) => [p.id, p.name]));
+
+    const productAgg = new Map<string, { sales: number; revenue: number }>();
+    for (const tx of allTx) {
+      const pid = tx.product_id ?? "__unknown__";
+      const prev = productAgg.get(pid) ?? { sales: 0, revenue: 0 };
+      productAgg.set(pid, { sales: prev.sales + 1, revenue: prev.revenue + Number(tx.amount) });
+    }
+    const salesByProduct: ProductSales[] = Array.from(productAgg.entries())
+      .map(([pid, stats]) => ({
+        product_id: pid,
+        product_name: productNameMap.get(pid) ?? "Sin producto",
+        ...stats,
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10);
+
+    const bestSellingProduct =
+      salesByProduct.length > 0
+        ? [...salesByProduct].sort((a, b) => b.sales - a.sales)[0].product_name
+        : null;
+
+    const revByDay = new Map<string, number>();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now - i * 24 * 60 * 60 * 1000);
+      revByDay.set(d.toISOString().slice(0, 10), 0);
+    }
+    for (const tx of recentTx) {
+      const key = tx.created_at.slice(0, 10);
+      if (revByDay.has(key)) revByDay.set(key, (revByDay.get(key) ?? 0) + Number(tx.amount));
+    }
+    const revenueByDay: DailyRevenue[] = Array.from(revByDay.entries()).map(([date, revenue]) => ({
+      date,
+      revenue,
+    }));
+
+    const memByDay = new Map<string, number>();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now - i * 24 * 60 * 60 * 1000);
+      memByDay.set(d.toISOString().slice(0, 10), 0);
+    }
+    for (const m of members) {
+      const key = m.created_at.slice(0, 10);
+      if (memByDay.has(key)) memByDay.set(key, (memByDay.get(key) ?? 0) + 1);
+    }
+    const membersByDay: DailyMembers[] = Array.from(memByDay.entries()).map(
+      ([date, new_members]) => ({ date, new_members })
+    );
+
+    return {
+      totalRevenue,
+      revenue30d,
+      revenueChange,
+      totalSales,
+      sales30d,
+      activeMembers: membersActive.count ?? 0,
+      publishedProducts: productsPublished.count ?? 0,
+      avgTicket,
+      bestSellingProduct,
+      revenueByDay,
+      membersByDay,
+      salesByProduct,
+    };
+  } catch {
+    return empty;
+  }
+}
+
 // ─── Public marketplace queries ───────────────────────────────────────────────
 
 export interface PublicProduct {

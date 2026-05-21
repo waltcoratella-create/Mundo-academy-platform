@@ -1,9 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
-import { Receipt } from "lucide-react";
+import { Receipt, Star } from "lucide-react";
 import { KpiCard } from "@/components/dashboard/kpi-card";
-import { RevenueChart, NewMembersChart } from "@/components/dashboard/revenue-chart";
-import { getBusinessById, getDashboardKPIs, getRecentTransactions } from "@/lib/supabase/queries";
+import { RevenueChart, NewMembersChart, SalesByProductChart } from "@/components/dashboard/revenue-chart";
+import { getBusinessById, getBusinessAnalytics, getRecentTransactions } from "@/lib/supabase/queries";
 import type { Transaction } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/utils";
 
@@ -18,28 +18,46 @@ export default async function AnaliticaPage({
   const business = await getBusinessById(params.businessId, userId);
   if (!business) notFound();
 
-  const [kpis, transactions] = await Promise.all([
-    getDashboardKPIs(business.id),
+  const [analytics, transactions] = await Promise.all([
+    getBusinessAnalytics(business.id),
     getRecentTransactions(business.id),
   ]);
 
   const kpiCards = [
     {
+      label: "Ingresos totales",
+      value: formatCurrency(analytics.totalRevenue),
+      change: 0,
+      changeLabel: "histórico",
+    },
+    {
       label: "Ingresos (30 días)",
-      value: formatCurrency(kpis.revenue),
-      change: kpis.revenueChange,
+      value: formatCurrency(analytics.revenue30d),
+      change: analytics.revenueChange,
+    },
+    {
+      label: "Ventas (30 días)",
+      value: String(analytics.sales30d),
+      change: 0,
+      changeLabel: `de ${analytics.totalSales} totales`,
     },
     {
       label: "Miembros activos",
-      value: String(kpis.memberCount),
+      value: String(analytics.activeMembers),
       change: 0,
-      changeLabel: "total activos",
+      changeLabel: "activos ahora",
     },
     {
-      label: "Productos",
-      value: String(kpis.productCount),
+      label: "Ticket promedio",
+      value: analytics.avgTicket > 0 ? formatCurrency(analytics.avgTicket) : "—",
       change: 0,
-      changeLabel: "publicados",
+      changeLabel: "por venta",
+    },
+    {
+      label: "Productos publicados",
+      value: String(analytics.publishedProducts),
+      change: 0,
+      changeLabel: "en catálogo",
     },
   ];
 
@@ -50,16 +68,30 @@ export default async function AnaliticaPage({
         <p className="text-gray-500 text-sm mt-1">{business.name} · Últimos 30 días</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {analytics.bestSellingProduct && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-brand-50 border border-brand-100 rounded-xl w-fit">
+          <Star className="w-4 h-4 text-brand-500 shrink-0" />
+          <p className="text-sm text-brand-700">
+            Producto estrella:{" "}
+            <span className="font-semibold">{analytics.bestSellingProduct}</span>
+          </p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {kpiCards.map((kpi) => (
           <KpiCard key={kpi.label} {...kpi} />
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <RevenueChart />
-        <NewMembersChart />
+        <RevenueChart data={analytics.revenueByDay} />
+        <NewMembersChart data={analytics.membersByDay} />
       </div>
+
+      {analytics.salesByProduct.length > 0 && (
+        <SalesByProductChart data={analytics.salesByProduct} />
+      )}
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
         <div className="px-5 py-4 border-b border-gray-100">
