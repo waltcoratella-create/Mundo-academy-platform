@@ -1199,3 +1199,128 @@ export function summarizeCustomers(
     newLast30d,
   };
 }
+
+// ─── Invoices (internal receipts) ────────────────────────────────────────────
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  amount: number;
+  currency: string;
+  status: string;
+  created_at: string;
+  stripe_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  product_id: string | null;
+  product_name: string | null;
+  buyer_id: string | null;
+  buyer_email: string | null;
+  buyer_name: string | null;
+}
+
+export async function getBusinessInvoices(businessId: string): Promise<Invoice[]> {
+  try {
+    const supabase = createAdminClient();
+
+    // Step 1 — purchases ordered ASC so sequential invoice numbers are stable
+    const { data: purchaseData, error } = await supabase
+      .from("purchases")
+      .select(
+        "id, amount, currency, status, created_at, stripe_session_id, stripe_payment_intent_id, product_id, user_id"
+      )
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: true });
+
+    if (error || !purchaseData || purchaseData.length === 0) return [];
+
+    type PurchaseRow = {
+      id: string;
+      amount: number | null;
+      currency: string | null;
+      status: string;
+      created_at: string;
+      stripe_session_id: string | null;
+      stripe_payment_intent_id: string | null;
+      product_id: string | null;
+      user_id: string | null;
+    };
+
+    const purchases = purchaseData as PurchaseRow[];
+
+    // Step 2 — collect unique ids
+    const productIds = [
+      ...new Set(purchases.map((p) => p.product_id).filter(Boolean)),
+    ] as string[];
+    const userIds = [
+      ...new Set(purchases.map((p) => p.user_id).filter(Boolean)),
+    ] as string[];
+
+    // Step 3 — resolve products
+    const { data: productData } = productIds.length
+      ? await supabase.from("products").select("id, name").in("id", productIds)
+      : { data: [] };
+
+    const productMap = new Map(
+      ((productData ?? []) as { id: string; name: string }[]).map((p) => [
+        p.id,
+        p.name,
+      ])
+    );
+
+    // Step 4 — resolve users
+    const { data: userData } = userIds.length
+      ? await supabase
+          .from("users")
+          .select("id, email, name")
+          .in("id", userIds)
+      : { data: [] };
+
+    const userMap = new Map(
+      (
+        (userData ?? []) as {
+          id: string;
+          email: string | null;
+          name: string | null;
+        }[]
+      ).map((u) => [u.id, { email: u.email, name: u.name }])
+    );
+
+    // Step 5 — assign sequential invoice numbers per year
+    const yearCounters = new Map<number, number>();
+    const invoices: Invoice[] = purchases.map((p) => {
+      const year = new Date(p.created_at).getFullYear();
+      const seq = (yearCounters.get(year) ?? 0) + 1;
+      yearCounters.set(year, seq);
+
+      const user = p.user_id ? userMap.get(p.user_id) : undefined;
+      return {
+        id: p.id,
+        invoiceNumber: `INV-${year}-${String(seq).padStart(4, "0")}`,
+        amount: Number(p.amount ?? 0),
+        currency: (p.currency ?? "USD").toUpperCase(),
+        status: p.status ?? "pending",
+        created_at: p.created_at,
+        stripe_session_id: p.stripe_session_id,
+        stripe_payment_intent_id: p.stripe_payment_intent_id,
+        product_id: p.product_id,
+        product_name: p.product_id ? (productMap.get(p.product_id) ?? null) : null,
+        buyer_id: p.user_id,
+        buyer_email: user?.email ?? null,
+        buyer_name: user?.name ?? null,
+      };
+    });
+
+    // Reverse so newest appears first in UI
+    return invoices.reverse();
+  } catch {
+    return [];
+  }
+}
+
+export async function getInvoiceById(
+  invoiceId: string,
+  businessId: string
+): Promise<Invoice | null> {
+  const all = await getBusinessInvoices(businessId);
+  return all.find((inv) => inv.id === invoiceId) ?? null;
+}
