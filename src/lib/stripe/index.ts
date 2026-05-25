@@ -1,12 +1,21 @@
 import Stripe from "stripe";
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-02-24.acacia",
-  typescript: true,
-});
+let _stripe: Stripe | undefined;
+
+export function getStripe(): Stripe {
+  if (!_stripe) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) throw new Error("STRIPE_SECRET_KEY is not set");
+    _stripe = new Stripe(key, {
+      apiVersion: "2025-02-24.acacia",
+      typescript: true,
+    });
+  }
+  return _stripe;
+}
 
 export async function createConnectAccount(email: string) {
-  return stripe.accounts.create({
+  return getStripe().accounts.create({
     type: "express",
     email,
     capabilities: { transfers: { requested: true } },
@@ -14,7 +23,7 @@ export async function createConnectAccount(email: string) {
 }
 
 export async function createConnectOnboardingLink(accountId: string, returnUrl: string) {
-  return stripe.accountLinks.create({
+  return getStripe().accountLinks.create({
     account: accountId,
     refresh_url: returnUrl,
     return_url: returnUrl,
@@ -23,7 +32,7 @@ export async function createConnectOnboardingLink(accountId: string, returnUrl: 
 }
 
 export async function createPaymentLink(priceId: string, connectedAccountId: string) {
-  return stripe.paymentLinks.create(
+  return getStripe().paymentLinks.create(
     { line_items: [{ price: priceId, quantity: 1 }] },
     { stripeAccount: connectedAccountId }
   );

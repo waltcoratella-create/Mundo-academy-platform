@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { getPublicProductById } from "@/lib/supabase/queries";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -64,6 +64,8 @@ export async function POST(req: NextRequest) {
   if (!product.price || product.price <= 0) {
     return NextResponse.json({ error: "Este producto no tiene un precio válido" }, { status: 400 });
   }
+
+  const stripe = getStripe();
 
   const user  = await currentUser();
   const email = user?.emailAddresses?.[0]?.emailAddress;
