@@ -10,12 +10,36 @@ import {
   Clock,
   XCircle,
   Building2,
+  Send,
+  FileEdit,
+  Calendar,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import type { Invoice } from "@/lib/supabase/queries";
+
+// ── Unified view type (consumed by both purchase receipts + manual invoices) ──
+
+export interface InvoiceView {
+  kind: "purchase" | "manual";
+  id: string;
+  invoiceNumber: string;
+  amount: number;
+  currency: string;
+  status: string;
+  created_at: string;
+  buyer_email: string | null;
+  buyer_name: string | null;
+  product_id: string | null;
+  product_name: string | null;
+  // Purchase-specific
+  stripe_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  // Manual-specific
+  due_date: string | null;
+  description: string | null;
+}
 
 interface Props {
-  invoice: Invoice;
+  invoice: InvoiceView;
   businessId: string;
   businessName: string;
 }
@@ -39,6 +63,16 @@ const STATUS_CONFIG: Record<
     style: "bg-red-100 text-red-600 border-red-200",
     icon: XCircle,
   },
+  sent: {
+    label: "Enviada",
+    style: "bg-blue-100 text-blue-700 border-blue-200",
+    icon: Send,
+  },
+  draft: {
+    label: "Borrador",
+    style: "bg-gray-100 text-gray-600 border-gray-200",
+    icon: FileEdit,
+  },
 };
 
 export function InvoiceDetailClient({ invoice: inv, businessId, businessName }: Props) {
@@ -57,6 +91,9 @@ export function InvoiceDetailClient({ invoice: inv, businessId, businessName }: 
   });
 
   const shortId = (s: string) => `${s.slice(0, 8)}…${s.slice(-6)}`;
+
+  const isManual = inv.kind === "manual";
+  const typeLabel = isManual ? "Factura manual" : "Recibo de pago interno";
 
   return (
     <div className="p-8 max-w-3xl mx-auto space-y-6">
@@ -97,11 +134,11 @@ export function InvoiceDetailClient({ invoice: inv, businessId, businessName }: 
             </div>
             <div>
               <p className="text-base font-bold text-gray-900">{businessName}</p>
-              <p className="text-xs text-gray-400 mt-0.5">Recibo de pago interno</p>
+              <p className="text-xs text-gray-400 mt-0.5">{typeLabel}</p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-xs text-gray-400 mb-0.5">Número de recibo</p>
+            <p className="text-xs text-gray-400 mb-0.5">Número</p>
             <p className="text-lg font-mono font-bold text-gray-900 tracking-wide">
               {inv.invoiceNumber}
             </p>
@@ -123,10 +160,10 @@ export function InvoiceDetailClient({ invoice: inv, businessId, businessName }: 
         <div className="px-8 py-6 space-y-6">
           {/* Buyer + Product grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <InfoBlock label="Comprador">
-              <p className="text-sm font-semibold text-gray-900">
-                {inv.buyer_name ?? "Sin nombre"}
-              </p>
+            <InfoBlock label="Cliente">
+              {inv.buyer_name && (
+                <p className="text-sm font-semibold text-gray-900">{inv.buyer_name}</p>
+              )}
               <p className="text-xs text-gray-400 mt-0.5">
                 {inv.buyer_email ?? "—"}
               </p>
@@ -142,6 +179,26 @@ export function InvoiceDetailClient({ invoice: inv, businessId, businessName }: 
               )}
             </InfoBlock>
           </div>
+
+          {/* Description (manual only) */}
+          {inv.description && (
+            <InfoBlock label="Descripción">
+              <p className="text-sm text-gray-700 leading-relaxed">{inv.description}</p>
+            </InfoBlock>
+          )}
+
+          {/* Due date (manual only) */}
+          {inv.due_date && (
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <Calendar className="w-3.5 h-3.5" />
+              Vence:{" "}
+              {new Date(inv.due_date).toLocaleDateString("es-MX", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+            </div>
+          )}
 
           {/* Line items */}
           <div className="rounded-xl border border-gray-100 overflow-hidden">
@@ -160,9 +217,9 @@ export function InvoiceDetailClient({ invoice: inv, businessId, businessName }: 
                 <tr className="border-t border-gray-100">
                   <td className="px-5 py-4">
                     <p className="text-sm font-medium text-gray-900">
-                      {inv.product_name ?? "Producto"}
+                      {inv.description || inv.product_name || "Producto / Servicio"}
                     </p>
-                    <p className="text-xs text-gray-400 mt-0.5">Acceso · 1 unidad</p>
+                    <p className="text-xs text-gray-400 mt-0.5">1 unidad</p>
                   </td>
                   <td className="px-5 py-4 text-right text-sm font-semibold text-gray-900 whitespace-nowrap">
                     {formatCurrency(inv.amount, inv.currency)}
@@ -185,7 +242,7 @@ export function InvoiceDetailClient({ invoice: inv, businessId, businessName }: 
             </table>
           </div>
 
-          {/* Stripe references */}
+          {/* Stripe references (purchase only) */}
           {(inv.stripe_session_id || inv.stripe_payment_intent_id) && (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -214,8 +271,9 @@ export function InvoiceDetailClient({ invoice: inv, businessId, businessName }: 
         {/* Footer */}
         <div className="px-8 py-4 border-t border-gray-100 bg-gray-50">
           <p className="text-xs text-gray-400 text-center leading-relaxed">
-            Este es un recibo interno de {businessName}. No constituye una factura fiscal.
-            Los pagos son procesados a través de proveedores de pago de terceros.
+            {isManual
+              ? `Factura emitida por ${businessName}. No constituye una factura fiscal.`
+              : `Este es un recibo interno de ${businessName}. No constituye una factura fiscal.`}
           </p>
         </div>
       </div>
@@ -254,10 +312,7 @@ function ReferenceRow({
   return (
     <div className="flex items-center justify-between gap-4">
       <span className="text-xs text-gray-500">{label}</span>
-      <span
-        className="text-xs font-mono text-gray-600 cursor-default"
-        title={full}
-      >
+      <span className="text-xs font-mono text-gray-600 cursor-default" title={full}>
         {value}
       </span>
     </div>

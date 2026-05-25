@@ -1324,3 +1324,166 @@ export async function getInvoiceById(
   const all = await getBusinessInvoices(businessId);
   return all.find((inv) => inv.id === invoiceId) ?? null;
 }
+
+// ─── Manual invoices ──────────────────────────────────────────────────────────
+
+export const MANUAL_INVOICES_SQL = `CREATE TABLE IF NOT EXISTS manual_invoices (
+  id                uuid         DEFAULT gen_random_uuid() PRIMARY KEY,
+  business_id       uuid         NOT NULL,
+  product_id        uuid,
+  customer_email    text         NOT NULL,
+  description       text,
+  amount            numeric      NOT NULL DEFAULT 0,
+  currency          text         DEFAULT 'USD' NOT NULL,
+  status            text         DEFAULT 'draft' NOT NULL,
+  due_date          timestamptz,
+  invoice_number    text,
+  payment_link_slug text,
+  created_at        timestamptz  DEFAULT now() NOT NULL
+);`;
+
+export interface ManualInvoice {
+  id: string;
+  business_id: string;
+  product_id: string | null;
+  product_name: string | null;
+  customer_email: string;
+  description: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  due_date: string | null;
+  invoice_number: string;
+  payment_link_slug: string | null;
+  created_at: string;
+}
+
+export interface ManualInvoicesResult {
+  invoices: ManualInvoice[];
+  tableExists: boolean;
+}
+
+export async function getBusinessManualInvoices(
+  businessId: string
+): Promise<ManualInvoicesResult> {
+  try {
+    const supabase = createAdminClient();
+
+    const { data, error } = await supabase
+      .from("manual_invoices")
+      .select(
+        "id, business_id, product_id, customer_email, description, amount, currency, status, due_date, invoice_number, payment_link_slug, created_at"
+      )
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      const tableExists = error.code !== "42P01";
+      console.error("[manual_invoices] query error:", error.code, error.message);
+      return { invoices: [], tableExists };
+    }
+
+    if (!data || data.length === 0) return { invoices: [], tableExists: true };
+
+    type Row = {
+      id: string; business_id: string; product_id: string | null;
+      customer_email: string; description: string | null;
+      amount: number | null; currency: string | null; status: string;
+      due_date: string | null; invoice_number: string | null;
+      payment_link_slug: string | null; created_at: string;
+    };
+
+    const rows = data as Row[];
+    const productIds = [
+      ...new Set(rows.map((r) => r.product_id).filter(Boolean)),
+    ] as string[];
+
+    const { data: productData } = productIds.length
+      ? await supabase.from("products").select("id, name").in("id", productIds)
+      : { data: [] };
+
+    const productMap = new Map(
+      ((productData ?? []) as { id: string; name: string }[]).map((p) => [
+        p.id,
+        p.name,
+      ])
+    );
+
+    const invoices: ManualInvoice[] = rows.map((r) => ({
+      id: r.id,
+      business_id: r.business_id,
+      product_id: r.product_id,
+      product_name: r.product_id ? (productMap.get(r.product_id) ?? null) : null,
+      customer_email: r.customer_email,
+      description: r.description,
+      amount: Number(r.amount ?? 0),
+      currency: (r.currency ?? "USD").toUpperCase(),
+      status: r.status ?? "draft",
+      due_date: r.due_date,
+      invoice_number: r.invoice_number ?? "",
+      payment_link_slug: r.payment_link_slug,
+      created_at: r.created_at,
+    }));
+
+    return { invoices, tableExists: true };
+  } catch {
+    return { invoices: [], tableExists: false };
+  }
+}
+
+export async function getManualInvoiceById(
+  invoiceId: string,
+  businessId: string
+): Promise<ManualInvoice | null> {
+  try {
+    const supabase = createAdminClient();
+
+    const { data, error } = await supabase
+      .from("manual_invoices")
+      .select(
+        "id, business_id, product_id, customer_email, description, amount, currency, status, due_date, invoice_number, payment_link_slug, created_at"
+      )
+      .eq("id", invoiceId)
+      .eq("business_id", businessId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+
+    type Row = {
+      id: string; business_id: string; product_id: string | null;
+      customer_email: string; description: string | null;
+      amount: number | null; currency: string | null; status: string;
+      due_date: string | null; invoice_number: string | null;
+      payment_link_slug: string | null; created_at: string;
+    };
+    const r = data as Row;
+
+    let productName: string | null = null;
+    if (r.product_id) {
+      const { data: prod } = await supabase
+        .from("products")
+        .select("name")
+        .eq("id", r.product_id)
+        .maybeSingle();
+      productName = (prod as { name: string } | null)?.name ?? null;
+    }
+
+    return {
+      id: r.id,
+      business_id: r.business_id,
+      product_id: r.product_id,
+      product_name: productName,
+      customer_email: r.customer_email,
+      description: r.description,
+      amount: Number(r.amount ?? 0),
+      currency: (r.currency ?? "USD").toUpperCase(),
+      status: r.status ?? "draft",
+      due_date: r.due_date,
+      invoice_number: r.invoice_number ?? "",
+      payment_link_slug: r.payment_link_slug,
+      created_at: r.created_at,
+    };
+  } catch {
+    return null;
+  }
+}

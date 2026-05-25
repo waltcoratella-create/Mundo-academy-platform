@@ -35,4 +35,8 @@
   .kpi-card {
     @apply bg-white rounded-xl border border-gray-100 p-5 shadow-sm;
   }
+
+  .input-base {
+    @apply w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-shadow;
+  }
 }
