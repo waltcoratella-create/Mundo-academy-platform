@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef, useEffect } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Heart,
@@ -39,6 +39,7 @@ interface CurrentUser {
 interface Props {
   initialPosts: FeedPost[];
   tableExists: boolean;
+  fetchError?: string;
   migrationSQL: string;
   currentUser: CurrentUser | null;
 }
@@ -180,13 +181,14 @@ function initials(name: string | null): string {
 
 type FeedTab = "todo" | "siguiendo" | "unido";
 
-export function InicioFeed({ initialPosts, tableExists, migrationSQL, currentUser }: Props) {
+export function InicioFeed({ initialPosts, tableExists, fetchError, migrationSQL, currentUser }: Props) {
   const [activeTab, setActiveTab] = useState<FeedTab>("todo");
   const [sqlCopied, setSqlCopied] = useState(false);
 
   const showMigrationBanner = !tableExists;
   const hasRealPosts = tableExists && initialPosts.length > 0;
-  const showMockExamples = !tableExists || initialPosts.length === 0;
+  // Mocks only when table truly doesn't exist (migration needed)
+  const showMockExamples = !tableExists;
 
   function copySql() {
     navigator.clipboard.writeText(migrationSQL).then(() => {
@@ -259,6 +261,17 @@ export function InicioFeed({ initialPosts, tableExists, migrationSQL, currentUse
           {/* Composer */}
           <Composer currentUser={currentUser} tableExists={tableExists} />
 
+          {/* ── Fetch error (DB/network error — not a migration issue) ── */}
+          {fetchError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+              <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-red-900">Error al cargar el feed</p>
+                <p className="text-xs text-red-700 mt-0.5">{fetchError}</p>
+              </div>
+            </div>
+          )}
+
           {/* ── Real posts ── */}
           {hasRealPosts && (
             <div className="space-y-4">
@@ -268,25 +281,39 @@ export function InicioFeed({ initialPosts, tableExists, migrationSQL, currentUse
             </div>
           )}
 
-          {/* Empty state (table exists but no posts yet) */}
-          {tableExists && initialPosts.length === 0 && (
-            <div className="bg-white rounded-2xl border border-gray-200 py-12 flex flex-col items-center gap-3 text-center px-6">
-              <div className="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center">
-                <MessageCircle className="w-6 h-6 text-gray-300" />
+          {/* ── Premium empty state (table exists, no error, no posts yet) ── */}
+          {tableExists && !fetchError && initialPosts.length === 0 && (
+            <div className="bg-white rounded-2xl border border-gray-200 py-16 flex flex-col items-center gap-5 text-center px-8">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100 border border-blue-100 flex items-center justify-center">
+                <MessageCircle className="w-7 h-7 text-blue-400" />
               </div>
-              <p className="text-sm font-medium text-gray-700">Aún no hay publicaciones</p>
-              <p className="text-xs text-gray-400">Sé el primero en publicar algo en el feed.</p>
+              <div className="space-y-2">
+                <p className="text-base font-semibold text-gray-900">Todavía no hay publicaciones</p>
+                <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
+                  Sé el primero en compartir una actualización, pregunta o recurso con la comunidad de Mundo Academy.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const ta = document.querySelector<HTMLTextAreaElement>("textarea");
+                  ta?.focus();
+                  ta?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 active:scale-95 transition-all"
+              >
+                <Send className="w-4 h-4" />
+                Crear primera publicación
+              </button>
             </div>
           )}
 
-          {/* ── Mock posts (examples, shown when table doesn't exist) ── */}
+          {/* ── Mock posts (only shown when table doesn't exist yet) ── */}
           {showMockExamples && (
             <div className="space-y-4">
-              {!tableExists && (
-                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide px-1">
-                  Publicaciones de ejemplo
-                </p>
-              )}
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide px-1">
+                Publicaciones de ejemplo
+              </p>
               {MOCK_POSTS.map((post) => (
                 <MockPostCard key={post.id} post={post} />
               ))}
@@ -321,6 +348,9 @@ function Composer({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Can't post until the table exists
+  const disabled = !tableExists;
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
@@ -400,11 +430,11 @@ function Composer({
         </div>
         <textarea
           rows={2}
-          placeholder="Di algo a la comunidad…"
+          placeholder={disabled ? "Ejecuta la migración para activar el feed…" : "Di algo a la comunidad…"}
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          disabled={isPending}
-          className="flex-1 text-sm text-gray-700 placeholder-gray-400 bg-transparent resize-none outline-none leading-relaxed disabled:opacity-60"
+          disabled={isPending || disabled}
+          className="flex-1 text-sm text-gray-700 placeholder-gray-400 bg-transparent resize-none outline-none leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed"
         />
       </div>
 
@@ -481,7 +511,7 @@ function Composer({
           </button>
           <button
             type="submit"
-            disabled={isPending || (!content.trim() && !imageFile)}
+            disabled={disabled || isPending || (!content.trim() && !imageFile)}
             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isPending ? (

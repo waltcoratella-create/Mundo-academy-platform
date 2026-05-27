@@ -24,6 +24,8 @@ export interface FeedPost {
 export interface FeedPostsResult {
   posts: FeedPost[];
   tableExists: boolean;
+  /** Present when there is a non-migration DB/network error */
+  fetchError?: string;
 }
 
 // ── Queries ───────────────────────────────────────────────────────────────────
@@ -41,17 +43,30 @@ export async function getFeedPosts(): Promise<FeedPostsResult> {
       .limit(50);
 
     if (error) {
-      const tableExists = error.code !== "42P01";
+      if (error.code === "42P01") {
+        // Table doesn't exist yet — show migration banner
+        return { posts: [], tableExists: false };
+      }
+      // Any other DB error (permissions, network, etc.)
       console.error("[feed_posts] query error:", error.code, error.message);
-      return { posts: [], tableExists };
+      return {
+        posts: [],
+        tableExists: true,
+        fetchError: "Error al cargar el feed. Intenta recargar la página.",
+      };
     }
 
     return {
       posts: (data ?? []) as FeedPost[],
       tableExists: true,
     };
-  } catch {
-    return { posts: [], tableExists: false };
+  } catch (err) {
+    console.error("[getFeedPosts] unexpected:", err);
+    return {
+      posts: [],
+      tableExists: true,
+      fetchError: "Error inesperado al cargar el feed. Intenta recargar la página.",
+    };
   }
 }
 

@@ -6,7 +6,7 @@ import { InicioFeed } from "@/components/dashboard/inicio-feed";
 export default async function InicioPage() {
   const { userId } = await auth();
 
-  const [{ posts, tableExists }, user] = await Promise.all([
+  const [{ posts, tableExists, fetchError }, user] = await Promise.all([
     getFeedPosts(),
     currentUser(),
   ]);
@@ -30,6 +30,7 @@ export default async function InicioPage() {
     <InicioFeed
       initialPosts={posts}
       tableExists={tableExists}
+      fetchError={fetchError}
       migrationSQL={FEED_POSTS_SQL}
       currentUser={currentUserData}
     />
