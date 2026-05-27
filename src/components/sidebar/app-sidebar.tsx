@@ -2,98 +2,172 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { UserButton, useUser } from "@clerk/nextjs";
 import {
-  Home, Search, Zap, Briefcase, Brain, GraduationCap,
-  Calendar, Target, ShoppingBag, Fish, Settings, Crown, Puzzle,
-  HelpCircle, Users, BookOpen,
+  Home,
+  Compass,
+  LayoutDashboard,
+  Plus,
+  HelpCircle,
+  Heart,
+  BookOpen,
+  Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-interface NavItem {
+// ── Navigation data ───────────────────────────────────────────────────────────
+
+const MAIN_NAV = [
+  { label: "Inicio",             href: "/inicio",       icon: Home },
+  { label: "Descubrir",          href: "/descubrir",    icon: Compass },
+  { label: "Panel de control",   href: "/mis-negocios", icon: LayoutDashboard },
+  { label: "Iniciar un negocio", href: "/crear",        icon: Plus },
+];
+
+const APPS: {
   label: string;
   href: string;
-  icon: React.ElementType;
+  initials: string;
+  bg: string;
+}[] = [
+  { label: "Mundo Academy",    href: "/inicio",       initials: "MA", bg: "bg-blue-600" },
+  { label: "Venture AI",       href: "/venture-ai",   initials: "VA", bg: "bg-purple-600" },
+  { label: "Mundo Ejecutivo",  href: "/mis-negocios", initials: "ME", bg: "bg-emerald-600" },
+  { label: "Agency Navigator", href: "/mis-negocios", initials: "AN", bg: "bg-indigo-600" },
+];
+
+const RECURSOS = [
+  { label: "Afiliados", href: "/afiliados", icon: Heart },
+  { label: "Ayuda",     href: "/ayuda",     icon: HelpCircle },
+  { label: "Blog",      href: "/blog",      icon: BookOpen },
+  { label: "Acerca de", href: "/acerca",    icon: Info },
+];
+
+// ── Helper ────────────────────────────────────────────────────────────────────
+
+function useIsActive(href: string) {
+  const pathname = usePathname();
+  return pathname === href || pathname.startsWith(href + "/");
 }
 
-const CORE: NavItem[] = [
-  { label: "Inicio",         href: "/inicio",          icon: Home },
-  { label: "Descubrir",      href: "/descubrir",       icon: Search },
-  { label: "Mis productos",  href: "/mis-productos",   icon: BookOpen },
-  { label: "Crear negocio",  href: "/crear",           icon: Zap },
-  { label: "Mis negocios",   href: "/mis-negocios",    icon: Briefcase },
-];
+// ── Sidebar component ─────────────────────────────────────────────────────────
 
-const ECOSYSTEM: NavItem[] = [
-  { label: "Venture AI",  href: "/venture-ai",  icon: Brain },
-  { label: "Cursos",      href: "/cursos",       icon: GraduationCap },
-  { label: "Comunidad",   href: "/comunidad",    icon: Users },
-  { label: "Eventos",     href: "/eventos",      icon: Calendar },
-  { label: "Mentorías",   href: "/mentorias",    icon: Target },
-  { label: "Marketplace", href: "/marketplace",  icon: ShoppingBag },
-  { label: "Shark Tank",  href: "/shark-tank",   icon: Fish },
-];
-
-const ACCOUNT: NavItem[] = [
-  { label: "Configuración",  href: "/configuracion", icon: Settings },
-  { label: "Mi suscripción", href: "/suscripcion",   icon: Crown },
-  { label: "Apps instaladas",href: "/apps",          icon: Puzzle },
-  { label: "Ayuda",          href: "/ayuda",          icon: HelpCircle },
-];
-
-function NavSection({ items, label }: { items: NavItem[]; label?: string }) {
-  const pathname = usePathname();
+export function AppSidebar() {
   return (
-    <div className="px-3">
-      {label && (
-        <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-          {label}
-        </p>
-      )}
-      <ul className="space-y-0.5">
-        {items.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
-          return (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                className={cn("sidebar-item", active && "active")}
-              >
-                <item.icon className="w-4 h-4 shrink-0" />
-                {item.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <aside className="w-60 shrink-0 h-full flex flex-col bg-white border-r border-gray-100 overflow-y-auto">
+      {/* Logo */}
+      <div className="px-5 py-5 shrink-0">
+        <Link href="/inicio" className="flex items-center gap-2.5">
+          <span className="text-xl">🌍</span>
+          <span className="text-sm font-bold text-gray-900 tracking-tight leading-none">
+            Mundo Academy
+          </span>
+        </Link>
+      </div>
+
+      <nav className="flex-1 px-3 pb-6 space-y-6 overflow-y-auto">
+
+        {/* Main nav */}
+        <ul className="space-y-0.5">
+          {MAIN_NAV.map((item) => (
+            <NavItem key={item.href + item.label} href={item.href} icon={item.icon} label={item.label} />
+          ))}
+        </ul>
+
+        {/* Apps / Comunidades */}
+        <div>
+          <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+            Apps
+          </p>
+          <ul className="space-y-0.5">
+            {APPS.map((app) => (
+              <AppItem key={app.label} {...app} />
+            ))}
+          </ul>
+        </div>
+
+        {/* Recursos */}
+        <div>
+          <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+            Recursos
+          </p>
+          <ul className="space-y-0.5">
+            {RECURSOS.map((item) => (
+              <NavItem key={item.href} href={item.href} icon={item.icon} label={item.label} />
+            ))}
+          </ul>
+        </div>
+
+      </nav>
+    </aside>
   );
 }
 
-export function AppSidebar() {
-  const { user } = useUser();
+// ── Nav item ──────────────────────────────────────────────────────────────────
 
+function NavItem({
+  href,
+  icon: Icon,
+  label,
+}: {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+}) {
+  const active = useIsActive(href);
   return (
-    <aside className="w-60 shrink-0 h-full flex flex-col bg-slate-900 overflow-y-auto">
-      <div className="px-4 py-4 border-b border-white/10">
-        <p className="text-base font-bold text-white tracking-tight">🌍 MUNDO ACADEMY</p>
-      </div>
+    <li>
+      <Link
+        href={href}
+        className={cn(
+          "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+          active
+            ? "bg-gray-100 text-gray-900"
+            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+        )}
+      >
+        <Icon className="w-4 h-4 shrink-0" />
+        {label}
+      </Link>
+    </li>
+  );
+}
 
-      <div className="px-4 py-3 border-b border-white/10 flex items-center gap-3">
-        <UserButton afterSignOutUrl="/sign-in" />
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-white truncate">
-            {user?.firstName ?? "Usuario"}
-          </p>
-          <p className="text-xs text-slate-400 truncate">{user?.primaryEmailAddress?.emailAddress}</p>
-        </div>
-      </div>
+// ── App item (with colored square avatar) ─────────────────────────────────────
 
-      <nav className="flex-1 py-4 space-y-5">
-        <NavSection items={CORE} label="Core" />
-        <NavSection items={ECOSYSTEM} label="Apps / Ecosistema" />
-        <NavSection items={ACCOUNT} label="Cuenta" />
-      </nav>
-    </aside>
+function AppItem({
+  href,
+  initials,
+  bg,
+  label,
+}: {
+  href: string;
+  initials: string;
+  bg: string;
+  label: string;
+}) {
+  const active = useIsActive(href) && href !== "/mis-negocios";
+  return (
+    <li>
+      <Link
+        href={href}
+        className={cn(
+          "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+          active
+            ? "bg-gray-100 text-gray-900"
+            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+        )}
+      >
+        <span
+          className={cn(
+            "w-5 h-5 rounded-md flex items-center justify-center text-white font-bold shrink-0",
+            bg
+          )}
+          style={{ fontSize: 9 }}
+        >
+          {initials}
+        </span>
+        {label}
+      </Link>
+    </li>
   );
 }
