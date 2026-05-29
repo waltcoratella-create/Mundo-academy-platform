@@ -817,61 +817,68 @@ function CreatorsPanel({
   if (creators.length === 0) return null;
 
   return (
-    <div id="creators-panel" className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-100">
-        <p className="text-sm font-semibold text-gray-900">Creadores populares</p>
+    <div id="creators-panel" className="bg-white rounded-2xl border border-gray-200">
+      {/* Header */}
+      <div className="px-4 pt-4 pb-3 flex items-center justify-between">
+        <p className="text-sm font-semibold text-gray-900">Usuarios populares</p>
+        <button className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors">
+          Ver todo
+        </button>
       </div>
-      <ul className="divide-y divide-gray-50">
+
+      {/* List */}
+      <ul className="pb-2">
         {creators.map((c) => {
           const isFollowing = followedIds.has(c.user_id);
           const label = initials(c.name);
           const bg = avatarColor(c.user_id);
+
           return (
-            <li key={c.user_id} className="px-5 py-3 flex items-center gap-3 group">
+            <li key={c.user_id} className="px-4 py-2.5 flex items-center gap-3">
+              {/* Avatar */}
               <div className="relative shrink-0">
                 {c.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={c.avatar_url}
                     alt={c.name ?? ""}
-                    className="w-8 h-8 rounded-full object-cover"
+                    className="w-9 h-9 rounded-full object-cover"
                   />
                 ) : (
                   <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${bg}`}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${bg}`}
                   >
                     {label}
                   </div>
                 )}
               </div>
+
+              {/* Name + context */}
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-gray-900 truncate">
+                <p className="text-xs font-semibold text-gray-900 truncate leading-tight">
                   {c.name ?? "Usuario"}
                 </p>
-                <p className="text-[10px] text-gray-400">
-                  {c.post_count} {c.post_count === 1 ? "publicación" : "publicaciones"}
+                <p className="text-[11px] text-gray-400 truncate leading-tight mt-0.5">
+                  {c.display_context}
                 </p>
               </div>
-              <button
-                onClick={() => (isFollowing ? onUnfollow(c.user_id) : onFollow(c.user_id))}
-                className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[10px] font-semibold transition-colors opacity-0 group-hover:opacity-100 ${
-                  isFollowing
-                    ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
-                    : "border-gray-200 text-gray-600 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700"
-                }`}
-              >
-                {isFollowing ? (
-                  <>
-                    <UserCheck className="w-3 h-3" />
-                    Siguiendo
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="w-3 h-3" />
-                    Seguir
-                  </>
-                )}
-              </button>
+
+              {/* Follow / Unfollow button — always visible */}
+              {isFollowing ? (
+                <button
+                  onClick={() => onUnfollow(c.user_id)}
+                  className="shrink-0 px-3 py-1.5 rounded-lg border border-gray-200 text-[11px] font-semibold text-gray-500 bg-white hover:border-red-200 hover:text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  Siguiendo
+                </button>
+              ) : (
+                <button
+                  onClick={() => onFollow(c.user_id)}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-blue-600 text-[11px] font-semibold text-white hover:bg-blue-700 transition-colors"
+                >
+                  Seguir
+                </button>
+              )}
             </li>
           );
         })}

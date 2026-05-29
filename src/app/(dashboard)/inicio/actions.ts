@@ -69,6 +69,8 @@ export interface FeedCreator {
   name: string | null;
   avatar_url: string | null;
   post_count: number;
+  /** Human-readable context line: "Creador de X", "Miembro activo…", etc. */
+  display_context: string;
 }
 
 // Raw shape straight from feed_posts (before enrichment)
@@ -641,6 +643,7 @@ export async function getFeedCreators(): Promise<FeedCreator[]> {
     const { userId } = await auth();
     const supabase = createAdminClient();
 
+    // 1. Pull the most recent 200 posts to count activity per user
     const { data, error } = await supabase
       .from("feed_posts")
       .select("user_id, author_name, author_avatar_url")
@@ -649,15 +652,15 @@ export async function getFeedCreators(): Promise<FeedCreator[]> {
 
     if (error) return [];
 
+    // Deduplicate: keep first-seen (most recent) author info, count posts
     const creatorMap = new Map<
       string,
       { name: string | null; avatar_url: string | null; count: number }
     >();
     for (const post of data ?? []) {
       const uid = post.user_id as string;
-      const existing = creatorMap.get(uid);
-      if (existing) {
-        existing.count++;
+      if (creatorMap.has(uid)) {
+        creatorMap.get(uid)!.count++;
       } else {
         creatorMap.set(uid, {
           name: post.author_name as string | null,
@@ -667,16 +670,85 @@ export async function getFeedCreators(): Promise<FeedCreator[]> {
       }
     }
 
-    return [...creatorMap.entries()]
+    // Sort by activity, exclude self, cap at 10
+    const topEntries = [...creatorMap.entries()]
       .sort((a, b) => b[1].count - a[1].count)
       .filter(([uid]) => uid !== userId)
-      .slice(0, 8)
-      .map(([user_id, info]) => ({
-        user_id,
-        name: info.name,
+      .slice(0, 10);
+
+    if (topEntries.length === 0) return [];
+
+    const topClerkIds = topEntries.map(([uid]) => uid);
+
+    // 2. Resolve Clerk IDs → internal UUIDs (needed for businesses.owner_id)
+    const clerkToUuid = new Map<string, string>();
+    try {
+      const { data: usersData } = await supabase
+        .from("users")
+        .select("id, clerk_id")
+        .in("clerk_id", topClerkIds);
+      (usersData ?? []).forEach((u) => {
+        clerkToUuid.set(u.clerk_id as string, u.id as string);
+      });
+    } catch {
+      // users table may have different schema — graceful skip
+    }
+
+    // 3. Fetch business names owned by those users (oldest first = primary)
+    const bizByOwnerUuid = new Map<string, string[]>();
+    const uuids = [...clerkToUuid.values()];
+    if (uuids.length > 0) {
+      try {
+        const { data: bizData } = await supabase
+          .from("businesses")
+          .select("name, owner_id")
+          .in("owner_id", uuids)
+          .order("created_at", { ascending: true });
+        (bizData ?? []).forEach((b) => {
+          const arr = bizByOwnerUuid.get(b.owner_id as string) ?? [];
+          arr.push(b.name as string);
+          bizByOwnerUuid.set(b.owner_id as string, arr);
+        });
+      } catch {
+        // safe to ignore
+      }
+    }
+
+    // 4. Build FeedCreator objects
+    return topEntries.map(([clerkId, info]) => {
+      // Name: strip email domain if author_name looks like an email address
+      let displayName = info.name;
+      if (displayName?.includes("@")) {
+        displayName = displayName.split("@")[0] ?? displayName;
+      }
+
+      // display_context priority:
+      //   A) 1 business  → "Creador de [name]"
+      //   B) >1 business → "Creador de [name] + X more"
+      //   C) ≥3 posts, no business → "Miembro activo de Mundo Academy"
+      //   D) fallback    → "Creador de Mundo Academy"
+      const uuid = clerkToUuid.get(clerkId);
+      const businesses = uuid ? (bizByOwnerUuid.get(uuid) ?? []) : [];
+
+      let displayContext: string;
+      if (businesses.length === 1) {
+        displayContext = `Creador de ${businesses[0]}`;
+      } else if (businesses.length > 1) {
+        displayContext = `Creador de ${businesses[0]} + ${businesses.length - 1} more`;
+      } else if (info.count >= 3) {
+        displayContext = "Miembro activo de Mundo Academy";
+      } else {
+        displayContext = "Creador de Mundo Academy";
+      }
+
+      return {
+        user_id: clerkId,
+        name: displayName,
         avatar_url: info.avatar_url,
         post_count: info.count,
-      }));
+        display_context: displayContext,
+      };
+    });
   } catch {
     return [];
   }
