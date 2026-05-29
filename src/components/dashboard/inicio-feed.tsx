@@ -14,17 +14,24 @@ import {
   DollarSign,
   Radio,
   Star,
-  Users,
-  TrendingUp,
   UserPlus,
+  UserCheck,
   X,
   Terminal,
   Copy,
   Send,
   AlertCircle,
 } from "lucide-react";
-import { createFeedPost } from "@/app/(dashboard)/inicio/actions";
-import type { FeedPost, FeedBusiness } from "@/app/(dashboard)/inicio/actions";
+import {
+  createFeedPost,
+  followUser,
+  unfollowUser,
+} from "@/app/(dashboard)/inicio/actions";
+import type {
+  FeedPost,
+  FeedBusiness,
+  FeedCreator,
+} from "@/app/(dashboard)/inicio/actions";
 import { RealPostCard } from "@/components/dashboard/inicio/real-post-card";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -43,6 +50,8 @@ interface Props {
   migrationSQL: string;
   currentUser: CurrentUser | null;
   userBusinesses: FeedBusiness[];
+  creators: FeedCreator[];
+  followedUserIds: string[];
 }
 
 // ── Static mock data (right panel + example posts when table is empty) ─────────
@@ -125,23 +134,6 @@ const MOCK_POSTS: MockPost[] = [
   },
 ];
 
-const MOCK_CREATORS = [
-  { name: "Steven Schwartz",  description: "Creador de Whop AI + 39 más",      initials: "SS", color: "bg-red-500",     online: true  },
-  { name: "Tiana",            description: "Creadora de Whop University + 1…", initials: "TI", color: "bg-pink-500",    online: true  },
-  { name: "Mundo Ejecutivo",  description: "Branding & autoridad latina",       initials: "ME", color: "bg-emerald-600", online: false },
-  { name: "QTT",              description: "Creador de 🚀",                     initials: "QT", color: "bg-yellow-500",  online: true  },
-  { name: "Laura Egocheaga",  description: "Creadora de Viral Growth Media",    initials: "LE", color: "bg-teal-500",    online: false },
-  { name: "Founder Network",  description: "Startups & Inversión · Latam",     initials: "FN", color: "bg-orange-500",  online: true  },
-  { name: "Agency Navigator", description: "Marketing de agencias",             initials: "AN", color: "bg-indigo-600",  online: false },
-  { name: "Matthew",          description: "Creador de viral + 1 más",          initials: "MT", color: "bg-amber-500",   online: false },
-];
-
-const MOCK_COMMUNITIES = [
-  { name: "IA & Automatización", members: "2.4k", emoji: "🤖", color: "bg-purple-100 text-purple-700" },
-  { name: "Negocios digitales",  members: "5.1k", emoji: "💼", color: "bg-blue-100 text-blue-700"    },
-  { name: "Inversión & Venture", members: "1.8k", emoji: "📈", color: "bg-green-100 text-green-700"  },
-  { name: "Marketing & Growth",  members: "3.2k", emoji: "🚀", color: "bg-orange-100 text-orange-700" },
-];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -180,7 +172,7 @@ function initials(name: string | null): string {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-type FilterTab = "todo" | "mundo-academy" | "mis-negocios";
+type FilterTab = "todo" | "siguiendo" | "mis-negocios";
 
 export function InicioFeed({
   initialPosts,
@@ -189,16 +181,22 @@ export function InicioFeed({
   migrationSQL,
   currentUser,
   userBusinesses,
+  creators,
+  followedUserIds,
 }: Props) {
   const [activeFilter, setActiveFilter] = useState<FilterTab>("todo");
   const [sqlCopied, setSqlCopied] = useState(false);
+  const [followedIds, setFollowedIds] = useState<Set<string>>(
+    () => new Set(followedUserIds)
+  );
+  const [, startFollowTransition] = useTransition();
 
   const showMigrationBanner = !tableExists;
   const showMockExamples = !tableExists;
 
   // Client-side filter
   const filteredPosts = initialPosts.filter((p) => {
-    if (activeFilter === "mundo-academy") return p.business_id === null;
+    if (activeFilter === "siguiendo") return followedIds.has(p.user_id);
     if (activeFilter === "mis-negocios") return p.business_id !== null;
     return true;
   });
@@ -209,6 +207,34 @@ export function InicioFeed({
     navigator.clipboard.writeText(migrationSQL).then(() => {
       setSqlCopied(true);
       setTimeout(() => setSqlCopied(false), 2000);
+    });
+  }
+
+  function handleFollow(targetUserId: string) {
+    setFollowedIds((prev) => new Set([...prev, targetUserId]));
+    startFollowTransition(async () => {
+      const result = await followUser(targetUserId);
+      if (result.error) {
+        setFollowedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(targetUserId);
+          return next;
+        });
+      }
+    });
+  }
+
+  function handleUnfollow(targetUserId: string) {
+    setFollowedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(targetUserId);
+      return next;
+    });
+    startFollowTransition(async () => {
+      const result = await unfollowUser(targetUserId);
+      if (result.error) {
+        setFollowedIds((prev) => new Set([...prev, targetUserId]));
+      }
     });
   }
 
@@ -229,9 +255,9 @@ export function InicioFeed({
             <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl px-1 py-1">
               {(
                 [
-                  { key: "todo",           label: "Todo" },
-                  { key: "mundo-academy",  label: "Mundo Academy" },
-                  { key: "mis-negocios",   label: "Mis negocios" },
+                  { key: "todo",       label: "Todo"       },
+                  { key: "siguiendo",  label: "Siguiendo"  },
+                  { key: "mis-negocios", label: "Mis negocios" },
                 ] as { key: FilterTab; label: string }[]
               ).map((tab) => (
                 <button
@@ -316,28 +342,46 @@ export function InicioFeed({
               </div>
               <div className="space-y-2">
                 <p className="text-base font-semibold text-gray-900">
-                  {activeFilter === "mis-negocios"
-                    ? "Esta comunidad todavía no tiene publicaciones"
-                    : "Todavía no hay publicaciones"}
+                  {activeFilter === "siguiendo"
+                    ? "No sigues a nadie todavía"
+                    : activeFilter === "mis-negocios"
+                      ? "Esta comunidad todavía no tiene publicaciones"
+                      : "Todavía no hay publicaciones"}
                 </p>
                 <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
-                  {activeFilter === "mis-negocios"
-                    ? "Publica algo en uno de tus negocios para que aparezca aquí."
-                    : "Sé el primero en compartir una actualización, pregunta o recurso con la comunidad de Mundo Academy."}
+                  {activeFilter === "siguiendo"
+                    ? "Sigue a creadores para ver sus publicaciones aquí."
+                    : activeFilter === "mis-negocios"
+                      ? "Publica algo en uno de tus negocios para que aparezca aquí."
+                      : "Sé el primero en compartir una actualización, pregunta o recurso con la comunidad de Mundo Academy."}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const ta = document.querySelector<HTMLTextAreaElement>("textarea");
-                  ta?.focus();
-                  ta?.scrollIntoView({ behavior: "smooth", block: "center" });
-                }}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 active:scale-95 transition-all"
-              >
-                <Send className="w-4 h-4" />
-                Crear primera publicación
-              </button>
+              {activeFilter === "siguiendo" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const panel = document.getElementById("creators-panel");
+                    panel?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 active:scale-95 transition-all"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Descubrir creadores
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ta = document.querySelector<HTMLTextAreaElement>("textarea");
+                    ta?.focus();
+                    ta?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 active:scale-95 transition-all"
+                >
+                  <Send className="w-4 h-4" />
+                  Crear primera publicación
+                </button>
+              )}
             </div>
           )}
 
@@ -356,8 +400,12 @@ export function InicioFeed({
 
         {/* ── Right panel ─────────────────────────────────────────────── */}
         <div className="w-72 shrink-0 space-y-4 hidden xl:block">
-          <CreatorsPanel />
-          <CommunitiesPanel />
+          <CreatorsPanel
+            creators={creators}
+            followedIds={followedIds}
+            onFollow={handleFollow}
+            onUnfollow={handleUnfollow}
+          />
         </div>
 
       </div>
@@ -755,61 +803,78 @@ function ActionBtn({
 
 // ── Creators panel ────────────────────────────────────────────────────────────
 
-function CreatorsPanel() {
+function CreatorsPanel({
+  creators,
+  followedIds,
+  onFollow,
+  onUnfollow,
+}: {
+  creators: FeedCreator[];
+  followedIds: Set<string>;
+  onFollow: (uid: string) => void;
+  onUnfollow: (uid: string) => void;
+}) {
+  if (creators.length === 0) return null;
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-      <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
+    <div id="creators-panel" className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+      <div className="px-5 py-4 border-b border-gray-100">
         <p className="text-sm font-semibold text-gray-900">Creadores populares</p>
-        <button className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors">Ver todo</button>
       </div>
       <ul className="divide-y divide-gray-50">
-        {MOCK_CREATORS.map((c) => (
-          <li key={c.name} className="px-5 py-3 flex items-center gap-3 group">
-            <div className="relative shrink-0">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${c.color}`}>
-                {c.initials}
+        {creators.map((c) => {
+          const isFollowing = followedIds.has(c.user_id);
+          const label = initials(c.name);
+          const bg = avatarColor(c.user_id);
+          return (
+            <li key={c.user_id} className="px-5 py-3 flex items-center gap-3 group">
+              <div className="relative shrink-0">
+                {c.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={c.avatar_url}
+                    alt={c.name ?? ""}
+                    className="w-8 h-8 rounded-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${bg}`}
+                  >
+                    {label}
+                  </div>
+                )}
               </div>
-              {c.online && (
-                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-gray-900 truncate">{c.name}</p>
-              <p className="text-[10px] text-gray-400 truncate">{c.description}</p>
-            </div>
-            <button className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-gray-200 text-[10px] font-semibold text-gray-600 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-colors opacity-0 group-hover:opacity-100">
-              <UserPlus className="w-3 h-3" />
-              Seguir
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-// ── Communities panel ─────────────────────────────────────────────────────────
-
-function CommunitiesPanel() {
-  return (
-    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-      <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
-        <p className="text-sm font-semibold text-gray-900">Comunidades destacadas</p>
-      </div>
-      <ul className="divide-y divide-gray-50">
-        {MOCK_COMMUNITIES.map((c) => (
-          <li key={c.name} className="px-5 py-3 flex items-center gap-3">
-            <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-base ${c.color}`}>{c.emoji}</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-gray-900 truncate">{c.name}</p>
-              <div className="flex items-center gap-1 mt-0.5">
-                <Users className="w-3 h-3 text-gray-400" />
-                <p className="text-[10px] text-gray-400">{c.members} miembros</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-gray-900 truncate">
+                  {c.name ?? "Usuario"}
+                </p>
+                <p className="text-[10px] text-gray-400">
+                  {c.post_count} {c.post_count === 1 ? "publicación" : "publicaciones"}
+                </p>
               </div>
-            </div>
-            <TrendingUp className="w-3.5 h-3.5 text-gray-300 shrink-0" />
-          </li>
-        ))}
+              <button
+                onClick={() => (isFollowing ? onUnfollow(c.user_id) : onFollow(c.user_id))}
+                className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[10px] font-semibold transition-colors opacity-0 group-hover:opacity-100 ${
+                  isFollowing
+                    ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
+                    : "border-gray-200 text-gray-600 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700"
+                }`}
+              >
+                {isFollowing ? (
+                  <>
+                    <UserCheck className="w-3 h-3" />
+                    Siguiendo
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="w-3 h-3" />
+                    Seguir
+                  </>
+                )}
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

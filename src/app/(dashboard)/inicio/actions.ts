@@ -64,6 +64,13 @@ export interface FeedPostsResult {
   fetchError?: string;
 }
 
+export interface FeedCreator {
+  user_id: string;
+  name: string | null;
+  avatar_url: string | null;
+  post_count: number;
+}
+
 // Raw shape straight from feed_posts (before enrichment)
 type RawPost = Omit<
   FeedPost,
@@ -607,6 +614,127 @@ export async function createCommentReply(
   } catch (err) {
     console.error("[createCommentReply] unexpected:", err);
     return { error: "Error inesperado. Intenta de nuevo." };
+  }
+}
+
+// ── getUserFollowedIds ────────────────────────────────────────────────────────
+
+export async function getUserFollowedIds(): Promise<string[]> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return [];
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("user_follows")
+      .select("following_user_id")
+      .eq("follower_user_id", userId);
+    return (data ?? []).map((r) => r.following_user_id as string);
+  } catch {
+    return [];
+  }
+}
+
+// ── getFeedCreators ───────────────────────────────────────────────────────────
+
+export async function getFeedCreators(): Promise<FeedCreator[]> {
+  try {
+    const { userId } = await auth();
+    const supabase = createAdminClient();
+
+    const { data, error } = await supabase
+      .from("feed_posts")
+      .select("user_id, author_name, author_avatar_url")
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (error) return [];
+
+    const creatorMap = new Map<
+      string,
+      { name: string | null; avatar_url: string | null; count: number }
+    >();
+    for (const post of data ?? []) {
+      const uid = post.user_id as string;
+      const existing = creatorMap.get(uid);
+      if (existing) {
+        existing.count++;
+      } else {
+        creatorMap.set(uid, {
+          name: post.author_name as string | null,
+          avatar_url: post.author_avatar_url as string | null,
+          count: 1,
+        });
+      }
+    }
+
+    return [...creatorMap.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
+      .filter(([uid]) => uid !== userId)
+      .slice(0, 8)
+      .map(([user_id, info]) => ({
+        user_id,
+        name: info.name,
+        avatar_url: info.avatar_url,
+        post_count: info.count,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+// ── followUser ────────────────────────────────────────────────────────────────
+
+export async function followUser(
+  targetUserId: string
+): Promise<{ error?: string }> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return { error: "No autenticado" };
+    if (userId === targetUserId) return { error: "No puedes seguirte a ti mismo" };
+
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("user_follows")
+      .insert({ follower_user_id: userId, following_user_id: targetUserId });
+
+    if (error) {
+      if (error.code === "42P01")
+        return { error: "Ejecuta la migración de user_follows primero." };
+      if (error.code === "23505") return {}; // already following — idempotent
+      return { error: "Error al seguir. Intenta de nuevo." };
+    }
+
+    revalidatePath("/inicio");
+    return {};
+  } catch {
+    return { error: "Error inesperado." };
+  }
+}
+
+// ── unfollowUser ──────────────────────────────────────────────────────────────
+
+export async function unfollowUser(
+  targetUserId: string
+): Promise<{ error?: string }> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return { error: "No autenticado" };
+
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("user_follows")
+      .delete()
+      .eq("follower_user_id", userId)
+      .eq("following_user_id", targetUserId);
+
+    if (error && error.code !== "42P01") {
+      return { error: "Error al dejar de seguir. Intenta de nuevo." };
+    }
+
+    revalidatePath("/inicio");
+    return {};
+  } catch {
+    return { error: "Error inesperado." };
   }
 }
 
