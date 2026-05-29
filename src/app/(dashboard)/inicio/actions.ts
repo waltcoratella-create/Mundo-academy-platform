@@ -6,6 +6,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export interface FeedReply {
+  id: string;
+  comment_id: string;
+  post_id: string;
+  user_id: string;
+  author_name: string | null;
+  author_avatar_url: string | null;
+  content: string;
+  created_at: string;
+}
+
 export interface FeedComment {
   id: string;
   post_id: string;
@@ -14,6 +25,8 @@ export interface FeedComment {
   author_avatar_url: string | null;
   content: string;
   created_at: string;
+  /** Up to 2 replies (initial load) or all replies (getPostComments), oldest first */
+  recent_replies: FeedReply[];
 }
 
 export interface FeedPost {
@@ -99,7 +112,10 @@ export async function getFeedPosts(): Promise<FeedPostsResult> {
 
     // 3. Fetch up to 3 recent comments per post
     //    (gracefully skip if feed_post_comments table doesn't exist yet)
-    const commentsByPost = new Map<string, FeedComment[]>();
+    type RawComment = Omit<FeedComment, "recent_replies">;
+    const rawCommentsByPost = new Map<string, RawComment[]>();
+    const loadedCommentIds: string[] = [];
+
     try {
       const { data: commentsData } = await supabase
         .from("feed_post_comments")
@@ -108,22 +124,60 @@ export async function getFeedPosts(): Promise<FeedPostsResult> {
         )
         .in("post_id", postIds)
         .order("created_at", { ascending: false })
-        .limit(150); // fetch generously; we cap at 3 per post in JS
+        .limit(150);
 
       (commentsData ?? []).forEach((c) => {
-        const arr = commentsByPost.get(c.post_id as string) ?? [];
-        if (arr.length < 3) arr.push(c as FeedComment);
-        commentsByPost.set(c.post_id as string, arr);
+        const arr = rawCommentsByPost.get(c.post_id as string) ?? [];
+        if (arr.length < 3) {
+          arr.push(c as RawComment);
+          loadedCommentIds.push(c.id as string);
+        }
+        rawCommentsByPost.set(c.post_id as string, arr);
       });
     } catch {
       // table not yet created — safe to ignore
     }
 
+    // 4. Fetch up to 2 replies per loaded comment
+    //    (gracefully skip if feed_comment_replies table doesn't exist yet)
+    const repliesByComment = new Map<string, FeedReply[]>();
+    if (loadedCommentIds.length > 0) {
+      try {
+        const { data: repliesData } = await supabase
+          .from("feed_comment_replies")
+          .select(
+            "id, comment_id, post_id, user_id, author_name, author_avatar_url, content, created_at"
+          )
+          .in("comment_id", loadedCommentIds)
+          .order("created_at", { ascending: false })
+          .limit(loadedCommentIds.length * 2);
+
+        (repliesData ?? []).forEach((r) => {
+          const arr = repliesByComment.get(r.comment_id as string) ?? [];
+          if (arr.length < 2) arr.push(r as FeedReply);
+          repliesByComment.set(r.comment_id as string, arr);
+        });
+      } catch {
+        // table not yet created — safe to ignore
+      }
+    }
+
+    // Merge: attach replies to each comment, attach comments to each post
+    const commentsByPost = new Map<string, FeedComment[]>();
+    rawCommentsByPost.forEach((rawComments, pid) => {
+      const enriched: FeedComment[] = [...rawComments]
+        .reverse() // DESC → ASC (oldest first)
+        .map((c) => ({
+          ...c,
+          recent_replies: [...(repliesByComment.get(c.id) ?? [])].reverse(),
+        }));
+      commentsByPost.set(pid, enriched);
+    });
+
     const posts: FeedPost[] = rawPosts.map((p) => ({
       ...p,
       liked_by_current_user: likedPostIds.has(p.id),
-      // comments came in DESC order; reverse to get oldest-first for display
-      recent_comments: [...(commentsByPost.get(p.id) ?? [])].reverse(),
+      recent_comments: commentsByPost.get(p.id) ?? [],
     }));
 
     return { posts, tableExists: true };
@@ -359,9 +413,130 @@ export async function createPostComment(
       .eq("id", postId);
 
     revalidatePath("/inicio");
-    return { success: true, comment: commentData as FeedComment };
+    return {
+      success: true,
+      comment: { ...(commentData as Omit<FeedComment, "recent_replies">), recent_replies: [] },
+    };
   } catch (err) {
     console.error("[createPostComment] unexpected:", err);
+    return { error: "Error inesperado. Intenta de nuevo." };
+  }
+}
+
+// ── getPostComments ───────────────────────────────────────────────────────────
+
+export async function getPostComments(
+  postId: string
+): Promise<{ comments: FeedComment[]; error?: string }> {
+  try {
+    const supabase = createAdminClient();
+
+    // All comments for the post, oldest first
+    const { data: commentsData, error } = await supabase
+      .from("feed_post_comments")
+      .select(
+        "id, post_id, user_id, author_name, author_avatar_url, content, created_at"
+      )
+      .eq("post_id", postId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("[getPostComments]", error.code, error.message);
+      return { comments: [], error: "Error al cargar comentarios." };
+    }
+
+    const rawComments = (commentsData ?? []) as Omit<FeedComment, "recent_replies">[];
+
+    if (rawComments.length === 0) return { comments: [] };
+
+    const commentIds = rawComments.map((c) => c.id);
+
+    // All replies for those comments
+    const repliesByComment = new Map<string, FeedReply[]>();
+    try {
+      const { data: repliesData } = await supabase
+        .from("feed_comment_replies")
+        .select(
+          "id, comment_id, post_id, user_id, author_name, author_avatar_url, content, created_at"
+        )
+        .in("comment_id", commentIds)
+        .order("created_at", { ascending: true });
+
+      (repliesData ?? []).forEach((r) => {
+        const arr = repliesByComment.get(r.comment_id as string) ?? [];
+        arr.push(r as FeedReply);
+        repliesByComment.set(r.comment_id as string, arr);
+      });
+    } catch {
+      // replies table not yet created — safe to ignore
+    }
+
+    const comments: FeedComment[] = rawComments.map((c) => ({
+      ...c,
+      recent_replies: repliesByComment.get(c.id) ?? [],
+    }));
+
+    return { comments };
+  } catch (err) {
+    console.error("[getPostComments] unexpected:", err);
+    return { comments: [], error: "Error inesperado al cargar comentarios." };
+  }
+}
+
+// ── createCommentReply ────────────────────────────────────────────────────────
+
+export async function createCommentReply(
+  commentId: string,
+  postId: string,
+  content: string
+): Promise<{ success?: boolean; reply?: FeedReply; error?: string }> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return { error: "No autenticado" };
+
+    const trimmed = content.trim();
+    if (!trimmed) return { error: "La respuesta no puede estar vacía" };
+    if (trimmed.length > 2000) {
+      return { error: "La respuesta no puede superar 2 000 caracteres" };
+    }
+
+    // Author info from Clerk — never trust frontend
+    const user = await currentUser();
+    const authorName = user?.firstName
+      ? `${user.firstName}${user.lastName ? " " + user.lastName : ""}`.trim()
+      : (user?.emailAddresses?.[0]?.emailAddress ?? "Usuario");
+    const authorAvatarUrl = user?.imageUrl ?? null;
+
+    const supabase = createAdminClient();
+
+    const { data: replyData, error: insertError } = await supabase
+      .from("feed_comment_replies")
+      .insert({
+        comment_id: commentId,
+        post_id: postId,
+        user_id: userId,
+        author_name: authorName,
+        author_avatar_url: authorAvatarUrl,
+        content: trimmed,
+      })
+      .select(
+        "id, comment_id, post_id, user_id, author_name, author_avatar_url, content, created_at"
+      )
+      .single();
+
+    if (insertError) {
+      console.error(
+        "[feed_comment_replies insert]",
+        insertError.code,
+        insertError.message
+      );
+      return { error: "Error al publicar la respuesta. Intenta de nuevo." };
+    }
+
+    revalidatePath("/inicio");
+    return { success: true, reply: replyData as FeedReply };
+  } catch (err) {
+    console.error("[createCommentReply] unexpected:", err);
     return { error: "Error inesperado. Intenta de nuevo." };
   }
 }
