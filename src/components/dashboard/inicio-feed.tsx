@@ -13,7 +13,6 @@ import {
   Smile,
   DollarSign,
   Radio,
-  ChevronDown,
   Star,
   Users,
   TrendingUp,
@@ -25,7 +24,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { createFeedPost } from "@/app/(dashboard)/inicio/actions";
-import type { FeedPost } from "@/app/(dashboard)/inicio/actions";
+import type { FeedPost, FeedBusiness } from "@/app/(dashboard)/inicio/actions";
 import { RealPostCard } from "@/components/dashboard/inicio/real-post-card";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -43,6 +42,7 @@ interface Props {
   fetchError?: string;
   migrationSQL: string;
   currentUser: CurrentUser | null;
+  userBusinesses: FeedBusiness[];
 }
 
 // ── Static mock data (right panel + example posts when table is empty) ─────────
@@ -180,16 +180,30 @@ function initials(name: string | null): string {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-type FeedTab = "todo" | "siguiendo" | "unido";
+type FilterTab = "todo" | "mundo-academy" | "mis-negocios";
 
-export function InicioFeed({ initialPosts, tableExists, fetchError, migrationSQL, currentUser }: Props) {
-  const [activeTab, setActiveTab] = useState<FeedTab>("todo");
+export function InicioFeed({
+  initialPosts,
+  tableExists,
+  fetchError,
+  migrationSQL,
+  currentUser,
+  userBusinesses,
+}: Props) {
+  const [activeFilter, setActiveFilter] = useState<FilterTab>("todo");
   const [sqlCopied, setSqlCopied] = useState(false);
 
   const showMigrationBanner = !tableExists;
-  const hasRealPosts = tableExists && initialPosts.length > 0;
-  // Mocks only when table truly doesn't exist (migration needed)
   const showMockExamples = !tableExists;
+
+  // Client-side filter
+  const filteredPosts = initialPosts.filter((p) => {
+    if (activeFilter === "mundo-academy") return p.business_id === null;
+    if (activeFilter === "mis-negocios") return p.business_id !== null;
+    return true;
+  });
+
+  const hasRealPosts = tableExists && filteredPosts.length > 0;
 
   function copySql() {
     navigator.clipboard.writeText(migrationSQL).then(() => {
@@ -198,6 +212,10 @@ export function InicioFeed({ initialPosts, tableExists, fetchError, migrationSQL
     });
   }
 
+  const currentUserForCard = currentUser
+    ? { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl }
+    : null;
+
   return (
     <div className="min-h-full bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex gap-6">
@@ -205,22 +223,22 @@ export function InicioFeed({ initialPosts, tableExists, fetchError, migrationSQL
         {/* ── Center feed ─────────────────────────────────────────────── */}
         <div className="flex-1 min-w-0 space-y-4">
 
-          {/* Header + tabs */}
+          {/* Header + filter tabs */}
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-gray-900">Inicio</h1>
             <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl px-1 py-1">
               {(
                 [
-                  { key: "todo",      label: "Todo" },
-                  { key: "siguiendo", label: "Siguiendo" },
-                  { key: "unido",     label: "Unido" },
-                ] as { key: FeedTab; label: string }[]
+                  { key: "todo",           label: "Todo" },
+                  { key: "mundo-academy",  label: "Mundo Academy" },
+                  { key: "mis-negocios",   label: "Mis negocios" },
+                ] as { key: FilterTab; label: string }[]
               ).map((tab) => (
                 <button
                   key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    activeTab === tab.key
+                  onClick={() => setActiveFilter(tab.key)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    activeFilter === tab.key
                       ? "bg-gray-900 text-white"
                       : "text-gray-500 hover:text-gray-800"
                   }`}
@@ -260,9 +278,13 @@ export function InicioFeed({ initialPosts, tableExists, fetchError, migrationSQL
           )}
 
           {/* Composer */}
-          <Composer currentUser={currentUser} tableExists={tableExists} />
+          <Composer
+            currentUser={currentUser}
+            tableExists={tableExists}
+            userBusinesses={userBusinesses}
+          />
 
-          {/* ── Fetch error (DB/network error — not a migration issue) ── */}
+          {/* Fetch error */}
           {fetchError && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
               <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
@@ -276,34 +298,32 @@ export function InicioFeed({ initialPosts, tableExists, fetchError, migrationSQL
           {/* ── Real posts ── */}
           {hasRealPosts && (
             <div className="space-y-4">
-              {initialPosts.map((post) => (
+              {filteredPosts.map((post) => (
                 <RealPostCard
                   key={post.id}
                   post={post}
-                  currentUser={
-                    currentUser
-                      ? {
-                          id: currentUser.id,
-                          name: currentUser.name,
-                          avatarUrl: currentUser.avatarUrl,
-                        }
-                      : null
-                  }
+                  currentUser={currentUserForCard}
                 />
               ))}
             </div>
           )}
 
-          {/* ── Premium empty state (table exists, no error, no posts yet) ── */}
-          {tableExists && !fetchError && initialPosts.length === 0 && (
+          {/* ── Empty state: table exists but nothing to show ── */}
+          {tableExists && !fetchError && filteredPosts.length === 0 && (
             <div className="bg-white rounded-2xl border border-gray-200 py-16 flex flex-col items-center gap-5 text-center px-8">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100 border border-blue-100 flex items-center justify-center">
                 <MessageCircle className="w-7 h-7 text-blue-400" />
               </div>
               <div className="space-y-2">
-                <p className="text-base font-semibold text-gray-900">Todavía no hay publicaciones</p>
+                <p className="text-base font-semibold text-gray-900">
+                  {activeFilter === "mis-negocios"
+                    ? "Esta comunidad todavía no tiene publicaciones"
+                    : "Todavía no hay publicaciones"}
+                </p>
                 <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
-                  Sé el primero en compartir una actualización, pregunta o recurso con la comunidad de Mundo Academy.
+                  {activeFilter === "mis-negocios"
+                    ? "Publica algo en uno de tus negocios para que aparezca aquí."
+                    : "Sé el primero en compartir una actualización, pregunta o recurso con la comunidad de Mundo Academy."}
                 </p>
               </div>
               <button
@@ -321,7 +341,7 @@ export function InicioFeed({ initialPosts, tableExists, fetchError, migrationSQL
             </div>
           )}
 
-          {/* ── Mock posts (only shown when table doesn't exist yet) ── */}
+          {/* Mock posts — only when table doesn't exist */}
           {showMockExamples && (
             <div className="space-y-4">
               <p className="text-xs text-gray-400 font-medium uppercase tracking-wide px-1">
@@ -350,9 +370,11 @@ export function InicioFeed({ initialPosts, tableExists, fetchError, migrationSQL
 function Composer({
   currentUser,
   tableExists,
+  userBusinesses,
 }: {
   currentUser: CurrentUser | null;
   tableExists: boolean;
+  userBusinesses: FeedBusiness[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -360,10 +382,16 @@ function Composer({
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Can't post until the table exists
   const disabled = !tableExists;
+
+  const selectedBizName =
+    selectedBusinessId !== null
+      ? (userBusinesses.find((b) => b.id === selectedBusinessId)?.name ?? "Negocio")
+      : "Mundo Academy";
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
@@ -399,6 +427,7 @@ function Composer({
 
     const fd = new FormData();
     fd.set("content", content);
+    fd.set("business_id", selectedBusinessId ?? "");
     if (imageFile) fd.set("image", imageFile);
 
     startTransition(async () => {
@@ -411,6 +440,7 @@ function Composer({
       setContent("");
       setImageFile(null);
       setImagePreview(null);
+      setSelectedBusinessId(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       // Refresh server component to get new posts
       router.refresh();
@@ -427,10 +457,39 @@ function Composer({
       onSubmit={handleSubmit}
       className="bg-white rounded-2xl border border-gray-200 p-4 space-y-3"
     >
-      {/* Selectors row */}
+      {/* "Publicar en" selector */}
       <div className="flex items-center gap-2">
-        <SelectorPill label="Mundo Academy" />
-        <SelectorPill label="Public forum" emoji="🌐" />
+        <span className="text-xs text-gray-500 font-medium">Publicar en</span>
+        {userBusinesses.length === 0 ? (
+          // No businesses — fixed to Mundo Academy
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-gray-50 text-xs font-medium text-gray-700">
+            <span className="w-4 h-4 rounded bg-blue-600 flex items-center justify-center text-white font-bold leading-none text-[8px]">
+              MA
+            </span>
+            Mundo Academy
+          </span>
+        ) : (
+          // Dropdown selector
+          <select
+            value={selectedBusinessId ?? ""}
+            onChange={(e) =>
+              setSelectedBusinessId(e.target.value || null)
+            }
+            disabled={disabled || isPending}
+            className="text-xs font-medium text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <option value="">Mundo Academy</option>
+            {userBusinesses.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <span className="text-xs text-gray-400 hidden sm:inline">·</span>
+        <span className="text-xs text-gray-500 hidden sm:inline font-medium">
+          {selectedBizName}
+        </span>
       </div>
 
       {/* Text input */}
@@ -545,26 +604,7 @@ function Composer({
   );
 }
 
-function SelectorPill({ label, emoji }: { label: string; emoji?: string }) {
-  return (
-    <button
-      type="button"
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 transition-colors"
-    >
-      {emoji ? (
-        <span className="text-sm leading-none">{emoji}</span>
-      ) : (
-        <span className="w-4 h-4 rounded bg-blue-600 flex items-center justify-center text-white font-bold leading-none text-[8px]">
-          MA
-        </span>
-      )}
-      {label}
-      <ChevronDown className="w-3 h-3 text-gray-400" />
-    </button>
-  );
-}
-
-// RealPostCard is now in src/components/dashboard/inicio/real-post-card.tsx
+// RealPostCard is in src/components/dashboard/inicio/real-post-card.tsx
 
 // ── Mock post card (example / placeholder posts) ──────────────────────────────
 

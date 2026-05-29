@@ -25,6 +25,9 @@ export const REPLIES_SQL = `CREATE TABLE IF NOT EXISTS feed_comment_replies (
   updated_at        timestamptz DEFAULT now() NOT NULL
 );`;
 
+export const BUSINESS_INDEX_SQL = `CREATE INDEX IF NOT EXISTS feed_posts_business_id_idx
+ON feed_posts(business_id);`;
+
 export const LIKES_COMMENTS_SQL = `CREATE TABLE IF NOT EXISTS feed_post_likes (
   id         uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
   post_id    uuid        NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,

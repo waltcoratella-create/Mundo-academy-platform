@@ -1,15 +1,17 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { getFeedPosts } from "./actions";
+import { getFeedPosts, getUserFeedBusinesses } from "./actions";
 import { FEED_POSTS_SQL } from "./constants";
 import { InicioFeed } from "@/components/dashboard/inicio-feed";
 
 export default async function InicioPage() {
   const { userId } = await auth();
 
-  const [{ posts, tableExists, fetchError }, user] = await Promise.all([
-    getFeedPosts(),
-    currentUser(),
-  ]);
+  const [{ posts, tableExists, fetchError }, user, userBusinesses] =
+    await Promise.all([
+      getFeedPosts(),
+      currentUser(),
+      getUserFeedBusinesses(),
+    ]);
 
   const currentUserData = userId
     ? {
@@ -33,6 +35,7 @@ export default async function InicioPage() {
       fetchError={fetchError}
       migrationSQL={FEED_POSTS_SQL}
       currentUser={currentUserData}
+      userBusinesses={userBusinesses}
     />
   );
 }

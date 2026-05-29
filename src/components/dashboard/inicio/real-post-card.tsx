@@ -479,6 +479,13 @@ export function RealPostCard({ post, currentUser }: RealPostCardProps) {
             </p>
             <p className="text-xs text-gray-400 mt-0.5">
               {timeAgo(post.created_at)}
+              {" · "}
+              <span>
+                Publicado en{" "}
+                <span className="font-medium text-gray-500">
+                  {post.business_name ?? "Mundo Academy"}
+                </span>
+              </span>
             </p>
           </div>
         </div>

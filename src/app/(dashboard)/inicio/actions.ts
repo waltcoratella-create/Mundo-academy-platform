@@ -29,10 +29,19 @@ export interface FeedComment {
   recent_replies: FeedReply[];
 }
 
+export interface FeedBusiness {
+  id: string;
+  name: string;
+  logo_url: string | null;
+}
+
 export interface FeedPost {
   id: string;
   user_id: string;
   business_id: string | null;
+  /** Resolved from businesses table; null means Mundo Academy */
+  business_name: string | null;
+  business_logo_url: string | null;
   author_name: string | null;
   author_avatar_url: string | null;
   content: string;
@@ -56,7 +65,10 @@ export interface FeedPostsResult {
 }
 
 // Raw shape straight from feed_posts (before enrichment)
-type RawPost = Omit<FeedPost, "liked_by_current_user" | "recent_comments">;
+type RawPost = Omit<
+  FeedPost,
+  "liked_by_current_user" | "recent_comments" | "business_name" | "business_logo_url"
+>;
 
 // ── getFeedPosts ──────────────────────────────────────────────────────────────
 
@@ -174,11 +186,38 @@ export async function getFeedPosts(): Promise<FeedPostsResult> {
       commentsByPost.set(pid, enriched);
     });
 
-    const posts: FeedPost[] = rawPosts.map((p) => ({
-      ...p,
-      liked_by_current_user: likedPostIds.has(p.id),
-      recent_comments: commentsByPost.get(p.id) ?? [],
-    }));
+    // 5. Fetch business names/logos for posts that have a business_id
+    const bizMap = new Map<string, { name: string; logo_url: string | null }>();
+    const uniqueBizIds = [
+      ...new Set(rawPosts.map((p) => p.business_id).filter(Boolean) as string[]),
+    ];
+    if (uniqueBizIds.length > 0) {
+      try {
+        const { data: bizData } = await supabase
+          .from("businesses")
+          .select("id, name, logo_url")
+          .in("id", uniqueBizIds);
+        (bizData ?? []).forEach((b) => {
+          bizMap.set(b.id as string, {
+            name: b.name as string,
+            logo_url: (b.logo_url as string | null) ?? null,
+          });
+        });
+      } catch {
+        // safe to ignore
+      }
+    }
+
+    const posts: FeedPost[] = rawPosts.map((p) => {
+      const biz = p.business_id ? bizMap.get(p.business_id) : null;
+      return {
+        ...p,
+        business_name: biz?.name ?? null,
+        business_logo_url: biz?.logo_url ?? null,
+        liked_by_current_user: likedPostIds.has(p.id),
+        recent_comments: commentsByPost.get(p.id) ?? [],
+      };
+    });
 
     return { posts, tableExists: true };
   } catch (err) {
@@ -211,6 +250,10 @@ export async function createFeedPost(
       return { error: "El contenido no puede superar 5 000 caracteres" };
     }
 
+    // business_id from form — validate ownership server-side, never trust the value
+    const rawBizId = ((formData.get("business_id") as string) ?? "").trim();
+    const businessId: string | null = rawBizId || null;
+
     // Author info from Clerk — never trust frontend
     const user = await currentUser();
     const authorName = user?.firstName
@@ -219,6 +262,31 @@ export async function createFeedPost(
     const authorAvatarUrl = user?.imageUrl ?? null;
 
     const supabase = createAdminClient();
+
+    // ── Validate business ownership if publishing to a business ──────────
+    if (businessId) {
+      // businesses.owner_id → users.id (UUID), not Clerk ID
+      const { data: userData } = await supabase
+        .from("users")
+        .select("id")
+        .eq("clerk_id", userId)
+        .maybeSingle();
+
+      if (!userData) {
+        return { error: "No se encontró tu perfil de usuario." };
+      }
+
+      const { data: bizData } = await supabase
+        .from("businesses")
+        .select("id")
+        .eq("id", businessId)
+        .eq("owner_id", userData.id)
+        .maybeSingle();
+
+      if (!bizData) {
+        return { error: "No tienes acceso a ese negocio." };
+      }
+    }
 
     // ── Optional image upload ─────────────────────────────────────────────
     let imageUrl: string | null = null;
@@ -265,6 +333,7 @@ export async function createFeedPost(
     // ── Insert post ───────────────────────────────────────────────────────
     const { error: insertError } = await supabase.from("feed_posts").insert({
       user_id: userId,
+      business_id: businessId,
       author_name: authorName,
       author_avatar_url: authorAvatarUrl,
       content: content,
@@ -538,5 +607,39 @@ export async function createCommentReply(
   } catch (err) {
     console.error("[createCommentReply] unexpected:", err);
     return { error: "Error inesperado. Intenta de nuevo." };
+  }
+}
+
+// ── getUserFeedBusinesses ─────────────────────────────────────────────────────
+
+export async function getUserFeedBusinesses(): Promise<FeedBusiness[]> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return [];
+
+    const supabase = createAdminClient();
+
+    // businesses.owner_id → users.id (UUID), resolve from Clerk ID
+    const { data: userData } = await supabase
+      .from("users")
+      .select("id")
+      .eq("clerk_id", userId)
+      .maybeSingle();
+
+    if (!userData) return [];
+
+    const { data } = await supabase
+      .from("businesses")
+      .select("id, name, logo_url")
+      .eq("owner_id", userData.id)
+      .order("created_at", { ascending: false });
+
+    return (data ?? []).map((b) => ({
+      id: b.id as string,
+      name: b.name as string,
+      logo_url: (b.logo_url as string | null) ?? null,
+    }));
+  } catch {
+    return [];
   }
 }
