@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { createFeedPost } from "@/app/(dashboard)/inicio/actions";
 import type { FeedPost } from "@/app/(dashboard)/inicio/actions";
+import { RealPostCard } from "@/components/dashboard/inicio/real-post-card";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -276,7 +277,19 @@ export function InicioFeed({ initialPosts, tableExists, fetchError, migrationSQL
           {hasRealPosts && (
             <div className="space-y-4">
               {initialPosts.map((post) => (
-                <RealPostCard key={post.id} post={post} />
+                <RealPostCard
+                  key={post.id}
+                  post={post}
+                  currentUser={
+                    currentUser
+                      ? {
+                          id: currentUser.id,
+                          name: currentUser.name,
+                          avatarUrl: currentUser.avatarUrl,
+                        }
+                      : null
+                  }
+                />
               ))}
             </div>
           )}
@@ -551,84 +564,7 @@ function SelectorPill({ label, emoji }: { label: string; emoji?: string }) {
   );
 }
 
-// ── Real post card (FeedPost from Supabase) ───────────────────────────────────
-
-function RealPostCard({ post }: { post: FeedPost }) {
-  const [liked, setLiked] = useState(false);
-  const bg = avatarColor(post.user_id);
-  const label = initials(post.author_name);
-
-  return (
-    <article className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:border-gray-300 transition-colors">
-      {/* Header */}
-      <div className="px-5 pt-4 pb-0 flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          {post.author_avatar_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={post.author_avatar_url}
-              alt={post.author_name ?? "Avatar"}
-              className="w-9 h-9 rounded-full object-cover shrink-0"
-            />
-          ) : (
-            <div
-              className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${bg}`}
-            >
-              {label}
-            </div>
-          )}
-          <div>
-            <p className="text-sm font-semibold text-gray-900">
-              {post.author_name ?? "Usuario"}
-            </p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {timeAgo(post.created_at)}
-            </p>
-          </div>
-        </div>
-        <button className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors shrink-0">
-          <MoreHorizontal className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Body */}
-      <div className="px-5 py-4 space-y-3">
-        {post.content && (
-          <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
-            {post.content}
-          </p>
-        )}
-        {post.image_url && (
-          <div className="rounded-xl overflow-hidden border border-gray-100">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={post.image_url}
-              alt="Imagen del post"
-              className="w-full object-cover max-h-80"
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="px-5 py-3 border-t border-gray-100 flex items-center gap-4">
-        <ActionBtn
-          icon={Heart}
-          count={post.likes_count + (liked ? 1 : 0)}
-          label="Me gusta"
-          active={liked}
-          activeClass="text-red-500"
-          onClick={() => setLiked((v) => !v)}
-        />
-        <ActionBtn icon={MessageCircle} count={post.comments_count} label="Comentar" />
-        <ActionBtn icon={BarChart2} count={post.views_count} label="Vistas" formatter={fmtViews} />
-        <button className="ml-auto p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors" title="Compartir">
-          <Share2 className="w-4 h-4" />
-        </button>
-      </div>
-    </article>
-  );
-}
+// RealPostCard is now in src/components/dashboard/inicio/real-post-card.tsx
 
 // ── Mock post card (example / placeholder posts) ──────────────────────────────
 
