@@ -125,13 +125,14 @@ export function UserMenu() {
                 Ver perfil
               </Link>
             </div>
-            <button
+            <Link
+              href="/configuracion"
               onClick={close}
               title="Configuración"
               className="shrink-0 p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
             >
               <Settings className="w-4 h-4" />
-            </button>
+            </Link>
           </div>
 
           <Divider />
