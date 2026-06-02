@@ -12,10 +12,11 @@ export default async function BusinessProfilePage({
 }: {
   params: { businessId: string };
 }) {
-  const [{ userId }, user, profile, posts, products] = await Promise.all([
-    auth(),
+  const { userId } = await auth();
+
+  const [user, profile, posts, products] = await Promise.all([
     currentUser(),
-    getBusinessProfile(params.businessId),
+    getBusinessProfile(params.businessId, userId),
     getBusinessFeedPosts(params.businessId),
     getBusinessPublicProducts(params.businessId),
   ]);

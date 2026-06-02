@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   FeedPost,
@@ -24,6 +25,8 @@ export interface BusinessProfile {
   members_count: number;
   posts_count: number;
   products_count: number;
+  /** Relationship of the current viewer to this business */
+  membership_status: "owner" | "member" | "visitor";
 }
 
 export interface BusinessProduct {
@@ -86,7 +89,8 @@ function bestAvatar(p: ProfileRow | undefined, stored: string | null): string | 
 // ── getBusinessProfile ────────────────────────────────────────────────────────
 
 export async function getBusinessProfile(
-  businessId: string
+  businessId: string,
+  currentClerkUserId?: string | null
 ): Promise<BusinessProfile | null> {
   try {
     const supabase = createAdminClient();
@@ -175,7 +179,7 @@ export async function getBusinessProfile(
     const [membersCount, postsCount, productsCount] = await Promise.all([
       (async () => {
         const { count, error } = await supabase
-          .from("product_members")
+          .from("members")
           .select("id", { count: "exact", head: true })
           .eq("business_id", businessId)
           .eq("status", "active");
@@ -201,6 +205,37 @@ export async function getBusinessProfile(
       })(),
     ]);
 
+    // 4. Membership status for the current viewer
+    let membershipStatus: BusinessProfile["membership_status"] = "visitor";
+    if (currentClerkUserId) {
+      try {
+        const { data: viewerRow } = await supabase
+          .from("users")
+          .select("id")
+          .eq("clerk_id", currentClerkUserId)
+          .maybeSingle();
+
+        if (viewerRow?.id) {
+          // Owner check: compare supabase UUIDs
+          if (biz.owner_id === viewerRow.id) {
+            membershipStatus = "owner";
+          } else {
+            // Member check
+            const { data: memberRow } = await supabase
+              .from("members")
+              .select("id")
+              .eq("business_id", businessId)
+              .eq("user_id", viewerRow.id)
+              .eq("status", "active")
+              .maybeSingle();
+            if (memberRow) membershipStatus = "member";
+          }
+        }
+      } catch {
+        // graceful — membership check is non-critical
+      }
+    }
+
     return {
       id: biz.id,
       name: biz.name,
@@ -213,6 +248,7 @@ export async function getBusinessProfile(
       members_count: membersCount,
       posts_count: postsCount,
       products_count: productsCount,
+      membership_status: membershipStatus,
     };
   } catch {
     return null;
@@ -342,6 +378,85 @@ export async function getBusinessFeedPosts(businessId: string): Promise<FeedPost
     }));
   } catch {
     return [];
+  }
+}
+
+// ── joinBusiness ──────────────────────────────────────────────────────────────
+
+export async function joinBusiness(
+  businessId: string
+): Promise<{ error?: string }> {
+  try {
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) return { error: "No autenticado" };
+
+    const supabase = createAdminClient();
+
+    // Resolve Supabase UUID from Clerk ID
+    const { data: userRow } = await supabase
+      .from("users")
+      .select("id")
+      .eq("clerk_id", clerkUserId)
+      .maybeSingle();
+
+    if (!userRow?.id) return { error: "Usuario no encontrado" };
+
+    // Guard: prevent owners from joining their own business
+    const { data: bizRow } = await supabase
+      .from("businesses")
+      .select("owner_id")
+      .eq("id", businessId)
+      .maybeSingle();
+    if (bizRow?.owner_id === userRow.id) return {};   // already owner — no-op
+
+    // Insert — unique constraint (business_id, user_id) handles duplicates gracefully
+    const { error } = await supabase.from("members").insert({
+      business_id: businessId,
+      user_id: userRow.id,
+      status: "active",
+    });
+
+    if (error && error.code !== "23505") return { error: error.message };
+
+    revalidatePath(`/business/${businessId}`);
+    return {};
+  } catch {
+    return { error: "Error interno" };
+  }
+}
+
+// ── leaveBusiness ─────────────────────────────────────────────────────────────
+
+export async function leaveBusiness(
+  businessId: string
+): Promise<{ error?: string }> {
+  try {
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) return { error: "No autenticado" };
+
+    const supabase = createAdminClient();
+
+    // Resolve Supabase UUID from Clerk ID
+    const { data: userRow } = await supabase
+      .from("users")
+      .select("id")
+      .eq("clerk_id", clerkUserId)
+      .maybeSingle();
+
+    if (!userRow?.id) return { error: "Usuario no encontrado" };
+
+    const { error } = await supabase
+      .from("members")
+      .delete()
+      .eq("business_id", businessId)
+      .eq("user_id", userRow.id);
+
+    if (error) return { error: error.message };
+
+    revalidatePath(`/business/${businessId}`);
+    return {};
+  } catch {
+    return { error: "Error interno" };
   }
 }
 

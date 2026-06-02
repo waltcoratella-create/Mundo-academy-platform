@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
   Users,
@@ -11,6 +11,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { RealPostCard } from "@/components/dashboard/inicio/real-post-card";
+import { joinBusiness } from "./actions";
 import type { BusinessProfile, BusinessProduct } from "./actions";
 import type { FeedPost } from "@/app/(dashboard)/inicio/actions";
 
@@ -137,9 +138,26 @@ export function BusinessProfileClient({
   currentUser,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("publicaciones");
+  const [memberStatus, setMemberStatus] = useState<BusinessProfile["membership_status"]>(
+    profile.membership_status
+  );
+  const [membersCount, setMembersCount] = useState(profile.members_count);
+  const [isPending, startTransition]    = useTransition();
 
-  const cover    = coverGradient(profile.id);
-  const logoBg   = logoColor(profile.id);
+  const cover  = coverGradient(profile.id);
+  const logoBg = logoColor(profile.id);
+
+  function handleJoin() {
+    setMemberStatus("member");
+    setMembersCount((c) => c + 1);
+    startTransition(async () => {
+      const result = await joinBusiness(profile.id);
+      if (result.error) {
+        setMemberStatus("visitor");
+        setMembersCount((c) => Math.max(0, c - 1));
+      }
+    });
+  }
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "publicaciones", label: "Publicaciones" },
@@ -186,11 +204,31 @@ export function BusinessProfileClient({
               )}
             </div>
 
-            {/* Join / Enter button (UI only — no membership logic yet) */}
+            {/* Join / Enter / Manage button */}
             <div className="mb-1">
-              <button className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 active:scale-95 transition-all shadow-sm">
-                Unirme
-              </button>
+              {memberStatus === "owner" ? (
+                <Link
+                  href={`/mis-negocios/${profile.id}`}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition-all shadow-sm"
+                >
+                  Administrar
+                </Link>
+              ) : memberStatus === "member" ? (
+                <Link
+                  href={`/mis-negocios/${profile.id}`}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition-all shadow-sm"
+                >
+                  Entrar
+                </Link>
+              ) : (
+                <button
+                  onClick={handleJoin}
+                  disabled={isPending}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 active:scale-95 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isPending ? "Uniéndome…" : "Unirme"}
+                </button>
+              )}
             </div>
           </div>
 
@@ -227,7 +265,7 @@ export function BusinessProfileClient({
             <div className="flex items-center gap-5 pt-1">
               <div className="flex items-center gap-1.5 text-sm text-gray-700">
                 <Users className="w-4 h-4 text-gray-400" />
-                <span className="font-semibold">{fmtCount(profile.members_count)}</span>
+                <span className="font-semibold">{fmtCount(membersCount)}</span>
                 <span className="text-gray-500 text-xs">miembros</span>
               </div>
               <div className="flex items-center gap-1.5 text-sm text-gray-700">
@@ -320,7 +358,7 @@ export function BusinessProfileClient({
 
           {/* Información */}
           {activeTab === "informacion" && (
-            <InfoPanel profile={profile} />
+            <InfoPanel profile={profile} membersCount={membersCount} />
           )}
 
         </div>
@@ -369,7 +407,13 @@ function ProductCard({ product }: { product: BusinessProduct }) {
 
 // ── InfoPanel ─────────────────────────────────────────────────────────────────
 
-function InfoPanel({ profile }: { profile: BusinessProfile }) {
+function InfoPanel({
+  profile,
+  membersCount,
+}: {
+  profile: BusinessProfile;
+  membersCount: number;
+}) {
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
 
@@ -423,7 +467,7 @@ function InfoPanel({ profile }: { profile: BusinessProfile }) {
           <Globe className="w-4 h-4 text-gray-400 shrink-0" />
           <span>
             <span className="font-semibold text-gray-900">
-              {fmtCount(profile.members_count)}
+              {fmtCount(membersCount)}
             </span>{" "}
             miembros ·{" "}
             <span className="font-semibold text-gray-900">
