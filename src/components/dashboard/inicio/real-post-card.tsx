@@ -488,13 +488,17 @@ export function RealPostCard({ post, currentUser }: RealPostCardProps) {
             </Link>
             <p className="text-xs text-gray-400 mt-0.5">
               {timeAgo(post.created_at)}
-              {" · "}
-              <span>
-                Publicado en{" "}
-                <span className="font-medium text-gray-500">
-                  {post.business_name ?? "Mundo Academy"}
-                </span>
-              </span>
+              {" · Publicado en "}
+              {post.business_id ? (
+                <Link
+                  href={`/business/${post.business_id}`}
+                  className="font-medium text-gray-500 hover:text-blue-600 hover:underline transition-colors"
+                >
+                  {post.business_name ?? "Negocio"}
+                </Link>
+              ) : (
+                <span className="font-medium text-gray-500">Mundo Academy</span>
+              )}
             </p>
           </div>
         </div>
