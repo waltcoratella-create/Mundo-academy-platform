@@ -1,7 +1,8 @@
 "use client";
 
 import { UserButton } from "@clerk/nextjs";
-import { Menu, Search, MessageCircle, Bell, Wallet, Sparkles } from "lucide-react";
+import { Menu, Search, MessageCircle, Wallet, Sparkles } from "lucide-react";
+import { NotificationsBell } from "@/components/dashboard/inicio/notifications-bell";
 
 interface Props {
   onToggleSidebar: () => void;
@@ -49,9 +50,7 @@ export function TopBar({ onToggleSidebar, onToggleAI, aiOpen }: Props) {
         </button>
 
         {/* Notifications */}
-        <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors">
-          <Bell className="w-5 h-5" />
-        </button>
+        <NotificationsBell />
 
         {/* AI button */}
         <button

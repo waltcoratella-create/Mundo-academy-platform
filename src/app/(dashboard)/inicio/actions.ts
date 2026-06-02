@@ -73,11 +73,80 @@ export interface FeedCreator {
   display_context: string;
 }
 
+export interface FeedNotification {
+  id: string;
+  recipient_user_id: string;
+  actor_user_id: string;
+  actor_name: string | null;
+  actor_avatar_url: string | null;
+  type: "post_like" | "post_comment" | "comment_reply" | "user_follow";
+  post_id: string | null;
+  comment_id: string | null;
+  reply_id: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
 // Raw shape straight from feed_posts (before enrichment)
 type RawPost = Omit<
   FeedPost,
   "liked_by_current_user" | "recent_comments" | "business_name" | "business_logo_url"
 >;
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+/** Resolve actor name/avatar from their most recent feed post — fast, no Clerk API call */
+async function resolveActorInfo(
+  actorUserId: string,
+  supabase: ReturnType<typeof createAdminClient>
+): Promise<{ name: string | null; avatar_url: string | null }> {
+  try {
+    const { data } = await supabase
+      .from("feed_posts")
+      .select("author_name, author_avatar_url")
+      .eq("user_id", actorUserId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return {
+      name: (data?.author_name ?? null) as string | null,
+      avatar_url: (data?.author_avatar_url ?? null) as string | null,
+    };
+  } catch {
+    return { name: null, avatar_url: null };
+  }
+}
+
+/** Insert a notification row; silently skips if actor === recipient or table missing */
+async function createNotification(
+  supabase: ReturnType<typeof createAdminClient>,
+  opts: {
+    recipientUserId: string;
+    actorUserId: string;
+    actorName: string | null;
+    actorAvatarUrl: string | null;
+    type: string;
+    postId?: string | null;
+    commentId?: string | null;
+    replyId?: string | null;
+  }
+): Promise<void> {
+  if (opts.recipientUserId === opts.actorUserId) return;
+  try {
+    await supabase.from("notifications").insert({
+      recipient_user_id: opts.recipientUserId,
+      actor_user_id: opts.actorUserId,
+      actor_name: opts.actorName,
+      actor_avatar_url: opts.actorAvatarUrl,
+      type: opts.type,
+      post_id: opts.postId ?? null,
+      comment_id: opts.commentId ?? null,
+      reply_id: opts.replyId ?? null,
+    });
+  } catch {
+    // notifications table not yet created — safe to ignore
+  }
+}
 
 // ── getFeedPosts ──────────────────────────────────────────────────────────────
 
@@ -423,6 +492,30 @@ export async function togglePostLike(
       .update({ likes_count: count ?? 0 })
       .eq("id", postId);
 
+    // Notify post owner when a like is given (not removed)
+    if (liked) {
+      try {
+        const { data: post } = await supabase
+          .from("feed_posts")
+          .select("user_id")
+          .eq("id", postId)
+          .maybeSingle();
+        if (post?.user_id) {
+          const actor = await resolveActorInfo(userId, supabase);
+          await createNotification(supabase, {
+            recipientUserId: post.user_id as string,
+            actorUserId: userId,
+            actorName: actor.name,
+            actorAvatarUrl: actor.avatar_url,
+            type: "post_like",
+            postId,
+          });
+        }
+      } catch {
+        // non-critical — never fail the like action
+      }
+    }
+
     revalidatePath("/inicio");
     return { success: true, liked };
   } catch (err) {
@@ -489,6 +582,28 @@ export async function createPostComment(
       .from("feed_posts")
       .update({ comments_count: count ?? 0 })
       .eq("id", postId);
+
+    // Notify post owner
+    try {
+      const { data: post } = await supabase
+        .from("feed_posts")
+        .select("user_id")
+        .eq("id", postId)
+        .maybeSingle();
+      if (post?.user_id) {
+        await createNotification(supabase, {
+          recipientUserId: post.user_id as string,
+          actorUserId: userId,
+          actorName: authorName,
+          actorAvatarUrl: authorAvatarUrl,
+          type: "post_comment",
+          postId,
+          commentId: (commentData as { id: string }).id,
+        });
+      }
+    } catch {
+      // non-critical
+    }
 
     revalidatePath("/inicio");
     return {
@@ -609,6 +724,29 @@ export async function createCommentReply(
         insertError.message
       );
       return { error: "Error al publicar la respuesta. Intenta de nuevo." };
+    }
+
+    // Notify comment owner
+    try {
+      const { data: comment } = await supabase
+        .from("feed_post_comments")
+        .select("user_id")
+        .eq("id", commentId)
+        .maybeSingle();
+      if (comment?.user_id) {
+        await createNotification(supabase, {
+          recipientUserId: comment.user_id as string,
+          actorUserId: userId,
+          actorName: authorName,
+          actorAvatarUrl: authorAvatarUrl,
+          type: "comment_reply",
+          postId,
+          commentId,
+          replyId: (replyData as { id: string }).id,
+        });
+      }
+    } catch {
+      // non-critical
     }
 
     revalidatePath("/inicio");
@@ -776,6 +914,24 @@ export async function followUser(
       return { error: "Error al seguir. Intenta de nuevo." };
     }
 
+    // Notify the followed user (best-effort, non-critical)
+    try {
+      const user = await currentUser();
+      const actorName = user?.firstName
+        ? `${user.firstName}${user.lastName ? " " + user.lastName : ""}`.trim()
+        : (user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] ?? null);
+      const actorAvatarUrl = user?.imageUrl ?? null;
+      await createNotification(supabase, {
+        recipientUserId: targetUserId,
+        actorUserId: userId,
+        actorName,
+        actorAvatarUrl,
+        type: "user_follow",
+      });
+    } catch {
+      // non-critical
+    }
+
     revalidatePath("/inicio");
     return {};
   } catch {
@@ -807,6 +963,64 @@ export async function unfollowUser(
     return {};
   } catch {
     return { error: "Error inesperado." };
+  }
+}
+
+// ── getNotifications ─────────────────────────────────────────────────────────
+
+export async function getNotifications(): Promise<FeedNotification[]> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return [];
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("notifications")
+      .select(
+        "id, recipient_user_id, actor_user_id, actor_name, actor_avatar_url, type, post_id, comment_id, reply_id, read_at, created_at"
+      )
+      .eq("recipient_user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error) return [];
+    return (data ?? []) as FeedNotification[];
+  } catch {
+    return [];
+  }
+}
+
+// ── getUnreadNotificationsCount ───────────────────────────────────────────────
+
+export async function getUnreadNotificationsCount(): Promise<number> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return 0;
+    const supabase = createAdminClient();
+    const { count, error } = await supabase
+      .from("notifications")
+      .select("*", { count: "exact", head: true })
+      .eq("recipient_user_id", userId)
+      .is("read_at", null);
+    if (error) return 0;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+// ── markNotificationsAsRead ───────────────────────────────────────────────────
+
+export async function markNotificationsAsRead(): Promise<void> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return;
+    const supabase = createAdminClient();
+    await supabase
+      .from("notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("recipient_user_id", userId)
+      .is("read_at", null);
+  } catch {
+    // graceful — non-critical
   }
 }
 
