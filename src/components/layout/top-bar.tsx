@@ -1,8 +1,8 @@
 "use client";
 
-import { UserButton } from "@clerk/nextjs";
 import { Menu, Search, MessageCircle, Wallet, Sparkles } from "lucide-react";
 import { NotificationsBell } from "@/components/dashboard/inicio/notifications-bell";
+import { UserMenu } from "@/components/layout/user-menu";
 
 interface Props {
   onToggleSidebar: () => void;
@@ -71,10 +71,8 @@ export function TopBar({ onToggleSidebar, onToggleAI, aiOpen }: Props) {
           0,00 US$
         </div>
 
-        {/* Avatar */}
-        <div className="ml-1">
-          <UserButton afterSignOutUrl="/sign-in" />
-        </div>
+        {/* Avatar + user menu */}
+        <UserMenu />
       </div>
     </header>
   );
