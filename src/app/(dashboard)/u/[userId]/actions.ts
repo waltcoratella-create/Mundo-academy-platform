@@ -13,8 +13,9 @@ import type {
 export interface UserProfile {
   user_id: string;
   display_name: string;
+  /** user_profiles.username (without @), null if not set */
+  username: string | null;
   avatar_url: string | null;
-  /** Always "Miembro de Mundo Academy" until bio editing exists */
   bio: string;
   posts_count: number;
   followers_count: number;
@@ -50,15 +51,6 @@ export async function getUserProfile(
     .order("created_at", { ascending: false });
 
   const rawPosts = (postsData ?? []) as RawPost[];
-
-  // Derive display identity from most recent post
-  let displayName: string | null = rawPosts[0]?.author_name ?? null;
-  let avatarUrl: string | null = rawPosts[0]?.author_avatar_url ?? null;
-  // Strip email domains
-  if (displayName?.includes("@")) {
-    displayName = displayName.split("@")[0] ?? displayName;
-  }
-
   const postIds = rawPosts.map((p) => p.id);
 
   // ── 2. Which posts the viewer has liked ─────────────────────────────────
@@ -122,6 +114,57 @@ export async function getUserProfile(
     } catch { /* table not yet created */ }
   }
 
+  // ── 5. Batch-fetch user_profiles for all participants ───────────────────
+  const allParticipantIds = [
+    ...new Set([
+      targetUserId,
+      ...rawPosts.map((p) => p.user_id),
+      ...[...rawCommentsByPost.values()].flat().map((c) => c.user_id),
+      ...[...repliesByComment.values()].flat().map((r) => r.user_id),
+    ]),
+  ];
+
+  type ProfileRow = {
+    display_name: string | null;
+    username: string | null;
+    avatar_url: string | null;
+    bio: string | null;
+  };
+
+  const profileMap = new Map<string, ProfileRow>();
+  try {
+    const { data: profilesData } = await supabase
+      .from("user_profiles")
+      .select("user_id, display_name, username, avatar_url, bio")
+      .in("user_id", allParticipantIds);
+    (profilesData ?? []).forEach((p) => {
+      profileMap.set(p.user_id as string, {
+        display_name: (p.display_name ?? null) as string | null,
+        username:     (p.username     ?? null) as string | null,
+        avatar_url:   (p.avatar_url   ?? null) as string | null,
+        bio:          (p.bio          ?? null) as string | null,
+      });
+    });
+  } catch { /* user_profiles table not yet created */ }
+
+  const targetProfile = profileMap.get(targetUserId);
+
+  /** Priority: profile.display_name > @username > strip-email stored > null */
+  function resolveName(uid: string, stored: string | null): string | null {
+    const p = profileMap.get(uid);
+    if (p?.display_name?.trim()) return p.display_name.trim();
+    if (p?.username?.trim()) return `@${p.username.trim()}`;
+    if (stored?.trim()) {
+      const n = stored.trim();
+      return n.includes("@") ? (n.split("@")[0] ?? n) : n;
+    }
+    return null;
+  }
+  /** Priority: profile.avatar_url > stored */
+  function resolveAvatar(uid: string, stored: string | null): string | null {
+    return profileMap.get(uid)?.avatar_url ?? stored ?? null;
+  }
+
   // Merge comments + replies into enriched FeedComment[]
   const commentsByPost = new Map<string, FeedComment[]>();
   rawCommentsByPost.forEach((rawComments, pid) => {
@@ -129,7 +172,13 @@ export async function getUserProfile(
       .reverse() // DESC → ASC oldest first
       .map((c) => ({
         ...c,
-        recent_replies: [...(repliesByComment.get(c.id) ?? [])].reverse(),
+        author_name: resolveName(c.user_id, c.author_name),
+        author_avatar_url: resolveAvatar(c.user_id, c.author_avatar_url),
+        recent_replies: [...(repliesByComment.get(c.id) ?? [])].reverse().map((r) => ({
+          ...r,
+          author_name: resolveName(r.user_id, r.author_name),
+          author_avatar_url: resolveAvatar(r.user_id, r.author_avatar_url),
+        })),
       }));
     commentsByPost.set(pid, enriched);
   });
@@ -160,6 +209,8 @@ export async function getUserProfile(
     const biz = p.business_id ? bizMap.get(p.business_id) : null;
     return {
       ...p,
+      author_name: resolveName(p.user_id, p.author_name),
+      author_avatar_url: resolveAvatar(p.user_id, p.author_avatar_url),
       business_name: biz?.name ?? null,
       business_logo_url: biz?.logo_url ?? null,
       liked_by_current_user: likedPostIds.has(p.id),
@@ -197,11 +248,22 @@ export async function getUserProfile(
     }
   } catch { /* user_follows table not yet created */ }
 
+  // Derive header identity — user_profiles wins over stale feed_posts data
+  const storedName   = rawPosts[0]?.author_name ?? null;
+  const storedAvatar = rawPosts[0]?.author_avatar_url ?? null;
+
+  const headerName =
+    targetProfile?.display_name?.trim() ||
+    (targetProfile?.username ? `@${targetProfile.username}` : null) ||
+    (storedName?.includes("@") ? storedName.split("@")[0] : storedName) ||
+    "Usuario";
+
   return {
     user_id: targetUserId,
-    display_name: displayName ?? "Usuario",
-    avatar_url: avatarUrl,
-    bio: "Miembro de Mundo Academy",
+    display_name: headerName,
+    username: targetProfile?.username ?? null,
+    avatar_url: targetProfile?.avatar_url ?? storedAvatar,
+    bio: targetProfile?.bio?.trim() || "Miembro de Mundo Academy",
     posts_count: rawPosts.length,
     followers_count: followersCount,
     following_count: followingCount,

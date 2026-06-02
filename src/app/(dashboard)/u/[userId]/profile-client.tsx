@@ -162,7 +162,12 @@ export function UserProfileClient({ profile, currentUser }: Props) {
               <h1 className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">
                 {profile.display_name}
               </h1>
-              <p className="text-sm text-gray-500 mt-0.5">{profile.bio}</p>
+              {profile.username && (
+                <p className="text-xs font-medium text-gray-400 mt-0.5">
+                  @{profile.username}
+                </p>
+              )}
+              <p className="text-sm text-gray-500 mt-1">{profile.bio}</p>
             </div>
 
             {/* Stats */}

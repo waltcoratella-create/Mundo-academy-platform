@@ -95,22 +95,87 @@ type RawPost = Omit<
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-/** Resolve actor name/avatar from their most recent feed post — fast, no Clerk API call */
+// ── Profile helpers ───────────────────────────────────────────────────────────
+
+type ProfileCache = {
+  display_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+};
+
+/** Batch-fetch user_profiles. Silently returns empty Map on missing table or any error. */
+async function batchGetUserProfiles(
+  userIds: string[],
+  supabase: ReturnType<typeof createAdminClient>
+): Promise<Map<string, ProfileCache>> {
+  const ids = [...new Set(userIds.filter(Boolean))];
+  if (ids.length === 0) return new Map();
+  try {
+    const { data } = await supabase
+      .from("user_profiles")
+      .select("user_id, display_name, username, avatar_url, bio")
+      .in("user_id", ids);
+    const map = new Map<string, ProfileCache>();
+    (data ?? []).forEach((p) => {
+      map.set(p.user_id as string, {
+        display_name: (p.display_name ?? null) as string | null,
+        username:     (p.username     ?? null) as string | null,
+        avatar_url:   (p.avatar_url   ?? null) as string | null,
+        bio:          (p.bio          ?? null) as string | null,
+      });
+    });
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * Pick the best display name:
+ * 1. profile.display_name  2. @profile.username  3. strip-email storedName  4. null
+ */
+function pickName(
+  profile: ProfileCache | undefined,
+  storedName: string | null
+): string | null {
+  if (profile?.display_name?.trim()) return profile.display_name.trim();
+  if (profile?.username?.trim()) return `@${profile.username.trim()}`;
+  if (storedName?.trim()) {
+    const n = storedName.trim();
+    return n.includes("@") ? (n.split("@")[0] ?? n) : n;
+  }
+  return null;
+}
+
+/** Pick the best avatar: profile.avatar_url > storedAvatar */
+function pickAvatar(
+  profile: ProfileCache | undefined,
+  storedAvatar: string | null
+): string | null {
+  return profile?.avatar_url ?? storedAvatar ?? null;
+}
+
+/** Resolve actor name/avatar — checks user_profiles first, falls back to feed_posts */
 async function resolveActorInfo(
   actorUserId: string,
   supabase: ReturnType<typeof createAdminClient>
 ): Promise<{ name: string | null; avatar_url: string | null }> {
   try {
-    const { data } = await supabase
-      .from("feed_posts")
-      .select("author_name, author_avatar_url")
-      .eq("user_id", actorUserId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const [profiles, postRes] = await Promise.all([
+      batchGetUserProfiles([actorUserId], supabase),
+      supabase
+        .from("feed_posts")
+        .select("author_name, author_avatar_url")
+        .eq("user_id", actorUserId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    const profile = profiles.get(actorUserId);
     return {
-      name: (data?.author_name ?? null) as string | null,
-      avatar_url: (data?.author_avatar_url ?? null) as string | null,
+      name: pickName(profile, (postRes.data?.author_name ?? null) as string | null),
+      avatar_url: pickAvatar(profile, (postRes.data?.author_avatar_url ?? null) as string | null),
     };
   } catch {
     return { name: null, avatar_url: null };
@@ -252,6 +317,17 @@ export async function getFeedPosts(): Promise<FeedPostsResult> {
       }
     }
 
+    // 5. Batch-fetch user_profiles to enrich identity at read time
+    //    Covers old posts where author_name may be an email address
+    const allFeedUserIds = [
+      ...new Set([
+        ...rawPosts.map((p) => p.user_id),
+        ...[...rawCommentsByPost.values()].flat().map((c) => c.user_id),
+        ...[...repliesByComment.values()].flat().map((r) => r.user_id),
+      ]),
+    ];
+    const profileMap = await batchGetUserProfiles(allFeedUserIds, supabase);
+
     // Merge: attach replies to each comment, attach comments to each post
     const commentsByPost = new Map<string, FeedComment[]>();
     rawCommentsByPost.forEach((rawComments, pid) => {
@@ -259,12 +335,18 @@ export async function getFeedPosts(): Promise<FeedPostsResult> {
         .reverse() // DESC → ASC (oldest first)
         .map((c) => ({
           ...c,
-          recent_replies: [...(repliesByComment.get(c.id) ?? [])].reverse(),
+          author_name: pickName(profileMap.get(c.user_id), c.author_name),
+          author_avatar_url: pickAvatar(profileMap.get(c.user_id), c.author_avatar_url),
+          recent_replies: [...(repliesByComment.get(c.id) ?? [])].reverse().map((r) => ({
+            ...r,
+            author_name: pickName(profileMap.get(r.user_id), r.author_name),
+            author_avatar_url: pickAvatar(profileMap.get(r.user_id), r.author_avatar_url),
+          })),
         }));
       commentsByPost.set(pid, enriched);
     });
 
-    // 5. Fetch business names/logos for posts that have a business_id
+    // 6. Fetch business names/logos for posts that have a business_id
     const bizMap = new Map<string, { name: string; logo_url: string | null }>();
     const uniqueBizIds = [
       ...new Set(rawPosts.map((p) => p.business_id).filter(Boolean) as string[]),
@@ -290,6 +372,8 @@ export async function getFeedPosts(): Promise<FeedPostsResult> {
       const biz = p.business_id ? bizMap.get(p.business_id) : null;
       return {
         ...p,
+        author_name: pickName(profileMap.get(p.user_id), p.author_name),
+        author_avatar_url: pickAvatar(profileMap.get(p.user_id), p.author_avatar_url),
         business_name: biz?.name ?? null,
         business_logo_url: biz?.logo_url ?? null,
         liked_by_current_user: likedPostIds.has(p.id),
@@ -664,9 +748,24 @@ export async function getPostComments(
       // replies table not yet created — safe to ignore
     }
 
+    // Enrich with user_profiles
+    const allCommentUserIds = [
+      ...new Set([
+        ...rawComments.map((c) => c.user_id),
+        ...[...repliesByComment.values()].flat().map((r) => r.user_id),
+      ]),
+    ];
+    const commentProfileMap = await batchGetUserProfiles(allCommentUserIds, supabase);
+
     const comments: FeedComment[] = rawComments.map((c) => ({
       ...c,
-      recent_replies: repliesByComment.get(c.id) ?? [],
+      author_name: pickName(commentProfileMap.get(c.user_id), c.author_name),
+      author_avatar_url: pickAvatar(commentProfileMap.get(c.user_id), c.author_avatar_url),
+      recent_replies: (repliesByComment.get(c.id) ?? []).map((r) => ({
+        ...r,
+        author_name: pickName(commentProfileMap.get(r.user_id), r.author_name),
+        author_avatar_url: pickAvatar(commentProfileMap.get(r.user_id), r.author_avatar_url),
+      })),
     }));
 
     return { comments };
@@ -818,6 +917,9 @@ export async function getFeedCreators(): Promise<FeedCreator[]> {
 
     const topClerkIds = topEntries.map(([uid]) => uid);
 
+    // 1.5. Fetch user_profiles for enriched names/avatars
+    const creatorProfiles = await batchGetUserProfiles(topClerkIds, supabase);
+
     // 2. Resolve Clerk IDs → internal UUIDs (needed for businesses.owner_id)
     const clerkToUuid = new Map<string, string>();
     try {
@@ -854,11 +956,7 @@ export async function getFeedCreators(): Promise<FeedCreator[]> {
 
     // 4. Build FeedCreator objects
     return topEntries.map(([clerkId, info]) => {
-      // Name: strip email domain if author_name looks like an email address
-      let displayName = info.name;
-      if (displayName?.includes("@")) {
-        displayName = displayName.split("@")[0] ?? displayName;
-      }
+      const profile = creatorProfiles.get(clerkId);
 
       // display_context priority:
       //   A) 1 business  → "Creador de [name]"
@@ -881,8 +979,8 @@ export async function getFeedCreators(): Promise<FeedCreator[]> {
 
       return {
         user_id: clerkId,
-        name: displayName,
-        avatar_url: info.avatar_url,
+        name: pickName(profile, info.name),
+        avatar_url: pickAvatar(profile, info.avatar_url),
         post_count: info.count,
         display_context: displayContext,
       };
@@ -982,7 +1080,21 @@ export async function getNotifications(): Promise<FeedNotification[]> {
       .order("created_at", { ascending: false })
       .limit(20);
     if (error) return [];
-    return (data ?? []) as FeedNotification[];
+    const notifications = (data ?? []) as FeedNotification[];
+    if (notifications.length === 0) return [];
+
+    // Enrich actor info from user_profiles (overrides stale stored names)
+    const actorIds = [...new Set(notifications.map((n) => n.actor_user_id))];
+    const actorProfiles = await batchGetUserProfiles(actorIds, supabase);
+
+    return notifications.map((n) => {
+      const profile = actorProfiles.get(n.actor_user_id);
+      return {
+        ...n,
+        actor_name: pickName(profile, n.actor_name),
+        actor_avatar_url: pickAvatar(profile, n.actor_avatar_url),
+      };
+    });
   } catch {
     return [];
   }

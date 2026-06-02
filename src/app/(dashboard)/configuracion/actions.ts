@@ -125,6 +125,7 @@ export async function updateUserProfile(
     return { error: "Error al guardar los cambios. Intenta de nuevo." };
   }
 
+  revalidatePath("/inicio");
   revalidatePath("/configuracion");
   revalidatePath(`/u/${userId}`);
   return { success: true };
