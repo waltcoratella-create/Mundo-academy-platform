@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
+import Link from "next/link";
 import {
   Heart,
   MessageCircle,
@@ -468,15 +469,23 @@ export function RealPostCard({ post, currentUser }: RealPostCardProps) {
       {/* Header */}
       <div className="px-5 pt-4 pb-0 flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <Avatar
-            url={post.author_avatar_url}
-            name={post.author_name}
-            uid={post.user_id}
-          />
+          <Link
+            href={`/u/${post.user_id}`}
+            className="shrink-0 hover:opacity-80 transition-opacity"
+          >
+            <Avatar
+              url={post.author_avatar_url}
+              name={post.author_name}
+              uid={post.user_id}
+            />
+          </Link>
           <div>
-            <p className="text-sm font-semibold text-gray-900">
+            <Link
+              href={`/u/${post.user_id}`}
+              className="text-sm font-semibold text-gray-900 hover:underline"
+            >
               {post.author_name ?? "Usuario"}
-            </p>
+            </Link>
             <p className="text-xs text-gray-400 mt-0.5">
               {timeAgo(post.created_at)}
               {" · "}
