@@ -6,6 +6,19 @@ export interface Business {
   name: string;
 }
 
+/** Richer business info used for list/overview pages. */
+export interface BusinessWithMeta {
+  id: string;
+  name: string;
+  description: string | null;
+  logo_url: string | null;
+}
+
+export interface OwnedAndJoinedBusinesses {
+  ownedBusinesses: BusinessWithMeta[];
+  joinedBusinesses: BusinessWithMeta[];
+}
+
 export interface DashboardKPIs {
   revenue: number;
   revenueChange: number;
@@ -70,6 +83,79 @@ export async function getUserBusinesses(clerkUserId: string): Promise<Business[]
     return data as Business[];
   } catch {
     return [];
+  }
+}
+
+/**
+ * Returns businesses the user owns AND businesses they have joined as a member.
+ * Owned businesses are NEVER duplicated in joinedBusinesses — de-duplication is
+ * enforced both client-side (Set of owned IDs) and server-side (neq owner_id).
+ */
+export async function getUserOwnedAndJoinedBusinesses(
+  clerkUserId: string
+): Promise<OwnedAndJoinedBusinesses> {
+  const empty: OwnedAndJoinedBusinesses = { ownedBusinesses: [], joinedBusinesses: [] };
+  try {
+    const supabase = createAdminClient();
+    const supabaseUserId = await resolveSupabaseUserId(clerkUserId);
+    if (!supabaseUserId) return empty;
+
+    // ── 1. Owned businesses ──────────────────────────────────────────────────
+    const { data: ownedData } = await supabase
+      .from("businesses")
+      .select("id, name, description, logo_url")
+      .eq("owner_id", supabaseUserId)
+      .order("created_at", { ascending: false });
+
+    const ownedBusinesses: BusinessWithMeta[] = (ownedData ?? []).map((b) => {
+      const r = b as Record<string, unknown>;
+      return {
+        id:          r.id as string,
+        name:        r.name as string,
+        description: (r.description ?? null) as string | null,
+        logo_url:    (r.logo_url ?? null) as string | null,
+      };
+    });
+
+    const ownedIds = new Set(ownedBusinesses.map((b) => b.id));
+
+    // ── 2. Member rows ───────────────────────────────────────────────────────
+    const { data: memberRows } = await supabase
+      .from("members")
+      .select("business_id")
+      .eq("user_id", supabaseUserId)
+      .eq("status", "active");
+
+    // Filter out any businesses already owned by this user
+    const joinedIds = [...new Set(
+      (memberRows ?? [])
+        .map((m) => (m as Record<string, unknown>).business_id as string)
+        .filter((id) => !ownedIds.has(id))
+    )];
+
+    // ── 3. Business details for joined IDs ───────────────────────────────────
+    let joinedBusinesses: BusinessWithMeta[] = [];
+    if (joinedIds.length > 0) {
+      const { data: joinedData } = await supabase
+        .from("businesses")
+        .select("id, name, description, logo_url")
+        .in("id", joinedIds)
+        .order("name", { ascending: true });
+
+      joinedBusinesses = (joinedData ?? []).map((b) => {
+        const r = b as Record<string, unknown>;
+        return {
+          id:          r.id as string,
+          name:        r.name as string,
+          description: (r.description ?? null) as string | null,
+          logo_url:    (r.logo_url ?? null) as string | null,
+        };
+      });
+    }
+
+    return { ownedBusinesses, joinedBusinesses };
+  } catch {
+    return empty;
   }
 }
 
