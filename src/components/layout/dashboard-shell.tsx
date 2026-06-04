@@ -4,10 +4,12 @@ import { useState } from "react";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { TopBar } from "@/components/layout/top-bar";
 import { AIAssistantPanel } from "@/components/layout/ai-assistant-panel";
+import { MessagesPanel } from "@/components/messages/messages-panel";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [aiOpen, setAiOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 overflow-hidden">
@@ -15,6 +17,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         onToggleSidebar={() => setSidebarOpen((v) => !v)}
         onToggleAI={() => setAiOpen((v) => !v)}
         aiOpen={aiOpen}
+        onToggleMessages={() => setMessagesOpen((v) => !v)}
+        messagesOpen={messagesOpen}
       />
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar wrapper — animates width */}
@@ -30,6 +34,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 overflow-y-auto min-w-0">
           {children}
         </main>
+
+        {/* Messages panel — slides in from right */}
+        <MessagesPanel open={messagesOpen} onClose={() => setMessagesOpen(false)} />
 
         {/* AI assistant panel — slides in from right */}
         <AIAssistantPanel open={aiOpen} onClose={() => setAiOpen(false)} />

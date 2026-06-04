@@ -8,9 +8,11 @@ interface Props {
   onToggleSidebar: () => void;
   onToggleAI: () => void;
   aiOpen: boolean;
+  onToggleMessages: () => void;
+  messagesOpen: boolean;
 }
 
-export function TopBar({ onToggleSidebar, onToggleAI, aiOpen }: Props) {
+export function TopBar({ onToggleSidebar, onToggleAI, aiOpen, onToggleMessages, messagesOpen }: Props) {
   return (
     <header className="h-14 shrink-0 sticky top-0 z-50 bg-white border-b border-[rgba(0,0,0,0.122)] flex items-center px-4 gap-2">
 
@@ -45,12 +47,20 @@ export function TopBar({ onToggleSidebar, onToggleAI, aiOpen }: Props) {
 
         {/* Chat */}
         <button
+          onClick={onToggleMessages}
           aria-label="Mensajes"
-          className="relative w-10 h-10 rounded-full flex items-center justify-center hover:bg-black/[0.063] text-[#202020] transition-colors"
+          aria-pressed={messagesOpen}
+          className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+            messagesOpen
+              ? "bg-black/[0.063] text-[#202020]"
+              : "hover:bg-black/[0.063] text-[#202020]"
+          }`}
         >
           <MessageCircle className="w-5 h-5" />
           {/* Unread dot */}
-          <span className="absolute top-0 right-0 w-4 h-4 rounded-full bg-[#d4544f] flex items-center justify-center text-[10px] font-bold text-white leading-none pointer-events-none" />
+          <span className="absolute top-0 right-0 w-4 h-4 rounded-full bg-[#d4544f] flex items-center justify-center text-[10px] font-bold text-white leading-none pointer-events-none">
+            2
+          </span>
         </button>
 
         {/* Notifications */}
