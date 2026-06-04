@@ -319,7 +319,9 @@ function CarouselSection({ def, products }: { def: SectionDef; products: PublicP
   const Icon  = ICONS[def.id] ?? Package;
 
   return (
-    <section aria-label={def.title}>
+    // min-w-0 + overflow-hidden: prevents the carousel track's full scroll-width
+    // from leaking into the flex-column layout and causing horizontal overflow.
+    <section aria-label={def.title} className="min-w-0 overflow-hidden">
       {/* Header — font-size: 20px, font-weight: 700, letter-spacing: -0.4125px, margin-bottom: 16px */}
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -378,7 +380,7 @@ function FeaturedSection({ products }: { products: PublicProduct[] }) {
   if (featured.length === 0) return null;
 
   return (
-    <section>
+    <section className="min-w-0">
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="w-5 h-5 text-orange-500" />
         <h2 className="text-[20px] font-bold text-gray-900 tracking-[-0.4125px]">Para empezar</h2>
@@ -475,7 +477,7 @@ const BANNERS = [
 
 function EmpezandoSection() {
   return (
-    <section>
+    <section className="min-w-0">
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="w-5 h-5 text-orange-500" />
         <h2 className="text-[20px] font-bold text-gray-900 tracking-[-0.4125px]">Empezando</h2>
@@ -702,7 +704,9 @@ export function DiscoverClient({ products }: { products: PublicProduct[] }) {
   );
 
   return (
-    <div className="min-h-screen bg-white -m-8">
+    // No negative margin — content fills the <main> container naturally.
+    // overflow-x-hidden prevents any child from triggering page-level horizontal scroll.
+    <div className="min-h-full bg-white w-full overflow-x-hidden">
       {/* Whop-style hero */}
       <WhopHero query={query} setQuery={setQuery} activeTab={activeTab} setActiveTab={setActiveTab} />
 
