@@ -435,7 +435,7 @@ function EditorialCard({ card }: { card: EditorialCardDef }) {
   return (
     <Link
       href={card.href}
-      className="group flex flex-col rounded-[16px] overflow-hidden bg-white border border-gray-100 shadow-[0_1px_2px_rgba(0,0,0,.05)] hover:bg-[#f9f9f9] hover:shadow-md transition-all duration-200 cursor-pointer"
+      className="group flex-none w-[360px] min-w-[360px] flex flex-col rounded-[16px] overflow-hidden bg-white border border-gray-100 shadow-[0_1px_2px_rgba(0,0,0,.05)] hover:bg-[#f9f9f9] transition-colors duration-200 cursor-pointer"
     >
       {/* Banner — same aspect-[2/1] as product cards */}
       <div className={`relative aspect-[2/1] overflow-hidden bg-gradient-to-br ${card.gradient} shrink-0`}>
@@ -477,9 +477,15 @@ function MundoEjecutivoSection() {
         <h2 className="text-[20px] font-bold text-gray-900 tracking-[-0.4125px]">Mundo Ejecutivo</h2>
       </div>
       <p className="text-[14px] text-gray-400 mb-4 pl-7">Contenido, noticias y recursos ejecutivos.</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+      {/* Same carousel track as CarouselSection — cards are 360px, same as ProductCard */}
+      <div
+        className="flex gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ scrollSnapType: "x mandatory" }}
+      >
         {MUNDO_EJECUTIVO_CARDS.map((card) => (
-          <EditorialCard key={card.id} card={card} />
+          <div key={card.id} style={{ scrollSnapAlign: "start" }}>
+            <EditorialCard card={card} />
+          </div>
         ))}
       </div>
     </section>
