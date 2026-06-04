@@ -87,8 +87,7 @@ function priceStr(p: PublicProduct): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  PRODUCT CARD
-//  w-[360px] | aspect-[2/1] banner | 16px body padding | pr-12 | 16px title
+//  PRODUCT CARD — w-[360px] | aspect-[2/1] banner | Tendencias / carousels
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ProductCard({ product }: { product: PublicProduct }) {
@@ -109,29 +108,20 @@ function ProductCard({ product }: { product: PublicProduct }) {
   return (
     <Link
       href={href}
-      // width: 360px | min-width: 360px | border-radius: 16px
-      // shadow: 0 1px 2px rgba(0,0,0,.05) | hover: gray-2 (#f9f9f9)
       className="group flex-none w-[360px] min-w-[360px] rounded-[16px] overflow-hidden bg-white border border-gray-100 shadow-[0_1px_2px_rgba(0,0,0,.05)] hover:bg-[#f9f9f9] transition-colors duration-200 cursor-pointer flex flex-col"
     >
-      {/* ── Banner — aspect-ratio: 2/1, object-fit: cover ── */}
+      {/* Banner */}
       <div className={`relative aspect-[2/1] overflow-hidden bg-gradient-to-br ${gradCls} shrink-0`}>
-        {/* Grid texture overlay */}
         <div className="absolute inset-0 opacity-[0.07]"
           style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px)", backgroundSize: "24px 24px" }}
         />
-        {/* Radial vignette */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_30%,rgba(255,255,255,0.12),transparent_70%)]" />
-        {/* Bottom scrim */}
         <div className="absolute bottom-0 inset-x-0 h-1/2 bg-gradient-to-t from-black/25 to-transparent" />
-
-        {/* Frosted-glass logo */}
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 shadow-2xl flex items-center justify-center ring-1 ring-white/20">
             <span className="text-3xl font-black text-white drop-shadow-lg select-none">{initial}</span>
           </div>
         </div>
-
-        {/* Top badges */}
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-10">
           {showNew
             ? <span className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400 text-black shadow-sm">
@@ -143,35 +133,26 @@ function ProductCard({ product }: { product: PublicProduct }) {
         </div>
       </div>
 
-      {/* ── Body — padding: 16px, padding-right: 48px, gap: 12px ── */}
+      {/* Body */}
       <div className="p-4 pr-12 flex-1 flex flex-col gap-3">
-
-        {/* Avatar 48×48 r-12, name, creator, price */}
         <div className="flex items-start gap-3">
-          {/* Avatar card: 48×48, border-radius: 12px */}
           <div className={`w-12 h-12 rounded-[12px] bg-gradient-to-br ${gradCls} flex items-center justify-center shrink-0 shadow-md`}>
             <span className="text-base font-black text-white select-none">{initial}</span>
           </div>
           <div className="flex-1 min-w-0 pt-0.5">
-            {/* Title: 16px, 700, line-height 24px */}
             <h3 className="text-[16px] font-bold text-gray-900 leading-6 line-clamp-1 group-hover:text-orange-600 transition-colors duration-150">
               {product.name}
             </h3>
-            {/* Creator: 12px */}
             <p className="text-[12px] text-gray-400 mt-0.5 truncate">por {product.business_name}</p>
           </div>
           <span className={`shrink-0 text-[12px] font-bold ${isFree ? "text-emerald-600" : "text-gray-900"} pt-0.5`}>
             {priceStr(product)}
           </span>
         </div>
-
-        {/* Description: 14px, line-height 20px, max 2 lines */}
         {product.description
           ? <p className="text-[14px] leading-5 text-gray-500 line-clamp-2">{product.description}</p>
           : <p className="text-[14px] leading-5 text-gray-300 italic">Sin descripción disponible</p>
         }
-
-        {/* Stats: 12px */}
         <div className="mt-auto flex items-center gap-2 text-[12px] text-gray-400 flex-wrap">
           <span className="flex items-center gap-0.5">
             <Star className="w-3 h-3 fill-amber-400 stroke-amber-400" />
@@ -199,54 +180,12 @@ function ProductCard({ product }: { product: PublicProduct }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  FEATURED CARD — landscape, full gradient
-// ─────────────────────────────────────────────────────────────────────────────
-
-function FeaturedCard({ product }: { product: PublicProduct }) {
-  const [gradCls] = GRADIENTS[product.type] ?? GRAD_DEFAULT;
-  const href      = `/produto/${product.slug ?? product.id}`;
-  const initial   = product.name.charAt(0).toUpperCase();
-
-  return (
-    <Link href={href}
-      className="group relative overflow-hidden rounded-[16px] cursor-pointer"
-      style={{ height: 180 }}>
-      <div className={`absolute inset-0 bg-gradient-to-br ${gradCls}`} />
-      <div className="absolute inset-0 opacity-[0.06]"
-        style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,.8) 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_20%_30%,rgba(255,255,255,0.15),transparent_60%)]" />
-      <div className="absolute -bottom-4 -right-4 text-[120px] font-black text-white/10 leading-none select-none">{initial}</div>
-      <div className="absolute bottom-0 inset-x-0 h-2/3 bg-gradient-to-t from-black/50 to-transparent" />
-
-      <div className="relative h-full flex flex-col justify-between p-4">
-        <div />
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <div className="w-7 h-7 rounded-lg bg-white/25 backdrop-blur-sm border border-white/30 flex items-center justify-center">
-              <span className="text-xs font-black text-white">{initial}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-bold text-white">{product.name}</span>
-              <ArrowRight className="w-3.5 h-3.5 text-white/70 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
-            </div>
-          </div>
-          {product.description && (
-            <p className="text-xs text-white/70 line-clamp-1">{product.description}</p>
-          )}
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 //  SKELETON
 // ─────────────────────────────────────────────────────────────────────────────
 
 function SkeletonCard() {
   return (
     <div className="flex-none w-[360px] min-w-[360px] rounded-[16px] overflow-hidden bg-white border border-gray-100 animate-pulse">
-      {/* aspect-ratio: 2/1 */}
       <div className="aspect-[2/1] bg-gray-100" />
       <div className="p-4 pr-12 space-y-3">
         <div className="flex items-start gap-3">
@@ -304,7 +243,6 @@ function CarouselSection({ def, products }: { def: SectionDef; products: PublicP
     setAtEnd(el.scrollLeft >= el.scrollWidth - el.clientWidth - 8);
   }, []);
 
-  // scroll 360px card + 16px gap = 376px per step
   const scroll = useCallback((d: "l" | "r") => {
     ref.current?.scrollBy({ left: d === "l" ? -376 : 376, behavior: "smooth" });
   }, []);
@@ -319,10 +257,7 @@ function CarouselSection({ def, products }: { def: SectionDef; products: PublicP
   const Icon  = ICONS[def.id] ?? Package;
 
   return (
-    // min-w-0 + overflow-hidden: prevents the carousel track's full scroll-width
-    // from leaking into the flex-column layout and causing horizontal overflow.
     <section aria-label={def.title} className="min-w-0 overflow-hidden">
-      {/* Header — font-size: 20px, font-weight: 700, letter-spacing: -0.4125px, margin-bottom: 16px */}
       <div className="flex items-start justify-between mb-4">
         <div>
           <div className="flex items-center gap-2">
@@ -349,7 +284,6 @@ function CarouselSection({ def, products }: { def: SectionDef; products: PublicP
         )}
       </div>
 
-      {/* Track */}
       <div ref={ref} onScroll={onScroll}
         className="flex gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         style={{ scrollSnapType: "x mandatory" }}>
@@ -367,37 +301,6 @@ function CarouselSection({ def, products }: { def: SectionDef; products: PublicP
           </Link>
         </p>
       )}
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  FEATURED SECTION — 2 landscape cards
-// ─────────────────────────────────────────────────────────────────────────────
-
-function FeaturedSection({ products }: { products: PublicProduct[] }) {
-  const featured = products.slice(0, 2);
-  if (featured.length === 0) return null;
-
-  return (
-    <section className="min-w-0">
-      <div className="flex items-center gap-2 mb-4">
-        <Sparkles className="w-5 h-5 text-orange-500" />
-        <h2 className="text-[20px] font-bold text-gray-900 tracking-[-0.4125px]">Para empezar</h2>
-      </div>
-      <div className={`grid gap-4 sm:gap-5 ${featured.length >= 2 ? "grid-cols-2" : "grid-cols-1"}`}>
-        {featured.map((p) => <FeaturedCard key={p.id} product={p} />)}
-        {featured.length === 1 && (
-          <Link href="/mis-negocios"
-            className="rounded-[16px] border-2 border-dashed border-gray-100 hover:border-orange-200 hover:bg-orange-50/40 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer group"
-            style={{ height: 180 }}>
-            <div className="w-10 h-10 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <PlusCircle className="w-5 h-5 text-orange-500" />
-            </div>
-            <p className="text-sm font-semibold text-gray-500">Publica tu producto</p>
-          </Link>
-        )}
-      </div>
     </section>
   );
 }
@@ -445,32 +348,20 @@ function SearchResults({ products, query }: { products: PublicProduct[]; query: 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  EMPEZANDO SECTION — branded banners
+//  EMPEZANDO SECTION — 2 starter banner cards (Mundo Academy only)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const BANNERS = [
+const EMPEZANDO_BANNERS = [
   {
     id: "b1",
     src: "/discover/banners/banner-mundo-academy-stars.png",
-    alt: "Mundo Academy — Aprende de los que ya lo lograron",
-    href: "/descubrir",
-  },
-  {
-    id: "b2",
-    src: "/discover/banners/banner-mundo-ejecutivo-noticias.png",
-    alt: "Mundo Ejecutivo Noticias — Noticias que impulsan líderes",
-    href: "/descubrir",
-  },
-  {
-    id: "b3",
-    src: "/discover/banners/banner-galeria-mundo-ejecutivo.png",
-    alt: "Galería Mundo Ejecutivo — Explora nuestras revistas y contenido exclusivo",
+    alt: "Aprende de los que ya lo lograron — Mundo Academy",
     href: "/descubrir",
   },
   {
     id: "b4",
     src: "/discover/banners/banner-mundo-academy-logo.png",
-    alt: "Mundo Academy — Aprende, crea y crece con mundo academy",
+    alt: "Mundo Academy — Aprende, crea y crece",
     href: "/descubrir",
   },
 ];
@@ -483,7 +374,7 @@ function EmpezandoSection() {
         <h2 className="text-[20px] font-bold text-gray-900 tracking-[-0.4125px]">Empezando</h2>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
-        {BANNERS.map((banner) => (
+        {EMPEZANDO_BANNERS.map((banner) => (
           <Link
             key={banner.id}
             href={banner.href}
@@ -506,7 +397,97 @@ function EmpezandoSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  SECTIONS CONFIG
+//  MUNDO EJECUTIVO SECTION — 2 editorial cards, no metadata/badges/price
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface EditorialCardDef {
+  id: string;
+  title: string;
+  description: string;
+  src: string;
+  href: string;
+  gradient: string;
+  initial: string;
+}
+
+const MUNDO_EJECUTIVO_CARDS: EditorialCardDef[] = [
+  {
+    id: "me1",
+    title: "Galería Mundo Ejecutivo",
+    description: "Explora nuestras revistas y contenido exclusivo",
+    src: "/discover/banners/banner-galeria-mundo-ejecutivo.png",
+    href: "/descubrir",
+    gradient: "from-amber-600 via-orange-500 to-red-600",
+    initial: "G",
+  },
+  {
+    id: "me2",
+    title: "Mundo Ejecutivo Noticias",
+    description: "Noticias que impulsan líderes y transforman decisiones",
+    src: "/discover/banners/banner-mundo-ejecutivo-noticias.png",
+    href: "/descubrir",
+    gradient: "from-slate-700 via-slate-600 to-slate-800",
+    initial: "N",
+  },
+];
+
+function EditorialCard({ card }: { card: EditorialCardDef }) {
+  return (
+    <Link
+      href={card.href}
+      className="group flex flex-col rounded-[16px] overflow-hidden bg-white border border-gray-100 shadow-[0_1px_2px_rgba(0,0,0,.05)] hover:bg-[#f9f9f9] hover:shadow-md transition-all duration-200 cursor-pointer"
+    >
+      {/* Banner — same aspect-[2/1] as product cards */}
+      <div className={`relative aspect-[2/1] overflow-hidden bg-gradient-to-br ${card.gradient} shrink-0`}>
+        <Image
+          src={card.src}
+          alt={card.title}
+          fill
+          className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          sizes="(max-width: 640px) 100vw, 50vw"
+        />
+        {/* Subtle bottom scrim */}
+        <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-black/20 to-transparent" />
+      </div>
+
+      {/* Body — avatar + title + description + arrow, no badges/price/metadata */}
+      <div className="p-4 flex items-start gap-3">
+        <div className={`w-12 h-12 rounded-[12px] bg-gradient-to-br ${card.gradient} flex items-center justify-center shrink-0 shadow-md`}>
+          <span className="text-base font-black text-white select-none">{card.initial}</span>
+        </div>
+        <div className="flex-1 min-w-0 pt-0.5">
+          <h3 className="text-[16px] font-bold text-gray-900 leading-6 line-clamp-1 group-hover:text-orange-600 transition-colors duration-150">
+            {card.title}
+          </h3>
+          <p className="text-[13px] text-gray-400 mt-0.5 line-clamp-2 leading-snug">
+            {card.description}
+          </p>
+        </div>
+        <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-orange-400 transition-colors shrink-0 mt-1" />
+      </div>
+    </Link>
+  );
+}
+
+function MundoEjecutivoSection() {
+  return (
+    <section className="min-w-0">
+      <div className="flex items-center gap-2 mb-1">
+        <Briefcase className="w-5 h-5 text-orange-500 shrink-0" />
+        <h2 className="text-[20px] font-bold text-gray-900 tracking-[-0.4125px]">Mundo Ejecutivo</h2>
+      </div>
+      <p className="text-[14px] text-gray-400 mb-4 pl-7">Contenido, noticias y recursos ejecutivos.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+        {MUNDO_EJECUTIVO_CARDS.map((card) => (
+          <EditorialCard key={card.id} card={card} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SECTIONS CONFIG — Tendencias + rest (real products only)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SECTIONS: SectionDef[] = [
@@ -526,9 +507,6 @@ const SECTIONS: SectionDef[] = [
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  WHOP HERO
-//  hero-wrapper: pt-64px pb-48px px-24px flex-col items-center
-//  hero-inner: max-w-750px gap-32px
-//  hero-heading-group: gap-12px text-center
 // ─────────────────────────────────────────────────────────────────────────────
 
 function WhopHero({
@@ -538,20 +516,13 @@ function WhopHero({
   activeTab: "discover" | "create"; setActiveTab: (v: "discover" | "create") => void;
 }) {
   return (
-    // hero-wrapper: pt-64px pb-48px px-24px items-center
     <div
       className="relative pt-16 pb-12 px-6 flex flex-col items-center"
       style={{ background: "radial-gradient(ellipse 80% 55% at 50% -5%, rgba(99,102,241,0.08) 0%, rgba(168,85,247,0.05) 45%, transparent 70%), #ffffff" }}
     >
-      {/* hero-inner: max-width 750px, gap 32px */}
       <div className="w-full max-w-[750px] flex flex-col items-center gap-8">
 
-        {/* ── Toggle Lanzar / Descubrir ──
-            height: 40px | padding: 4px | border-radius: 8px
-            bg: rgba(0,0,0,0.063)
-            items: height 32px | padding 0 8px | border-radius 6px
-            font-size: 14px | font-weight: 500
-        */}
+        {/* Tab toggle */}
         <div className="inline-flex items-center h-10 p-1 rounded-[8px] bg-black/[0.063]">
           {(["create", "discover"] as const).map((tab) => (
             <button
@@ -568,23 +539,17 @@ function WhopHero({
           ))}
         </div>
 
-        {/* hero-heading-group: gap 12px, text-center */}
+        {/* Heading group */}
         <div className="flex flex-col items-center gap-3 text-center">
-          {/* Title: 56px | 400 | 1.1 | -0.04em | max-w 500px | gray-12 (#202020) */}
           <h1 className="text-[56px] font-normal leading-[1.1] tracking-[-0.04em] max-w-[500px] text-center text-[#202020]">
             Donde los negocios despegan.
           </h1>
-          {/* Subtitle: 16px | 400 | 26px | max-w 512px | gray-11 (#646464) */}
           <p className="text-[16px] font-normal leading-[26px] max-w-[512px] text-[#646464] text-center">
             Descubre y lanza productos digitales con más de 21M de emprendedores en Mundo Academy.
           </p>
         </div>
 
-        {/* ── Search box ──
-            width: 100% | border-radius: 28px
-            background: gray-3 (#f3f3f3) | border: 1px solid gray-6 (#dcdcdc)
-            min-height: ~102px
-        */}
+        {/* Search box */}
         <div className="w-full">
           <div className="flex flex-col rounded-[28px] bg-[#f3f3f3] border border-[#dcdcdc] min-h-[102px]">
             <input
@@ -594,9 +559,7 @@ function WhopHero({
               placeholder="Buscar cursos, mentorías, comunidades..."
               className="flex-1 bg-transparent text-gray-800 placeholder-gray-400 outline-none text-base w-full px-5 pt-4 pb-2 min-h-0"
             />
-            {/* Toolbar: margin 0 12px 12px 12px — buttons 32×32 circular */}
             <div className="mx-3 mb-3 flex items-center justify-between">
-              {/* + button: 32×32 circular, border: 1px solid gray-4 (#ebebeb) */}
               <button
                 aria-label="Opciones"
                 className="w-8 h-8 rounded-full bg-white border border-[#ebebeb] flex items-center justify-center hover:bg-gray-50 transition-colors cursor-pointer shrink-0"
@@ -613,14 +576,12 @@ function WhopHero({
                     <X className="w-4 h-4" />
                   </button>
                 )}
-                {/* Mic button: 32×32 circular */}
                 <button
                   aria-label="Buscar por voz"
                   className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
                 >
                   <Mic className="w-[18px] h-[18px]" />
                 </button>
-                {/* Send button: 32×32 circular, dark */}
                 <button
                   aria-label="Buscar"
                   className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-900 flex items-center justify-center transition-colors cursor-pointer"
@@ -632,12 +593,7 @@ function WhopHero({
           </div>
         </div>
 
-        {/* ── Stats bar ──
-            gap: 12px | font-size: 16px
-            numbers: tracking-tighter | gray-a11 (rgba(0,0,0,0.608))
-            labels:  gray-a8  (rgba(0,0,0,0.298))
-            dots:    gray-a6  (rgba(0,0,0,0.137))
-        */}
+        {/* Stats bar */}
         <div className="flex flex-wrap items-center justify-center gap-3 text-[16px]">
           <span>
             <span className="font-semibold tracking-tighter text-black/60">3.4M US$</span>
@@ -704,26 +660,24 @@ export function DiscoverClient({ products }: { products: PublicProduct[] }) {
   );
 
   return (
-    // No negative margin — content fills the <main> container naturally.
-    // overflow-x-hidden prevents any child from triggering page-level horizontal scroll.
     <div className="min-h-full bg-white w-full overflow-x-hidden">
-      {/* Whop-style hero */}
       <WhopHero query={query} setQuery={setQuery} activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {/* Launch tab */}
       {activeTab === "create" && <LaunchView />}
 
-      {/* Discovery feed
-          discover-sections: gap 40px | max-width 1280px | margin 0 auto | padding 24px
-      */}
       {activeTab === "discover" && (
         <div className="max-w-[1280px] mx-auto px-6 py-6 flex flex-col gap-10">
           {isSearching ? (
             <SearchResults products={displayProducts} query={query} />
           ) : (
             <>
+              {/* 1. Empezando — 2 Mundo Academy starter banners */}
               <EmpezandoSection />
-              <FeaturedSection products={displayProducts} />
+
+              {/* 2. Mundo Ejecutivo — 2 editorial cards, no metadata */}
+              <MundoEjecutivoSection />
+
+              {/* 3. Tendencias + rest — real products from backend */}
               {SECTIONS.map((def) => (
                 <CarouselSection key={def.id} def={def} products={displayProducts} />
               ))}
