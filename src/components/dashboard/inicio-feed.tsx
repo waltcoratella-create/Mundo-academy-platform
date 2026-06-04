@@ -15,7 +15,6 @@ import {
   Radio,
   Star,
   UserPlus,
-  UserCheck,
   X,
   Terminal,
   Copy,
@@ -54,7 +53,7 @@ interface Props {
   followedUserIds: string[];
 }
 
-// ── Static mock data (right panel + example posts when table is empty) ─────────
+// ── Static mock data ──────────────────────────────────────────────────────────
 
 interface MockPost {
   id: string;
@@ -134,7 +133,6 @@ const MOCK_POSTS: MockPost[] = [
   },
 ];
 
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtViews(n: number) {
@@ -153,7 +151,6 @@ function timeAgo(iso: string): string {
   return `${days}d`;
 }
 
-/** Deterministic Tailwind bg color from a string hash */
 const AVATAR_COLORS = [
   "bg-blue-600", "bg-purple-600", "bg-emerald-600", "bg-orange-500",
   "bg-pink-600",  "bg-teal-600",  "bg-indigo-600",  "bg-amber-600",
@@ -194,7 +191,6 @@ export function InicioFeed({
   const showMigrationBanner = !tableExists;
   const showMockExamples = !tableExists;
 
-  // Client-side filter
   const filteredPosts = initialPosts.filter((p) => {
     if (activeFilter === "siguiendo") return followedIds.has(p.user_id);
     if (activeFilter === "mis-negocios") return p.business_id !== null;
@@ -243,7 +239,8 @@ export function InicioFeed({
     : null;
 
   return (
-    <div className="min-h-full bg-gray-50">
+    // bg-white — matches Whop feed background
+    <div className="min-h-full bg-white">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex gap-6">
 
         {/* ── Center feed ─────────────────────────────────────────────── */}
@@ -251,22 +248,27 @@ export function InicioFeed({
 
           {/* Header + filter tabs */}
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold text-gray-900">Inicio</h1>
-            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl px-1 py-1">
+            {/* Title: 20px / 700 / lh 26px / ls -0.5px / #202020 */}
+            <h1 className="text-[20px] font-bold leading-[26px] tracking-[-0.5px] text-[#202020]">
+              Inicio
+            </h1>
+            {/* Tab wrapper: bg rgba(0,0,0,.063) / border-radius 8px / p-1 */}
+            <div className="flex items-center gap-1 bg-black/[0.063] rounded-[8px] p-1">
               {(
                 [
-                  { key: "todo",       label: "Todo"       },
-                  { key: "siguiendo",  label: "Siguiendo"  },
+                  { key: "todo",         label: "Todo"         },
+                  { key: "siguiendo",    label: "Siguiendo"    },
                   { key: "mis-negocios", label: "Mis negocios" },
                 ] as { key: FilterTab; label: string }[]
               ).map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => setActiveFilter(tab.key)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  // Tab: 14px / 500 / lh 20px / ls -0.08px
+                  className={`px-3 py-1.5 rounded-[6px] text-[14px] font-medium leading-5 tracking-[-0.08px] transition-colors ${
                     activeFilter === tab.key
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-500 hover:text-gray-800"
+                      ? "bg-white text-[#202020] shadow-sm"
+                      : "text-black/[0.447] hover:text-black/60"
                   }`}
                 >
                   {tab.label}
@@ -334,21 +336,21 @@ export function InicioFeed({
             </div>
           )}
 
-          {/* ── Empty state: table exists but nothing to show ── */}
+          {/* ── Empty state ── */}
           {tableExists && !fetchError && filteredPosts.length === 0 && (
-            <div className="bg-white rounded-2xl border border-gray-200 py-16 flex flex-col items-center gap-5 text-center px-8">
+            <div className="bg-white rounded-2xl border border-[rgba(0,0,0,0.08)] py-16 flex flex-col items-center gap-5 text-center px-8">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100 border border-blue-100 flex items-center justify-center">
                 <MessageCircle className="w-7 h-7 text-blue-400" />
               </div>
               <div className="space-y-2">
-                <p className="text-base font-semibold text-gray-900">
+                <p className="text-[16px] font-semibold text-[#202020]">
                   {activeFilter === "siguiendo"
                     ? "No sigues a nadie todavía"
                     : activeFilter === "mis-negocios"
                       ? "Esta comunidad todavía no tiene publicaciones"
                       : "Todavía no hay publicaciones"}
                 </p>
-                <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
+                <p className="text-[15px] text-black/60 max-w-xs leading-[21px] tracking-[-0.08px]">
                   {activeFilter === "siguiendo"
                     ? "Sigue a creadores para ver sus publicaciones aquí."
                     : activeFilter === "mis-negocios"
@@ -363,7 +365,7 @@ export function InicioFeed({
                     const panel = document.getElementById("creators-panel");
                     panel?.scrollIntoView({ behavior: "smooth", block: "start" });
                   }}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 active:scale-95 transition-all"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[rgb(42,83,208)] text-white text-[16px] font-medium leading-6 tracking-[-0.18px] hover:opacity-90 active:scale-95 transition-all"
                 >
                   <UserPlus className="w-4 h-4" />
                   Descubrir creadores
@@ -376,7 +378,7 @@ export function InicioFeed({
                     ta?.focus();
                     ta?.scrollIntoView({ behavior: "smooth", block: "center" });
                   }}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 active:scale-95 transition-all"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[rgb(42,83,208)] text-white text-[16px] font-medium leading-6 tracking-[-0.18px] hover:opacity-90 active:scale-95 transition-all"
                 >
                   <Send className="w-4 h-4" />
                   Crear primera publicación
@@ -385,10 +387,10 @@ export function InicioFeed({
             </div>
           )}
 
-          {/* Mock posts — only when table doesn't exist */}
+          {/* Mock posts */}
           {showMockExamples && (
             <div className="space-y-4">
-              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide px-1">
+              <p className="text-[13px] text-black/[0.447] font-medium uppercase tracking-wide px-1">
                 Publicaciones de ejemplo
               </p>
               {MOCK_POSTS.map((post) => (
@@ -413,7 +415,7 @@ export function InicioFeed({
   );
 }
 
-// ── Composer (functional) ─────────────────────────────────────────────────────
+// ── Composer ──────────────────────────────────────────────────────────────────
 
 function Composer({
   currentUser,
@@ -433,7 +435,6 @@ function Composer({
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Can't post until the table exists
   const disabled = !tableExists;
 
   const selectedBizName =
@@ -484,47 +485,40 @@ function Composer({
         setError(result.error);
         return;
       }
-      // Reset form
       setContent("");
       setImageFile(null);
       setImagePreview(null);
       setSelectedBusinessId(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      // Refresh server component to get new posts
       router.refresh();
     });
   }
 
-  const avatarBg = currentUser
-    ? avatarColor(currentUser.id)
-    : "bg-blue-600";
+  const avatarBg = currentUser ? avatarColor(currentUser.id) : "bg-blue-600";
   const avatarLabel = currentUser?.initials ?? "MA";
 
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-white rounded-2xl border border-gray-200 p-4 space-y-3"
+      className="bg-white rounded-2xl border border-[rgba(0,0,0,0.08)] p-4 space-y-3"
     >
       {/* "Publicar en" selector */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-gray-500 font-medium">Publicar en</span>
+        {/* Label: 14px / 400 / muted */}
+        <span className="text-[14px] text-black/[0.447]">Publicar en</span>
         {userBusinesses.length === 0 ? (
-          // No businesses — fixed to Mundo Academy
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-gray-50 text-xs font-medium text-gray-700">
-            <span className="w-4 h-4 rounded bg-blue-600 flex items-center justify-center text-white font-bold leading-none text-[8px]">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/[0.063] text-[14px] text-[#202020]">
+            <span className="w-4 h-4 rounded-[4px] bg-blue-600 flex items-center justify-center text-white font-bold leading-none text-[8px]">
               MA
             </span>
             Mundo Academy
           </span>
         ) : (
-          // Dropdown selector
           <select
             value={selectedBusinessId ?? ""}
-            onChange={(e) =>
-              setSelectedBusinessId(e.target.value || null)
-            }
+            onChange={(e) => setSelectedBusinessId(e.target.value || null)}
             disabled={disabled || isPending}
-            className="text-xs font-medium text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-[14px] text-[#202020] border border-[rgba(0,0,0,0.08)] rounded-full px-3 py-1.5 bg-black/[0.063] hover:bg-black/[0.09] focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="">Mundo Academy</option>
             {userBusinesses.map((b) => (
@@ -534,39 +528,35 @@ function Composer({
             ))}
           </select>
         )}
-        <span className="text-xs text-gray-400 hidden sm:inline">·</span>
-        <span className="text-xs text-gray-500 hidden sm:inline font-medium">
+        <span className="text-[14px] text-black/[0.447] hidden sm:inline">·</span>
+        <span className="text-[14px] text-black/60 hidden sm:inline">
           {selectedBizName}
         </span>
       </div>
 
       {/* Text input */}
       <div className="flex items-start gap-3">
-        {/* Avatar */}
         <div
           className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold mt-0.5 ${avatarBg}`}
         >
           {avatarLabel}
         </div>
+        {/* Textarea: 15px / 400 / lh 21px / ls -0.08px */}
         <textarea
           rows={2}
           placeholder={disabled ? "Ejecuta la migración para activar el feed…" : "Di algo a la comunidad…"}
           value={content}
           onChange={(e) => setContent(e.target.value)}
           disabled={isPending || disabled}
-          className="flex-1 text-sm text-gray-700 placeholder-gray-400 bg-transparent resize-none outline-none leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 text-[15px] leading-[21px] tracking-[-0.08px] text-[#202020] placeholder-black/[0.447] bg-transparent resize-none outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
       </div>
 
       {/* Image preview */}
       {imagePreview && (
-        <div className="relative rounded-xl overflow-hidden border border-gray-200 ml-11">
+        <div className="relative rounded-xl overflow-hidden border border-[rgba(0,0,0,0.08)] ml-11">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imagePreview}
-            alt="preview"
-            className="max-h-48 w-full object-cover"
-          />
+          <img src={imagePreview} alt="preview" className="max-h-48 w-full object-cover" />
           <button
             type="button"
             onClick={removeImage}
@@ -579,21 +569,20 @@ function Composer({
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 border border-red-200 ml-11">
+        <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2 border border-red-200 ml-11">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           {error}
         </div>
       )}
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+      <div className="flex items-center justify-between border-t border-[rgba(0,0,0,0.06)] pt-3">
         <div className="flex items-center gap-0.5">
-          {/* Image upload */}
           <button
             type="button"
             title="Imagen"
             onClick={() => fileInputRef.current?.click()}
-            className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+            className="p-2 rounded-full text-black/[0.447] hover:text-[#202020] hover:bg-black/[0.063] transition-colors"
           >
             <ImageIcon className="w-4 h-4" />
           </button>
@@ -605,16 +594,16 @@ function Composer({
             onChange={handleImageChange}
           />
           {[
-            { icon: Film,       label: "GIF" },
-            { icon: Smile,      label: "Emoji" },
+            { icon: Film,       label: "GIF"      },
+            { icon: Smile,      label: "Emoji"    },
             { icon: BarChart2,  label: "Encuesta" },
-            { icon: DollarSign, label: "Monetizar" },
+            { icon: DollarSign, label: "Monetizar"},
           ].map(({ icon: Icon, label }) => (
             <button
               key={label}
               type="button"
               title={label}
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+              className="p-2 rounded-full text-black/[0.447] hover:text-[#202020] hover:bg-black/[0.063] transition-colors"
             >
               <Icon className="w-4 h-4" />
             </button>
@@ -622,26 +611,28 @@ function Composer({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Activar en vivo: bg rgba(196,59,56,.075) / text rgb(190,60,57) / 16px / 500 */}
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100 transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[rgba(196,59,56,0.075)] text-[rgb(190,60,57)] text-[16px] font-medium leading-6 tracking-[-0.18px] hover:bg-[rgba(196,59,56,0.12)] transition-colors"
           >
-            <Radio className="w-3.5 h-3.5" />
+            <Radio className="w-4 h-4" />
             Activar en vivo
           </button>
+          {/* Publicar: bg rgb(42,83,208) / text white / 16px / 500 */}
           <button
             type="submit"
             disabled={disabled || isPending || (!content.trim() && !imageFile)}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[rgb(42,83,208)] text-white text-[16px] font-medium leading-6 tracking-[-0.18px] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isPending ? (
               <>
-                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 Publicando…
               </>
             ) : (
               <>
-                <Send className="w-3.5 h-3.5" />
+                <Send className="w-4 h-4" />
                 Publicar
               </>
             )}
@@ -652,14 +643,12 @@ function Composer({
   );
 }
 
-// RealPostCard is in src/components/dashboard/inicio/real-post-card.tsx
-
-// ── Mock post card (example / placeholder posts) ──────────────────────────────
+// ── Mock post card ────────────────────────────────────────────────────────────
 
 function MockPostCard({ post }: { post: MockPost }) {
   const [liked, setLiked] = useState(false);
   return (
-    <article className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:border-gray-300 transition-colors">
+    <article className="bg-white rounded-2xl border border-[rgba(0,0,0,0.08)] overflow-hidden hover:border-[rgba(0,0,0,0.15)] transition-colors">
       <div className="px-5 pt-4 pb-0 flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${post.author.color}`}>
@@ -667,29 +656,38 @@ function MockPostCard({ post }: { post: MockPost }) {
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-semibold text-gray-900">{post.author.name}</span>
-              <span className="text-xs text-gray-400">↗</span>
-              <span className="text-xs text-gray-500">{post.channel}</span>
+              {/* Author name: 15px / semibold / #202020 */}
+              <span className="text-[15px] font-semibold text-[#202020]">{post.author.name}</span>
+              <span className="text-[14px] text-black/[0.447]">↗</span>
+              {/* Channel: 14px / muted */}
+              <span className="text-[14px] text-black/[0.447] tracking-[-0.08px]">{post.channel}</span>
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">{post.author.handle} · {post.timeAgo}</p>
+            {/* Handle + time: 14px / muted / ls -0.08px */}
+            <p className="text-[14px] text-black/[0.447] tracking-[-0.08px] mt-0.5">
+              {post.author.handle} · {post.timeAgo}
+            </p>
           </div>
         </div>
-        <button className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors shrink-0">
+        <button className="p-1.5 rounded-full text-black/[0.447] hover:bg-black/[0.063] hover:text-[#202020] transition-colors shrink-0">
           <MoreHorizontal className="w-4 h-4" />
         </button>
       </div>
 
       <div className="px-5 py-4 space-y-4">
-        <p className="text-sm text-gray-800 leading-relaxed">{post.text}</p>
+        {/* Post text: 15px / 400 / lh 21px / ls -0.08px / #202020 */}
+        <p className="text-[15px] text-[#202020] leading-[21px] tracking-[-0.08px]">{post.text}</p>
         {post.poll && <PollBlock poll={post.poll} />}
         {post.card && <EmbedCardBlock card={post.card} />}
       </div>
 
-      <div className="px-5 py-3 border-t border-gray-100 flex items-center gap-4">
+      <div className="px-5 py-3 border-t border-[rgba(0,0,0,0.06)] flex items-center gap-4">
         <ActionBtn icon={Heart} count={post.stats.likes + (liked ? 1 : 0)} label="Me gusta" active={liked} activeClass="text-red-500" onClick={() => setLiked((v) => !v)} />
         <ActionBtn icon={MessageCircle} count={post.stats.comments} label="Comentar" />
         <ActionBtn icon={BarChart2} count={post.stats.views} label="Vistas" formatter={fmtViews} />
-        <button className="ml-auto p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors" title="Compartir">
+        <button
+          className="ml-auto p-1.5 rounded-full text-black/[0.447] hover:text-[#202020] hover:bg-black/[0.063] transition-colors"
+          title="Compartir"
+        >
           <Share2 className="w-4 h-4" />
         </button>
       </div>
@@ -707,19 +705,19 @@ function PollBlock({ poll }: { poll: { options: string[]; votes: number } }) {
         <button
           key={i}
           onClick={() => setVoted(i)}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium text-left transition-colors ${
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-[15px] leading-[21px] tracking-[-0.08px] font-medium text-left transition-colors ${
             voted === i
               ? "border-blue-600 bg-blue-50 text-blue-700"
-              : "border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-300 hover:bg-gray-100"
+              : "border-[rgba(0,0,0,0.08)] bg-black/[0.02] text-[#202020] hover:border-[rgba(0,0,0,0.15)] hover:bg-black/[0.04]"
           }`}
         >
-          <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${voted === i ? "border-blue-600" : "border-gray-300"}`}>
+          <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${voted === i ? "border-blue-600" : "border-[rgba(0,0,0,0.2)]"}`}>
             {voted === i && <span className="w-2 h-2 rounded-full bg-blue-600 block" />}
           </span>
           {opt}
         </button>
       ))}
-      <p className="text-xs text-gray-400 pt-0.5">{poll.votes.toLocaleString()} votos</p>
+      <p className="text-[14px] text-black/[0.447] pt-0.5">{poll.votes.toLocaleString()} votos</p>
     </div>
   );
 }
@@ -740,32 +738,32 @@ function EmbedCardBlock({
   };
 }) {
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden">
+    <div className="rounded-xl border border-[rgba(0,0,0,0.08)] overflow-hidden">
       <div className="px-4 py-4 flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             {card.badge && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600 uppercase tracking-wide">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-black/[0.06] text-black/60 uppercase tracking-wide">
                 {card.badge}
               </span>
             )}
-            <p className="text-sm font-semibold text-gray-900">{card.title}</p>
+            <p className="text-[15px] font-semibold text-[#202020]">{card.title}</p>
           </div>
-          <p className="text-xs text-gray-500 leading-relaxed">{card.description}</p>
+          <p className="text-[14px] text-black/60 leading-5 tracking-[-0.08px]">{card.description}</p>
           {card.metric && (
             <div className="flex items-center gap-1.5 mt-2">
               <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-              <span className="text-xs text-gray-500">{card.metric}</span>
+              <span className="text-[14px] text-black/[0.447]">{card.metric}</span>
             </div>
           )}
-          {card.price && <p className="text-sm font-bold text-gray-900 mt-2">{card.price}</p>}
+          {card.price && <p className="text-[15px] font-bold text-[#202020] mt-2">{card.price}</p>}
         </div>
       </div>
       <div className="px-4 pb-4">
-        <button className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+        <button className={`w-full py-2.5 rounded-xl text-[15px] font-medium tracking-[-0.08px] transition-colors ${
           card.ctaStyle === "brand"
-            ? "bg-blue-600 text-white hover:bg-blue-700"
-            : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+            ? "bg-[rgb(42,83,208)] text-white hover:opacity-90"
+            : "border border-[rgba(0,0,0,0.08)] bg-white text-[#202020] hover:bg-black/[0.04]"
         }`}>
           {card.cta}
         </button>
@@ -791,8 +789,9 @@ function ActionBtn({
     <button
       onClick={onClick}
       title={label}
-      className={`inline-flex items-center gap-1.5 text-xs font-medium transition-colors rounded-lg px-2 py-1.5 hover:bg-gray-100 ${
-        active ? activeClass : "text-gray-500 hover:text-gray-800"
+      // 14px / 500 / rounded-full / muted colors
+      className={`inline-flex items-center gap-1.5 text-[14px] font-medium transition-colors rounded-full px-2.5 py-1.5 hover:bg-black/[0.063] ${
+        active ? activeClass : "text-black/[0.447] hover:text-[#202020]"
       }`}
     >
       <Icon className="w-3.5 h-3.5" />
@@ -817,16 +816,14 @@ function CreatorsPanel({
   if (creators.length === 0) return null;
 
   return (
-    <div id="creators-panel" className="bg-white rounded-2xl border border-gray-200">
-      {/* Header */}
+    <div id="creators-panel" className="bg-white rounded-2xl border border-[rgba(0,0,0,0.08)]">
       <div className="px-4 pt-4 pb-3 flex items-center justify-between">
-        <p className="text-sm font-semibold text-gray-900">Usuarios populares</p>
-        <button className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors">
+        <p className="text-[15px] font-semibold text-[#202020]">Usuarios populares</p>
+        <button className="text-[14px] font-medium text-blue-600 hover:text-blue-700 transition-colors">
           Ver todo
         </button>
       </div>
 
-      {/* List */}
       <ul className="pb-2">
         {creators.map((c) => {
           const isFollowing = followedIds.has(c.user_id);
@@ -835,7 +832,6 @@ function CreatorsPanel({
 
           return (
             <li key={c.user_id} className="px-4 py-2.5 flex items-center gap-3">
-              {/* Avatar */}
               <div className="relative shrink-0">
                 {c.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -845,36 +841,32 @@ function CreatorsPanel({
                     className="w-9 h-9 rounded-full object-cover"
                   />
                 ) : (
-                  <div
-                    className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${bg}`}
-                  >
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${bg}`}>
                     {label}
                   </div>
                 )}
               </div>
 
-              {/* Name + context */}
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-gray-900 truncate leading-tight">
+                <p className="text-[14px] font-semibold text-[#202020] truncate leading-tight">
                   {c.name ?? "Usuario"}
                 </p>
-                <p className="text-[11px] text-gray-400 truncate leading-tight mt-0.5">
+                <p className="text-[13px] text-black/[0.447] truncate leading-tight mt-0.5">
                   {c.display_context}
                 </p>
               </div>
 
-              {/* Follow / Unfollow button — always visible */}
               {isFollowing ? (
                 <button
                   onClick={() => onUnfollow(c.user_id)}
-                  className="shrink-0 px-3 py-1.5 rounded-lg border border-gray-200 text-[11px] font-semibold text-gray-500 bg-white hover:border-red-200 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  className="shrink-0 px-3 py-1.5 rounded-full border border-[rgba(0,0,0,0.08)] text-[13px] font-medium text-black/[0.447] bg-white hover:border-red-200 hover:text-red-500 hover:bg-red-50 transition-colors"
                 >
                   Siguiendo
                 </button>
               ) : (
                 <button
                   onClick={() => onFollow(c.user_id)}
-                  className="shrink-0 px-3 py-1.5 rounded-lg bg-blue-600 text-[11px] font-semibold text-white hover:bg-blue-700 transition-colors"
+                  className="shrink-0 px-3 py-1.5 rounded-full bg-[rgb(42,83,208)] text-[13px] font-medium text-white hover:opacity-90 transition-opacity"
                 >
                   Seguir
                 </button>

@@ -117,15 +117,15 @@ function ReplyItem({ reply }: { reply: FeedReply }) {
         size="xs"
       />
       <div className="flex-1 min-w-0">
-        <div className="bg-white border border-gray-100 rounded-2xl px-3 py-1.5">
-          <p className="text-[11px] font-semibold text-gray-900 leading-none mb-0.5">
+        <div className="bg-black/[0.031] rounded-2xl px-3 py-1.5">
+          <p className="text-[11px] font-semibold text-[#202020] leading-none mb-0.5">
             {reply.author_name ?? "Usuario"}
           </p>
-          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+          <p className="text-[13px] text-[#202020] leading-relaxed whitespace-pre-wrap">
             {reply.content}
           </p>
         </div>
-        <p className="text-[10px] text-gray-400 mt-0.5 ml-1">
+        <p className="text-[11px] text-black/[0.447] mt-0.5 ml-1">
           {timeAgo(reply.created_at)}
         </p>
       </div>
@@ -159,7 +159,6 @@ function CommentItem({
 
   function handleOpenReply() {
     setShowReplyForm(true);
-    // Focus after mount
     setTimeout(() => replyInputRef.current?.focus(), 30);
   }
 
@@ -199,24 +198,24 @@ function CommentItem({
       />
       <div className="flex-1 min-w-0">
         {/* Bubble */}
-        <div className="bg-gray-50 rounded-2xl px-3 py-2">
-          <p className="text-xs font-semibold text-gray-900 leading-none mb-0.5">
+        <div className="bg-black/[0.031] rounded-2xl px-3 py-2">
+          <p className="text-[13px] font-semibold text-[#202020] leading-none mb-0.5">
             {comment.author_name ?? "Usuario"}
           </p>
-          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+          <p className="text-[14px] text-[#202020] leading-5 tracking-[-0.08px] whitespace-pre-wrap">
             {comment.content}
           </p>
         </div>
 
         {/* Meta row */}
         <div className="flex items-center gap-3 mt-1 ml-1">
-          <span className="text-[10px] text-gray-400">
+          <span className="text-[12px] text-black/[0.447]">
             {timeAgo(comment.created_at)}
           </span>
           <button
             type="button"
             onClick={handleOpenReply}
-            className="text-[10px] font-semibold text-gray-500 hover:text-blue-600 transition-colors"
+            className="text-[12px] font-semibold text-black/[0.447] hover:text-[#202020] transition-colors"
           >
             Responder
           </button>
@@ -224,7 +223,7 @@ function CommentItem({
 
         {/* Replies */}
         {replies.length > 0 && (
-          <div className="mt-2 pl-3 border-l-2 border-gray-100 space-y-0">
+          <div className="mt-2 pl-3 border-l-2 border-[rgba(0,0,0,0.06)] space-y-0">
             {replies.map((r) => (
               <ReplyItem key={r.id} reply={r} />
             ))}
@@ -237,7 +236,7 @@ function CommentItem({
             onSubmit={handleSubmitReply}
             className="flex items-center gap-2 mt-2"
           >
-            <CornerDownRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+            <CornerDownRight className="w-3.5 h-3.5 text-black/[0.2] shrink-0" />
             {currentUser && (
               <Avatar
                 url={currentUser.avatarUrl}
@@ -246,7 +245,7 @@ function CommentItem({
                 size="xs"
               />
             )}
-            <div className="flex-1 flex items-center gap-1.5 bg-gray-50 rounded-2xl px-3 py-1.5 border border-gray-200 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+            <div className="flex-1 flex items-center gap-1.5 bg-black/[0.031] rounded-2xl px-3 py-1.5 border border-[rgba(0,0,0,0.08)] focus-within:border-[rgba(0,0,0,0.2)] transition-colors">
               <input
                 ref={replyInputRef}
                 type="text"
@@ -255,13 +254,13 @@ function CommentItem({
                 onChange={(e) => setReplyInput(e.target.value)}
                 disabled={isPending}
                 maxLength={2000}
-                className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none disabled:opacity-50 min-w-0"
+                className="flex-1 bg-transparent text-[14px] text-[#202020] placeholder-black/[0.447] outline-none disabled:opacity-50 min-w-0 tracking-[-0.08px]"
               />
               {/* Cancel */}
               <button
                 type="button"
                 onClick={handleCancelReply}
-                className="p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
+                className="p-0.5 text-black/[0.447] hover:text-[#202020] transition-colors"
                 title="Cancelar"
               >
                 <X className="w-3.5 h-3.5" />
@@ -270,11 +269,11 @@ function CommentItem({
               <button
                 type="submit"
                 disabled={isPending || !replyInput.trim()}
-                className="p-0.5 text-blue-600 hover:text-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="p-0.5 text-[rgb(42,83,208)] hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Enviar respuesta"
               >
                 {isPending ? (
-                  <span className="w-3.5 h-3.5 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin block" />
+                  <span className="w-3.5 h-3.5 border-2 border-[rgba(42,83,208,0.2)] border-t-[rgb(42,83,208)] rounded-full animate-spin block" />
                 ) : (
                   <Send className="w-3.5 h-3.5" />
                 )}
@@ -285,7 +284,7 @@ function CommentItem({
 
         {/* Reply error */}
         {error && (
-          <div className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 rounded-xl px-3 py-1.5 border border-red-100 mt-1.5">
+          <div className="flex items-center gap-1.5 text-[12px] text-[rgb(190,60,57)] bg-[rgba(196,59,56,0.075)] rounded-xl px-3 py-1.5 border border-[rgba(196,59,56,0.15)] mt-1.5">
             <AlertCircle className="w-3 h-3 shrink-0" />
             {error}
           </div>
@@ -321,7 +320,7 @@ function CommentSection({
   function handleLoadMore() {
     startLoadMoreTransition(async () => {
       const result = await getPostComments(postId);
-      if (result.error) return; // keep current comments visible on error
+      if (result.error) return;
       setComments(result.comments);
       setAllLoaded(true);
     });
@@ -347,18 +346,18 @@ function CommentSection({
   }
 
   return (
-    <div className="border-t border-gray-100 px-5 py-4 space-y-3">
+    <div className="border-t border-[rgba(0,0,0,0.06)] px-5 py-4 space-y-3">
       {/* ── "Ver más comentarios" button ── */}
       {!allLoaded && totalComments > initialComments.length && (
         <button
           type="button"
           onClick={handleLoadMore}
           disabled={isLoadingMore}
-          className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 text-[13px] font-semibold text-[rgb(42,83,208)] hover:opacity-80 transition-opacity disabled:opacity-50"
         >
           {isLoadingMore ? (
             <>
-              <span className="w-3 h-3 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin shrink-0" />
+              <span className="w-3 h-3 border-2 border-[rgba(42,83,208,0.2)] border-t-[rgb(42,83,208)] rounded-full animate-spin shrink-0" />
               Cargando…
             </>
           ) : (
@@ -373,7 +372,7 @@ function CommentSection({
 
       {/* ── Comment list ── */}
       {comments.length === 0 ? (
-        <p className="text-xs text-gray-400 text-center py-2">
+        <p className="text-[14px] text-black/[0.447] text-center py-2 tracking-[-0.08px]">
           Sé el primero en comentar
         </p>
       ) : (
@@ -399,7 +398,7 @@ function CommentSection({
             size="sm"
           />
         )}
-        <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-2xl px-3 py-2 border border-gray-200 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+        <div className="flex-1 flex items-center gap-2 bg-black/[0.031] rounded-2xl px-3 py-2 border border-[rgba(0,0,0,0.08)] focus-within:border-[rgba(0,0,0,0.2)] transition-colors">
           <input
             ref={inputRef}
             type="text"
@@ -408,16 +407,16 @@ function CommentSection({
             onChange={(e) => setInput(e.target.value)}
             disabled={isPending}
             maxLength={2000}
-            className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none disabled:opacity-50"
+            className="flex-1 bg-transparent text-[14px] text-[#202020] placeholder-black/[0.447] outline-none disabled:opacity-50 tracking-[-0.08px]"
           />
           <button
             type="submit"
             disabled={isPending || !input.trim()}
-            className="shrink-0 p-1 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="shrink-0 p-1 rounded-full text-[rgb(42,83,208)] hover:bg-black/[0.063] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             title="Enviar comentario"
           >
             {isPending ? (
-              <span className="w-4 h-4 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin block" />
+              <span className="w-4 h-4 border-2 border-[rgba(42,83,208,0.2)] border-t-[rgb(42,83,208)] rounded-full animate-spin block" />
             ) : (
               <Send className="w-4 h-4" />
             )}
@@ -427,7 +426,7 @@ function CommentSection({
 
       {/* Comment error */}
       {error && (
-        <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2 border border-red-100">
+        <div className="flex items-center gap-2 text-[13px] text-[rgb(190,60,57)] bg-[rgba(196,59,56,0.075)] rounded-xl px-3 py-2 border border-[rgba(196,59,56,0.15)]">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           {error}
         </div>
@@ -457,7 +456,6 @@ export function RealPostCard({ post, currentUser }: RealPostCardProps) {
     startLikeTransition(async () => {
       const result = await togglePostLike(post.id);
       if (result.error) {
-        // Roll back on failure
         setLiked(wasLiked);
         setLikesCount((c) => c + (wasLiked ? 1 : -1));
       }
@@ -465,7 +463,7 @@ export function RealPostCard({ post, currentUser }: RealPostCardProps) {
   }
 
   return (
-    <article className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:border-gray-300 transition-colors">
+    <article className="bg-white rounded-2xl border border-[rgba(0,0,0,0.08)] overflow-hidden hover:border-[rgba(0,0,0,0.15)] transition-colors">
       {/* Header */}
       <div className="px-5 pt-4 pb-0 flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
@@ -482,27 +480,27 @@ export function RealPostCard({ post, currentUser }: RealPostCardProps) {
           <div>
             <Link
               href={`/u/${post.user_id}`}
-              className="text-sm font-semibold text-gray-900 hover:underline"
+              className="text-[15px] font-semibold text-[#202020] hover:underline leading-[21px] tracking-[-0.08px]"
             >
               {post.author_name ?? "Usuario"}
             </Link>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-[14px] text-black/[0.447] mt-0.5 tracking-[-0.08px]">
               {timeAgo(post.created_at)}
               {" · Publicado en "}
               {post.business_id ? (
                 <Link
                   href={`/business/${post.business_id}`}
-                  className="font-medium text-gray-500 hover:text-blue-600 hover:underline transition-colors"
+                  className="font-medium text-black/[0.447] hover:text-[#202020] hover:underline transition-colors"
                 >
                   {post.business_name ?? "Negocio"}
                 </Link>
               ) : (
-                <span className="font-medium text-gray-500">Mundo Academy</span>
+                <span className="font-medium text-black/[0.447]">Mundo Academy</span>
               )}
             </p>
           </div>
         </div>
-        <button className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors shrink-0">
+        <button className="p-1.5 rounded-full text-black/[0.447] hover:bg-black/[0.063] hover:text-[#202020] transition-colors shrink-0">
           <MoreHorizontal className="w-4 h-4" />
         </button>
       </div>
@@ -510,12 +508,12 @@ export function RealPostCard({ post, currentUser }: RealPostCardProps) {
       {/* Body */}
       <div className="px-5 py-4 space-y-3">
         {post.content && (
-          <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+          <p className="text-[15px] text-[#202020] leading-[21px] tracking-[-0.08px] whitespace-pre-wrap">
             {post.content}
           </p>
         )}
         {post.image_url && (
-          <div className="rounded-xl overflow-hidden border border-gray-100">
+          <div className="rounded-xl overflow-hidden border border-[rgba(0,0,0,0.06)]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={post.image_url}
@@ -527,20 +525,20 @@ export function RealPostCard({ post, currentUser }: RealPostCardProps) {
       </div>
 
       {/* Action bar */}
-      <div className="px-5 py-3 border-t border-gray-100 flex items-center gap-1">
+      <div className="px-5 py-3 border-t border-[rgba(0,0,0,0.06)] flex items-center gap-1">
         {/* Like */}
         <button
           onClick={handleLike}
           disabled={isPendingLike}
           title={liked ? "Quitar like" : "Me gusta"}
-          className={`inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1.5 transition-colors disabled:cursor-not-allowed ${
+          className={`inline-flex items-center gap-1.5 text-[14px] font-medium rounded-full px-2.5 py-1.5 transition-colors disabled:cursor-not-allowed ${
             liked
-              ? "text-red-500 bg-red-50 hover:bg-red-100"
-              : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+              ? "text-[rgb(190,60,57)] bg-[rgba(196,59,56,0.075)] hover:bg-[rgba(196,59,56,0.12)]"
+              : "text-black/[0.447] hover:text-[#202020] hover:bg-black/[0.063]"
           }`}
         >
           <Heart
-            className={`w-3.5 h-3.5 transition-all ${liked ? "fill-red-500" : ""}`}
+            className={`w-3.5 h-3.5 transition-all ${liked ? "fill-[rgb(190,60,57)]" : ""}`}
           />
           {likesCount > 0 && <span>{likesCount}</span>}
         </button>
@@ -549,21 +547,21 @@ export function RealPostCard({ post, currentUser }: RealPostCardProps) {
         <button
           onClick={() => setShowComments((v) => !v)}
           title="Comentarios"
-          className={`inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1.5 transition-colors ${
+          className={`inline-flex items-center gap-1.5 text-[14px] font-medium rounded-full px-2.5 py-1.5 transition-colors ${
             showComments
-              ? "text-blue-600 bg-blue-50 hover:bg-blue-100"
-              : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+              ? "text-[rgb(42,83,208)] bg-[rgba(42,83,208,0.075)] hover:bg-[rgba(42,83,208,0.12)]"
+              : "text-black/[0.447] hover:text-[#202020] hover:bg-black/[0.063]"
           }`}
         >
           <MessageCircle
-            className={`w-3.5 h-3.5 ${showComments ? "fill-blue-100" : ""}`}
+            className={`w-3.5 h-3.5 ${showComments ? "fill-[rgba(42,83,208,0.15)]" : ""}`}
           />
           {post.comments_count > 0 && <span>{post.comments_count}</span>}
         </button>
 
         {/* Views (read-only) */}
         {post.views_count > 0 && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-gray-400 px-2.5 py-1.5">
+          <span className="inline-flex items-center gap-1.5 text-[14px] text-black/[0.447] px-2.5 py-1.5">
             <BarChart2 className="w-3.5 h-3.5" />
             {fmtCount(post.views_count)}
           </span>
@@ -571,7 +569,7 @@ export function RealPostCard({ post, currentUser }: RealPostCardProps) {
 
         {/* Share */}
         <button
-          className="ml-auto p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          className="ml-auto p-1.5 rounded-full text-black/[0.447] hover:text-[#202020] hover:bg-black/[0.063] transition-colors"
           title="Compartir"
         >
           <Share2 className="w-4 h-4" />
