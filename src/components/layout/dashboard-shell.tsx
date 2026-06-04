@@ -20,7 +20,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         {/* Sidebar wrapper — animates width */}
         <div
           className={`transition-all duration-300 ease-in-out overflow-hidden shrink-0 ${
-            sidebarOpen ? "w-60" : "w-0"
+            sidebarOpen ? "w-[280px]" : "w-0"
           }`}
         >
           <AppSidebar />

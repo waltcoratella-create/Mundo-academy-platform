@@ -22,14 +22,18 @@
 }
 
 @layer components {
+  /* Sidebar nav item — light Whop theme.
+     Primary styles are now inline in app-sidebar.tsx;
+     this class is kept as a fallback for any other sidebar consumers. */
   .sidebar-item {
-    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium
-           text-slate-300 hover:bg-white/10 hover:text-white
-           transition-colors duration-150 cursor-pointer;
+    @apply flex items-center gap-2 px-[9px] h-12 w-full rounded-[14px]
+           text-[18px] font-medium tracking-[-0.2925px] leading-[26px]
+           text-black/60 hover:bg-[#fafafa]
+           transition-colors duration-150 cursor-pointer select-none;
   }
 
   .sidebar-item.active {
-    @apply bg-brand-500/20 text-white;
+    @apply bg-[#e0e0e0] text-[#202020];
   }
 
   .kpi-card {
