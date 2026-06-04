@@ -18,7 +18,6 @@ import {
   Sun,
   Moon,
   ChevronRight,
-  ChevronDown,
 } from "lucide-react";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -96,12 +95,9 @@ export function UserMenu() {
         onClick={() => setOpen((v) => !v)}
         aria-label="Menú de usuario"
         aria-expanded={open}
-        className="flex items-center gap-1 rounded-full hover:opacity-80 transition-opacity"
+        className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-black/[0.063] transition-colors overflow-hidden"
       >
-        <UserAvatar url={avatarUrl} label={label} bg={bg} size={32} />
-        <ChevronDown
-          className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-        />
+        <UserAvatar url={avatarUrl} label={label} bg={bg} size={36} />
       </button>
 
       {/* ── Dropdown ── */}
