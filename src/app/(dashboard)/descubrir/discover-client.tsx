@@ -348,48 +348,117 @@ function SearchResults({ products, query }: { products: PublicProduct[]; query: 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  EMPEZANDO SECTION — 2 starter banner cards (Mundo Academy only)
+//  PROMO CARD — Whop-style compact banner with overlay text
+//  aspect-ratio: 3/1 mobile → 5/2 sm → 7/2 lg
+//  At 356.5px wide → height ≈ 142.6px (5/2 ratio)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const EMPEZANDO_BANNERS = [
+interface EmpezandoBanner {
+  id: string;
+  src: string;
+  alt: string;
+  href: string;
+  title: string;
+  subtitle: string;
+  avatarGradient: string;
+  initial: string;
+}
+
+const EMPEZANDO_BANNERS: EmpezandoBanner[] = [
   {
     id: "b1",
     src: "/discover/banners/banner-mundo-academy-stars.png",
-    alt: "Aprende de los que ya lo lograron — Mundo Academy",
+    alt: "Aprende de los que ya lo lograron",
     href: "/descubrir",
+    title: "Aprende de los que ya lo lograron",
+    subtitle: "Historias, cursos y aprendizajes de emprendedores reales",
+    avatarGradient: "from-amber-500 to-orange-600",
+    initial: "A",
   },
   {
     id: "b4",
     src: "/discover/banners/banner-mundo-academy-logo.png",
-    alt: "Mundo Academy — Aprende, crea y crece",
+    alt: "Mundo Academy",
     href: "/descubrir",
+    title: "Mundo Academy",
+    subtitle: "Crea, lanza y escala tu negocio digital",
+    avatarGradient: "from-blue-500 to-indigo-600",
+    initial: "M",
   },
 ];
+
+function PromoCard({ banner }: { banner: EmpezandoBanner }) {
+  return (
+    // .promo-card: position relative | flex | overflow hidden | border-radius 16px
+    // aspect-ratio: 3/1 mobile → 5/2 sm → 7/2 lg
+    <Link
+      href={banner.href}
+      className="group relative flex overflow-hidden rounded-[16px] aspect-[3/1] sm:aspect-[5/2] lg:aspect-[7/2] cursor-pointer"
+    >
+      {/* .promo-card-bg-img: absolute inset-0, object-fit cover */}
+      <Image
+        src={banner.src}
+        alt={banner.alt}
+        fill
+        className="object-cover"
+        sizes="(max-width: 640px) 100vw, 50vw"
+      />
+
+      {/* .promo-card-overlay: gradient bottom-to-top */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0) 100%)",
+        }}
+      />
+
+      {/* .promo-card-content: relative | mt-auto | flex-col | gap-1 | p-5 */}
+      <div className="relative mt-auto flex flex-col gap-1 p-5">
+
+        {/* .promo-card-title-row: flex items-center gap-2 */}
+        <div className="flex items-center gap-2">
+          {/* .promo-card-avatar: 24×24 | border-radius 8px */}
+          <div
+            className={`w-6 h-6 rounded-[8px] bg-gradient-to-br ${banner.avatarGradient} flex items-center justify-center shrink-0`}
+          >
+            <span className="text-[9px] font-bold text-white leading-none">{banner.initial}</span>
+          </div>
+
+          {/* .promo-card-name: 18px | 700 | lh 26px | ls -0.2925px | white */}
+          <span className="text-[18px] font-bold leading-[26px] tracking-[-0.2925px] text-white line-clamp-1">
+            {banner.title}
+          </span>
+
+          {/* Chevron: 16×16 | white/70 | hover translate-x-1 */}
+          <ChevronRight className="w-4 h-4 text-white/70 shrink-0 transition-transform duration-200 group-hover:translate-x-1" />
+        </div>
+
+        {/* .promo-card-subtitle: 14px | 400 | lh 20px | ls -0.079px | white/70 */}
+        <p className="text-[14px] font-normal leading-5 tracking-[-0.079px] text-white/70 line-clamp-1">
+          {banner.subtitle}
+        </p>
+
+      </div>
+    </Link>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  PARA EMPEZAR SECTION — 2 promo cards (Mundo Academy only)
+// ─────────────────────────────────────────────────────────────────────────────
 
 function EmpezandoSection() {
   return (
     <section className="min-w-0">
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="w-5 h-5 text-orange-500" />
-        <h2 className="text-[20px] font-bold text-gray-900 tracking-[-0.4125px]">Empezando</h2>
+        <h2 className="text-[20px] font-bold text-gray-900 tracking-[-0.4125px]">Para empezar</h2>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+      {/* .empezando-grid: 2 cols desktop / 1 col mobile | gap 16px */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {EMPEZANDO_BANNERS.map((banner) => (
-          <Link
-            key={banner.id}
-            href={banner.href}
-            className="group relative block rounded-[16px] overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,.05)] hover:shadow-md transition-all duration-200 cursor-pointer"
-          >
-            <div className="relative w-full aspect-[2/1]">
-              <Image
-                src={banner.src}
-                alt={banner.alt}
-                fill
-                className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                sizes="(max-width: 640px) 100vw, 50vw"
-              />
-            </div>
-          </Link>
+          <PromoCard key={banner.id} banner={banner} />
         ))}
       </div>
     </section>
