@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import {
   Bell, CreditCard, Palette, Shield, FileText, Scale,
   BarChart2, Home, AppWindow, ChevronRight, Pencil,
-  CheckCircle2, AlertCircle, Loader2, X,
+  CheckCircle2, AlertCircle, Loader2, X, Camera,
 } from "lucide-react";
 import { updateBusinessSettings } from "@/app/actions/business-settings";
 import type { BusinessSettings } from "@/lib/supabase/queries";
+import { uploadBusinessLogo, uploadBusinessCover } from "@/app/actions/upload-actions";
 
 const MIGRATION_SQL = `ALTER TABLE businesses
   ADD COLUMN IF NOT EXISTS description   text,
@@ -234,6 +235,46 @@ function EditForm({
   const boundAction = updateBusinessSettings.bind(null, settings.id);
   const [state, formAction] = useFormState(boundAction, { error: "" });
 
+  // ── Image upload state ────────────────────────────────────────────────────
+  const [logoUrl,      setLogoUrl]      = useState<string | null>(settings.logo_url);
+  const [coverUrl,     setCoverUrl]     = useState<string | null>(settings.cover_url);
+  const [logoLoading,  setLogoLoading]  = useState(false);
+  const [coverLoading, setCoverLoading] = useState(false);
+  const [logoError,    setLogoError]    = useState<string | null>(null);
+  const [coverError,   setCoverError]   = useState<string | null>(null);
+  const logoInputRef  = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
+  const disabled = !settings.hasExtendedFields;
+
+  async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setLogoError(null);
+    setLogoLoading(true);
+    const fd = new FormData();
+    fd.set("file", file);
+    const result = await uploadBusinessLogo(settings.id, fd);
+    setLogoLoading(false);
+    if (result.error) setLogoError(result.error);
+    else if (result.url) setLogoUrl(result.url);
+  }
+
+  async function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setCoverError(null);
+    setCoverLoading(true);
+    const fd = new FormData();
+    fd.set("file", file);
+    const result = await uploadBusinessCover(settings.id, fd);
+    setCoverLoading(false);
+    if (result.error) setCoverError(result.error);
+    else if (result.url) setCoverUrl(result.url);
+  }
+
   return (
     <div className="rounded-xl border border-brand-200 bg-white shadow-sm overflow-hidden">
       {/* Header */}
@@ -274,7 +315,15 @@ function EditForm({
           </div>
         )}
 
+        {/* Hidden file inputs */}
+        <input ref={logoInputRef}  type="file" accept="image/*" className="hidden" onChange={handleLogoChange}  disabled={disabled} />
+        <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverChange} disabled={disabled} />
+
         <form action={formAction} className="space-y-4">
+          {/* Keep current URLs in hidden inputs so form submission stays in sync */}
+          <input type="hidden" name="logo_url"  value={logoUrl  ?? ""} />
+          <input type="hidden" name="cover_url" value={coverUrl ?? ""} />
+
           <FormField
             label="Nombre del negocio"
             name="name"
@@ -290,7 +339,7 @@ function EditForm({
               defaultValue={settings.website ?? ""}
               placeholder="https://tunegocio.com"
               type="url"
-              disabled={!settings.hasExtendedFields}
+              disabled={disabled}
             />
             <FormField
               label="Email de soporte"
@@ -298,7 +347,7 @@ function EditForm({
               defaultValue={settings.support_email ?? ""}
               placeholder="soporte@tunegocio.com"
               type="email"
-              disabled={!settings.hasExtendedFields}
+              disabled={disabled}
             />
           </div>
 
@@ -308,28 +357,80 @@ function EditForm({
             defaultValue={settings.description ?? ""}
             placeholder="Describe tu negocio en pocas palabras…"
             multiline
-            disabled={!settings.hasExtendedFields}
+            disabled={disabled}
           />
 
+          {/* ── Image uploads ── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField
-              label="URL del logo"
-              name="logo_url"
-              defaultValue={settings.logo_url ?? ""}
-              placeholder="https://…/logo.png"
-              type="url"
-              hint="Cuadrado, mín. 128×128 px"
-              disabled={!settings.hasExtendedFields}
-            />
-            <FormField
-              label="URL de portada"
-              name="cover_url"
-              defaultValue={settings.cover_url ?? ""}
-              placeholder="https://…/cover.jpg"
-              type="url"
-              hint="Horizontal, recomendado 1200×400 px"
-              disabled={!settings.hasExtendedFields}
-            />
+            {/* Logo */}
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-gray-700">
+                Logo
+                {disabled && <span className="ml-2 text-xs font-normal text-yellow-600">(requiere migración SQL)</span>}
+              </p>
+              <button
+                type="button"
+                disabled={disabled || logoLoading}
+                onClick={() => logoInputRef.current?.click()}
+                className="w-full flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-gray-200 hover:border-brand-400 hover:bg-brand-50/40 transition-colors disabled:cursor-not-allowed disabled:opacity-50 text-left"
+              >
+                <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-gray-100 flex items-center justify-center">
+                  {logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={logoUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <Camera className="w-5 h-5 text-gray-300" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-700">
+                    {logoLoading ? "Subiendo…" : logoUrl ? "Cambiar logo" : "Subir logo"}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">Cuadrado · JPG, PNG, WebP · máx. 5 MB</p>
+                </div>
+                {logoLoading && <Loader2 className="w-4 h-4 text-brand-500 animate-spin shrink-0" />}
+              </button>
+              {logoError && (
+                <p className="flex items-center gap-1 text-xs text-red-600">
+                  <AlertCircle className="w-3 h-3 shrink-0" />{logoError}
+                </p>
+              )}
+            </div>
+
+            {/* Cover */}
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-gray-700">
+                Portada
+                {disabled && <span className="ml-2 text-xs font-normal text-yellow-600">(requiere migración SQL)</span>}
+              </p>
+              <button
+                type="button"
+                disabled={disabled || coverLoading}
+                onClick={() => coverInputRef.current?.click()}
+                className="w-full flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-gray-200 hover:border-brand-400 hover:bg-brand-50/40 transition-colors disabled:cursor-not-allowed disabled:opacity-50 text-left"
+              >
+                <div className="w-20 h-12 rounded-md overflow-hidden shrink-0 bg-gray-100 flex items-center justify-center">
+                  {coverUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={coverUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <Camera className="w-5 h-5 text-gray-300" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-700">
+                    {coverLoading ? "Subiendo…" : coverUrl ? "Cambiar portada" : "Subir portada"}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">Horizontal · JPG, PNG, WebP · máx. 5 MB</p>
+                </div>
+                {coverLoading && <Loader2 className="w-4 h-4 text-brand-500 animate-spin shrink-0" />}
+              </button>
+              {coverError && (
+                <p className="flex items-center gap-1 text-xs text-red-600">
+                  <AlertCircle className="w-3 h-3 shrink-0" />{coverError}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="flex justify-end pt-1">

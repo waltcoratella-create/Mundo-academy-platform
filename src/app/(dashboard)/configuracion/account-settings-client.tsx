@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useClerk } from "@clerk/nextjs";
 import {
   Camera,
@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { updateUserProfile } from "./actions";
 import type { UserProfileData } from "./actions";
+import { uploadUserAvatar, uploadUserCover } from "@/app/actions/upload-actions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -150,7 +151,44 @@ function EditProfilePanel({
   const seedName = p?.display_name ?? clerkData.fullName ?? "";
   const seedUser = p?.username ?? "";
   const seedBio  = p?.bio ?? "";
-  const seedAvatar = p?.avatar_url ?? clerkData.imageUrl ?? null;
+
+  // Image state — initialise from profile, update optimistically after upload
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(p?.avatar_url ?? clerkData.imageUrl ?? null);
+  const [coverUrl,  setCoverUrl]  = useState<string | null>(p?.cover_url ?? null);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [coverLoading,  setCoverLoading]  = useState(false);
+  const [avatarError,   setAvatarError]   = useState<string | null>(null);
+  const [coverError,    setCoverError]    = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef  = useRef<HTMLInputElement>(null);
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setAvatarError(null);
+    setAvatarLoading(true);
+    const fd = new FormData();
+    fd.set("file", file);
+    const result = await uploadUserAvatar(fd);
+    setAvatarLoading(false);
+    if (result.error) setAvatarError(result.error);
+    else if (result.url) setAvatarUrl(result.url);
+  }
+
+  async function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setCoverError(null);
+    setCoverLoading(true);
+    const fd = new FormData();
+    fd.set("file", file);
+    const result = await uploadUserCover(fd);
+    setCoverLoading(false);
+    if (result.error) setCoverError(result.error);
+    else if (result.url) setCoverUrl(result.url);
+  }
 
   // Birth date
   const [bYear, bMonth, bDay] = (p?.birth_date ?? "").split("-");
@@ -219,24 +257,55 @@ function EditProfilePanel({
   return (
     <div className="space-y-5">
 
+      {/* Hidden file inputs */}
+      <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+      <input ref={coverInputRef}  type="file" accept="image/*" className="hidden" onChange={handleCoverChange} />
+
       {/* ── Card: Cover + avatar ── */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
 
         {/* Cover banner */}
-        <div className="relative h-36 bg-gradient-to-br from-gray-100 to-gray-200 group cursor-pointer hover:from-gray-200 hover:to-gray-300 transition-all flex items-center justify-center">
-          <Camera className="w-7 h-7 text-gray-400" />
-          <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 backdrop-blur-sm text-xs font-medium text-gray-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+        <div
+          className="relative h-36 bg-gradient-to-br from-gray-100 to-gray-200 group cursor-pointer hover:from-gray-200 hover:to-gray-300 transition-all flex items-center justify-center overflow-hidden"
+          onClick={() => !coverLoading && coverInputRef.current?.click()}
+        >
+          {coverUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={coverUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          ) : (
+            <Camera className="w-7 h-7 text-gray-400" />
+          )}
+
+          {/* Loading overlay */}
+          {coverLoading && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
+              <span className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            </div>
+          )}
+
+          {/* Hover label */}
+          <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 backdrop-blur-sm text-xs font-medium text-gray-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10">
             <Camera className="w-3 h-3" /> Cambiar portada
           </span>
         </div>
 
+        {/* Cover error */}
+        {coverError && (
+          <p className="flex items-center gap-1.5 px-5 pt-2 text-xs text-red-600">
+            <AlertCircle className="w-3 h-3 shrink-0" />{coverError}
+          </p>
+        )}
+
         {/* Avatar overlapping cover */}
         <div className="px-5 pb-5">
-          <div className="relative -mt-10 mb-4 inline-block">
-            <div className="relative w-20 h-20 rounded-full ring-4 ring-white overflow-hidden group cursor-pointer">
-              {seedAvatar ? (
+          <div className="relative -mt-10 mb-1 inline-flex flex-col items-start gap-1">
+            <div
+              className="relative w-20 h-20 rounded-full ring-4 ring-white overflow-hidden group cursor-pointer"
+              onClick={() => !avatarLoading && avatarInputRef.current?.click()}
+            >
+              {avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={seedAvatar} alt="" className="w-full h-full object-cover" />
+                <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div
                   className={`w-full h-full flex items-center justify-center text-white text-2xl font-bold ${bg}`}
@@ -244,19 +313,34 @@ function EditProfilePanel({
                   {label}
                 </div>
               )}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                <Camera className="w-5 h-5 text-white" />
-              </div>
+              {avatarLoading ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                </div>
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                  <Camera className="w-5 h-5 text-white" />
+                </div>
+              )}
             </div>
+
+            {/* Avatar error */}
+            {avatarError && (
+              <p className="flex items-center gap-1 text-[11px] text-red-600 max-w-[200px] leading-tight">
+                <AlertCircle className="w-3 h-3 shrink-0" />{avatarError}
+              </p>
+            )}
           </div>
 
-          {/* Name preview */}
-          <p className="text-sm font-semibold text-gray-900">
-            {displayName || clerkData.fullName || "Tu nombre"}
-          </p>
-          {clerkData.email && (
-            <p className="text-xs text-gray-400 mt-0.5">{clerkData.email}</p>
-          )}
+          {/* Name preview — pushed below avatar+error block */}
+          <div className={avatarError ? "mt-2" : "mt-4"}>
+            <p className="text-sm font-semibold text-gray-900">
+              {displayName || clerkData.fullName || "Tu nombre"}
+            </p>
+            {clerkData.email && (
+              <p className="text-xs text-gray-400 mt-0.5">{clerkData.email}</p>
+            )}
+          </div>
         </div>
       </div>
 
