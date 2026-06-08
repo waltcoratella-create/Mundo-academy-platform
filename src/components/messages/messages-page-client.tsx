@@ -198,11 +198,13 @@ function EmptyThreadState({
 interface Props {
   initialConversations: DirectConversation[];
   tableExists: boolean;
+  /** Pre-select a conversation by ID (e.g. from ?conv= query param). */
+  initialSelectedId?: string;
 }
 
-export function MessagesPageClient({ initialConversations, tableExists }: Props) {
+export function MessagesPageClient({ initialConversations, tableExists, initialSelectedId }: Props) {
   const [conversations, setConversations] = useState(initialConversations);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? null);
   const [search, setSearch] = useState("");
   const [filterUnread, setFilterUnread] = useState(false);
 

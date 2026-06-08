@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   followUser,
   unfollowUser,
 } from "@/app/(dashboard)/inicio/actions";
+import { getOrCreateConversation } from "@/app/(dashboard)/messages/actions";
 import { RealPostCard } from "@/components/dashboard/inicio/real-post-card";
 import type { UserProfile } from "./actions";
-import { FileText, Users } from "lucide-react";
+import { FileText, Users, MessageCircle } from "lucide-react";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -48,6 +50,56 @@ function fmtCount(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
   if (n >= 1000) return (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k";
   return String(n);
+}
+
+// ── MessageButton ─────────────────────────────────────────────────────────────
+
+function MessageButton({ targetUserId }: { targetUserId: string }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+
+  async function handleClick() {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await getOrCreateConversation(targetUserId);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.push(`/messages?conv=${result.conversationId}`);
+    } catch {
+      setError("Error al abrir el mensaje. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        onClick={handleClick}
+        disabled={loading}
+        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        {loading ? (
+          <>
+            <span className="w-3.5 h-3.5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+            Abriendo…
+          </>
+        ) : (
+          <>
+            <MessageCircle className="w-3.5 h-3.5" />
+            Mensaje
+          </>
+        )}
+      </button>
+      {error && (
+        <p className="text-[11px] text-red-500 leading-none">{error}</p>
+      )}
+    </div>
+  );
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -132,8 +184,14 @@ export function UserProfileClient({ profile, currentUser }: Props) {
               )}
             </div>
 
-            {/* Follow / Own profile */}
-            <div className="mb-1">
+            {/* Actions: Mensaje + Seguir / own profile */}
+            <div className="mb-1 flex items-center gap-2">
+              {/* Mensaje — only for other users and authenticated viewers */}
+              {!profile.is_own_profile && currentUser && (
+                <MessageButton targetUserId={profile.user_id} />
+              )}
+
+              {/* Follow */}
               {profile.is_own_profile ? (
                 <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gray-200 bg-gray-50 text-sm font-medium text-gray-500">
                   Este es tu perfil
