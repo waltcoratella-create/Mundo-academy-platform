@@ -8,6 +8,22 @@ import {
   sendMessage,
   markConversationRead,
 } from "@/app/(dashboard)/messages/actions";
+import { createClient } from "@/lib/supabase/client";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+/** Raw row shape from Supabase Realtime payload (no computed fields). */
+type DMRow = {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  sender_name: string | null;
+  sender_avatar: string | null;
+  content: string;
+  created_at: string;
+  read_at: string | null;
+  deleted_at: string | null;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -172,9 +188,13 @@ export function MessageThread({ conversation, onRead, onMessageSent }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Stable Supabase client — key={conv.id} causes full remount on conversation switch
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+  if (!supabaseRef.current) supabaseRef.current = createClient();
+
   const { other_participant } = conversation;
 
-  // Load messages on mount — key={conv.id} guarantees a fresh mount per conversation
+  // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -191,19 +211,17 @@ export function MessageThread({ conversation, onRead, onMessageSent }: Props) {
       onRead(conversation.id);
     });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll to bottom when new messages arrive
+  // ── Scroll to bottom on new messages ───────────────────────────────────────
   useEffect(() => {
     if (!loading) {
       bottomRef.current?.scrollIntoView({ behavior: "instant" });
     }
   }, [messages, loading]);
 
-  // Auto-resize textarea
+  // ── Auto-resize textarea ────────────────────────────────────────────────────
   useEffect(() => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -211,6 +229,48 @@ export function MessageThread({ conversation, onRead, onMessageSent }: Props) {
     ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
   }, [input]);
 
+  // ── Realtime: subscribe to new messages in this conversation ────────────────
+  useEffect(() => {
+    const supabase = supabaseRef.current!;
+
+    const channel = supabase
+      .channel(`dm_thread_${conversation.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "direct_messages",
+          filter: `conversation_id=eq.${conversation.id}`,
+        },
+        (payload) => {
+          const row = payload.new as DMRow;
+
+          // In a 1:1 conversation: if sender is not the other participant, it's me
+          const is_own = row.sender_id !== other_participant.user_id;
+
+          setMessages((prev) => {
+            // Dedup: own messages are optimistically added by sendMessage already
+            if (prev.some((m) => m.id === row.id)) return prev;
+            return [...prev, { ...row, is_own }];
+          });
+
+          // Incoming message: mark as read + notify parent sidebar
+          if (!is_own) {
+            void markConversationRead(conversation.id);
+            onRead(conversation.id);
+            onMessageSent(conversation.id, row.content.slice(0, 200));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Load older messages ─────────────────────────────────────────────────────
   const handleLoadMore = async () => {
     if (!cursor || loadingMore) return;
     const prevScrollHeight = scrollRef.current?.scrollHeight ?? 0;
@@ -220,7 +280,6 @@ export function MessageThread({ conversation, onRead, onMessageSent }: Props) {
     setHasMore(result.hasMore);
     setCursor(result.nextCursor);
     setLoadingMore(false);
-    // Restore scroll position so the view doesn't jump
     requestAnimationFrame(() => {
       if (scrollRef.current) {
         const newScrollHeight = scrollRef.current.scrollHeight;
@@ -229,6 +288,7 @@ export function MessageThread({ conversation, onRead, onMessageSent }: Props) {
     });
   };
 
+  // ── Send message ────────────────────────────────────────────────────────────
   const handleSend = async () => {
     const content = input.trim();
     if (!content || sending) return;
@@ -258,8 +318,11 @@ export function MessageThread({ conversation, onRead, onMessageSent }: Props) {
     }
   };
 
-  // Build render list: interleave day separators
-  const renderItems: Array<{ type: "separator"; label: string } | { type: "msg"; msg: DirectMessage; showAvatar: boolean; isFirst: boolean }> = [];
+  // ── Build render list with day separators ───────────────────────────────────
+  const renderItems: Array<
+    | { type: "separator"; label: string }
+    | { type: "msg"; msg: DirectMessage; showAvatar: boolean; isFirst: boolean }
+  > = [];
   let lastDay: string | null = null;
   let lastSenderId: string | null = null;
 
@@ -279,6 +342,7 @@ export function MessageThread({ conversation, onRead, onMessageSent }: Props) {
     lastSenderId = msg.sender_id;
   }
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Header ── */}

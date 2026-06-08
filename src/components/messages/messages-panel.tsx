@@ -14,6 +14,18 @@ import {
   markConversationRead,
   getUnreadDMCount,
 } from "@/app/(dashboard)/messages/actions";
+import { createClient } from "@/lib/supabase/client";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type DMRow = {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  sender_name: string | null;
+  content: string;
+  created_at: string;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -260,6 +272,10 @@ function PanelThread({
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Stable Supabase client — key={conv.id} causes full remount on conversation switch
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+  if (!supabaseRef.current) supabaseRef.current = createClient();
+
   const { other_participant } = conversation;
 
   // Load messages on mount — parent uses key={conv.id} to remount per conversation
@@ -289,6 +305,57 @@ function PanelThread({
     ta.style.height = "auto";
     ta.style.height = `${Math.min(ta.scrollHeight, 100)}px`;
   }, [input]);
+
+  // ── Realtime: subscribe to new messages in this conversation ────────────────
+  useEffect(() => {
+    const supabase = supabaseRef.current!;
+
+    const channel = supabase
+      .channel(`dm_panel_thread_${conversation.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "direct_messages",
+          filter: `conversation_id=eq.${conversation.id}`,
+        },
+        (payload) => {
+          const row = payload.new as DMRow;
+          const is_own = row.sender_id !== other_participant.user_id;
+
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === row.id)) return prev; // dedup own-sends
+            return [
+              ...prev,
+              {
+                id: row.id,
+                conversation_id: row.conversation_id,
+                sender_id: row.sender_id,
+                sender_name: row.sender_name,
+                sender_avatar: null,
+                content: row.content,
+                created_at: row.created_at,
+                read_at: null,
+                deleted_at: null,
+                is_own,
+              },
+            ];
+          });
+
+          if (!is_own) {
+            void markConversationRead(conversation.id);
+            onRead(conversation.id);
+            onMessageSent(conversation.id, row.content.slice(0, 200));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLoadMore = async () => {
     if (!cursor || loadingMore) return;
@@ -543,6 +610,24 @@ export function MessagesPanel({ open, onClose, onUnreadChange }: Props) {
   const [selectedConv, setSelectedConv] = useState<DirectConversation | null>(null);
   const [search, setSearch] = useState("");
 
+  // Ref so realtime callback always sees the current selectedConv
+  const selectedConvRef = useRef(selectedConv);
+  useEffect(() => { selectedConvRef.current = selectedConv; }, [selectedConv]);
+
+  // Stable Supabase client
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+  if (!supabaseRef.current) supabaseRef.current = createClient();
+
+  // Keep onUnreadChange ref stable to avoid stale closures
+  const onUnreadChangeRef = useRef(onUnreadChange);
+  useEffect(() => { onUnreadChangeRef.current = onUnreadChange; });
+
+  // Sync topbar badge whenever conversations state changes
+  useEffect(() => {
+    const total = conversations.reduce((s, c) => s + c.unread_count, 0);
+    onUnreadChangeRef.current?.(total);
+  }, [conversations]);
+
   // On mount: load the unread count for the topbar badge (runs even when panel is closed)
   useEffect(() => {
     getUnreadDMCount().then((count) => {
@@ -578,15 +663,57 @@ export function MessagesPanel({ open, onClose, onUnreadChange }: Props) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose, selectedConv]);
 
+  // ── Realtime: keep conversation list in sync ──────────────────────────────
+  // Subscription is set up once and stays alive while the component is mounted.
+  // It only processes events when we have known conversations loaded.
+  useEffect(() => {
+    const supabase = supabaseRef.current!;
+
+    const channel = supabase
+      .channel("dm_conv_list_panel")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "direct_messages",
+        },
+        (payload) => {
+          const row = payload.new as DMRow;
+
+          setConversations((prev) => {
+            const idx = prev.findIndex((c) => c.id === row.conversation_id);
+            if (idx === -1) return prev; // Not one of our conversations — ignore
+
+            const conv = prev[idx]!;
+            const isFromOther = row.sender_id === conv.other_participant.user_id;
+            const isSelected = selectedConvRef.current?.id === conv.id;
+
+            const updated: DirectConversation = {
+              ...conv,
+              last_message_at: row.created_at,
+              last_message_preview: row.content.slice(0, 200),
+              unread_count:
+                isFromOther && !isSelected
+                  ? conv.unread_count + 1
+                  : conv.unread_count,
+            };
+
+            return [updated, ...prev.filter((c) => c.id !== conv.id)];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleConvRead = (convId: string) => {
-    setConversations((prev) => {
-      const updated = prev.map((c) =>
-        c.id === convId ? { ...c, unread_count: 0 } : c
-      );
-      const total = updated.reduce((s, c) => s + c.unread_count, 0);
-      onUnreadChange?.(total);
-      return updated;
-    });
+    setConversations((prev) =>
+      prev.map((c) => (c.id === convId ? { ...c, unread_count: 0 } : c))
+    );
   };
 
   const handleMessageSent = (convId: string, preview: string) => {
@@ -600,11 +727,10 @@ export function MessagesPanel({ open, onClose, onUnreadChange }: Props) {
       return [...updated].sort((a, b) => {
         if (!a.last_message_at) return 1;
         if (!b.last_message_at) return -1;
-        return (
-          new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
-        );
+        return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
       });
     });
+    // Badge sync is handled by the conversations useEffect
   };
 
   const handleExpandToPage = () => {

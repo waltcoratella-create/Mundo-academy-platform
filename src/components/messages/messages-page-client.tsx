@@ -1,9 +1,21 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Search, Pencil, MessageCircle } from "lucide-react";
 import type { DirectConversation } from "@/app/(dashboard)/messages/actions";
+import { createClient } from "@/lib/supabase/client";
 import { MessageThread } from "./message-thread";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type DMRow = {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  sender_name: string | null;
+  content: string;
+  created_at: string;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -210,6 +222,15 @@ export function MessagesPageClient({ initialConversations, tableExists, initialS
 
   const selectedConv = conversations.find((c) => c.id === selectedId) ?? null;
 
+  // ── Ref so realtime callbacks always see the current selectedId ─────────────
+  const selectedIdRef = useRef(selectedId);
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+
+  // ── Stable Supabase client ──────────────────────────────────────────────────
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+  if (!supabaseRef.current) supabaseRef.current = createClient();
+
+  // ── Conversation list callbacks ─────────────────────────────────────────────
   const handleConvRead = useCallback((convId: string) => {
     setConversations((prev) =>
       prev.map((c) => (c.id === convId ? { ...c, unread_count: 0 } : c))
@@ -232,7 +253,54 @@ export function MessagesPageClient({ initialConversations, tableExists, initialS
     });
   }, []);
 
-  // Filtered list
+  // ── Realtime: keep conversation list in sync ────────────────────────────────
+  useEffect(() => {
+    const supabase = supabaseRef.current!;
+
+    const channel = supabase
+      .channel("dm_conv_list_page")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "direct_messages",
+        },
+        (payload) => {
+          const row = payload.new as DMRow;
+
+          setConversations((prev) => {
+            const idx = prev.findIndex((c) => c.id === row.conversation_id);
+            if (idx === -1) return prev; // Not one of our conversations — ignore
+
+            const conv = prev[idx]!;
+            const isFromOther = row.sender_id === conv.other_participant.user_id;
+            const isSelected = selectedIdRef.current === conv.id;
+
+            const updated: DirectConversation = {
+              ...conv,
+              last_message_at: row.created_at,
+              last_message_preview: row.content.slice(0, 200),
+              // Only increment unread when: incoming + not currently open
+              unread_count:
+                isFromOther && !isSelected
+                  ? conv.unread_count + 1
+                  : conv.unread_count,
+            };
+
+            // Bubble updated conversation to top
+            return [updated, ...prev.filter((c) => c.id !== conv.id)];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Filtered list ───────────────────────────────────────────────────────────
   let filtered = conversations;
   if (filterUnread) filtered = filtered.filter((c) => c.unread_count > 0);
   if (search.trim()) {
