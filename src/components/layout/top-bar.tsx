@@ -10,9 +10,10 @@ interface Props {
   aiOpen: boolean;
   onToggleMessages: () => void;
   messagesOpen: boolean;
+  dmUnreadCount?: number;
 }
 
-export function TopBar({ onToggleSidebar, onToggleAI, aiOpen, onToggleMessages, messagesOpen }: Props) {
+export function TopBar({ onToggleSidebar, onToggleAI, aiOpen, onToggleMessages, messagesOpen, dmUnreadCount = 0 }: Props) {
   return (
     <header className="h-14 shrink-0 sticky top-0 z-50 bg-white border-b border-[rgba(0,0,0,0.122)] flex items-center px-4 gap-2">
 
@@ -57,10 +58,12 @@ export function TopBar({ onToggleSidebar, onToggleAI, aiOpen, onToggleMessages, 
           }`}
         >
           <MessageCircle className="w-5 h-5" />
-          {/* Unread dot */}
-          <span className="absolute top-0 right-0 w-4 h-4 rounded-full bg-[#d4544f] flex items-center justify-center text-[10px] font-bold text-white leading-none pointer-events-none">
-            2
-          </span>
+          {/* Unread badge */}
+          {dmUnreadCount > 0 && (
+            <span className="absolute top-0 right-0 min-w-[16px] h-4 px-[3px] rounded-full bg-[#d4544f] flex items-center justify-center text-[10px] font-bold text-white leading-none pointer-events-none">
+              {dmUnreadCount > 99 ? "99+" : dmUnreadCount}
+            </span>
+          )}
         </button>
 
         {/* Notifications */}

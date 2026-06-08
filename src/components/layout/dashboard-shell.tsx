@@ -10,6 +10,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [aiOpen, setAiOpen] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
+  const [dmUnreadCount, setDmUnreadCount] = useState(0);
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 overflow-hidden">
@@ -19,6 +20,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         aiOpen={aiOpen}
         onToggleMessages={() => setMessagesOpen((v) => !v)}
         messagesOpen={messagesOpen}
+        dmUnreadCount={dmUnreadCount}
       />
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar wrapper — animates width */}
@@ -36,7 +38,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </main>
 
         {/* Messages panel — slides in from right */}
-        <MessagesPanel open={messagesOpen} onClose={() => setMessagesOpen(false)} />
+        <MessagesPanel
+          open={messagesOpen}
+          onClose={() => setMessagesOpen(false)}
+          onUnreadChange={setDmUnreadCount}
+        />
 
         {/* AI assistant panel — slides in from right */}
         <AIAssistantPanel open={aiOpen} onClose={() => setAiOpen(false)} />
