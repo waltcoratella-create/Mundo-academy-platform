@@ -1,6 +1,14 @@
 "use client";
 
+import localFont from "next/font/local";
 import { useState, useMemo, useRef, useCallback } from "react";
+
+const cabinetGrotesk = localFont({
+  src: "../../../../public/fonts/CabinetGrotesk-Regular.woff2",
+  weight: "400",
+  display: "swap",
+  variable: "--font-cabinet",
+});
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -616,7 +624,7 @@ function WhopHero({
 
         {/* Heading group */}
         <div className="flex flex-col items-center gap-3 text-center">
-          <h1 className="text-[56px] font-normal leading-[1.1] tracking-[-0.04em] max-w-[500px] text-center text-[#202020]">
+          <h1 className={`${cabinetGrotesk.className} text-[40px] md:text-[56px] font-normal leading-[1.1] tracking-[-0.04em] max-w-[500px] text-center text-[#202020]`}>
             Donde los negocios despegan.
           </h1>
           <p className="text-[16px] font-normal leading-[26px] max-w-[512px] text-[#646464] text-center">
