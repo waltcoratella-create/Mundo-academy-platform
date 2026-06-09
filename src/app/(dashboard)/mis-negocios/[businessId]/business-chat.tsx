@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Send, Hash } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import {
   getBusinessChatMessages,
   sendBusinessChatMessage,
@@ -80,7 +81,11 @@ export function BusinessChat({ businessId, canWrite }: Props) {
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // ── Data fetching ───────────────────────────────────────────────────────────
+  // Lazy-init Supabase browser client — one instance for the lifetime of the component
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+  if (!supabaseRef.current) supabaseRef.current = createClient();
+
+  // ── Initial load ────────────────────────────────────────────────────────────
 
   const loadMessages = useCallback(async () => {
     const result = await getBusinessChatMessages(businessId);
@@ -90,7 +95,40 @@ export function BusinessChat({ businessId, canWrite }: Props) {
 
   useEffect(() => { loadMessages(); }, [loadMessages]);
 
-  // Auto-scroll to bottom when new messages arrive
+  // ── Realtime subscription ───────────────────────────────────────────────────
+  // Listens for INSERTs on business_chat_messages filtered to this business.
+  // Deduplicates so own messages loaded by handleSend→loadMessages() aren't doubled.
+
+  useEffect(() => {
+    const supabase = supabaseRef.current!;
+
+    const channel = supabase
+      .channel(`biz_chat_${businessId}`)
+      .on(
+        "postgres_changes",
+        {
+          event:  "INSERT",
+          schema: "public",
+          table:  "business_chat_messages",
+          filter: `business_id=eq.${businessId}`,
+        },
+        (payload) => {
+          const row = payload.new as BusinessChatMessage;
+          setMessages((prev) => {
+            // Dedup: own messages are already added by the post-send loadMessages()
+            if (prev.some((m) => m.id === row.id)) return prev;
+            return [...prev, row];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [businessId]); // re-subscribe if businessId ever changes
+
+  // Auto-scroll to bottom when messages arrive
   useEffect(() => {
     if (!loading) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
