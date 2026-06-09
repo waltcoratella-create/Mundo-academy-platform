@@ -167,6 +167,22 @@ function MessageBubble({
   );
 }
 
+// ─── TypingDots ───────────────────────────────────────────────────────────────
+
+function TypingDots() {
+  return (
+    <span className="inline-flex gap-[3px] items-end pb-0.5">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="w-[5px] h-[5px] rounded-full bg-[rgba(0,0,0,0.35)] animate-bounce"
+          style={{ animationDelay: `${i * 0.15}s`, animationDuration: "0.9s" }}
+        />
+      ))}
+    </span>
+  );
+}
+
 // ─── MessageThread ────────────────────────────────────────────────────────────
 
 interface Props {
@@ -184,9 +200,15 @@ export function MessageThread({ conversation, onRead, onMessageSent }: Props) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [otherIsTyping, setOtherIsTyping] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const channelRef = useRef<any>(null);
+  const isTypingRef = useRef(false);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Stable Supabase client — key={conv.id} causes full remount on conversation switch
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
@@ -229,7 +251,7 @@ export function MessageThread({ conversation, onRead, onMessageSent }: Props) {
     ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
   }, [input]);
 
-  // ── Realtime: subscribe to new messages in this conversation ────────────────
+  // ── Realtime: subscribe to new messages + typing broadcasts ────────────────
   useEffect(() => {
     const supabase = supabaseRef.current!;
 
@@ -255,15 +277,28 @@ export function MessageThread({ conversation, onRead, onMessageSent }: Props) {
             return [...prev, { ...row, is_own }];
           });
 
-          // Incoming message: mark as read + notify parent sidebar
+          // Incoming message: clear typing indicator + mark as read
           if (!is_own) {
+            setOtherIsTyping(false);
+            if (typingClearTimerRef.current) clearTimeout(typingClearTimerRef.current);
             void markConversationRead(conversation.id);
             onRead(conversation.id);
             onMessageSent(conversation.id, row.content.slice(0, 200));
           }
         }
       )
+      .on("broadcast", { event: "typing" }, (payload) => {
+        const { is_typing } = payload.payload as { is_typing: boolean };
+        setOtherIsTyping(is_typing);
+        if (typingClearTimerRef.current) clearTimeout(typingClearTimerRef.current);
+        if (is_typing) {
+          // Auto-clear if no update within 3s (fallback for disconnects)
+          typingClearTimerRef.current = setTimeout(() => setOtherIsTyping(false), 3000);
+        }
+      })
       .subscribe();
+
+    channelRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
@@ -288,6 +323,31 @@ export function MessageThread({ conversation, onRead, onMessageSent }: Props) {
     });
   };
 
+  // ── Typing indicator — send broadcast on keystroke, debounce stop ──────────
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    if (!e.target.value.trim()) {
+      // Input cleared: immediately signal "stopped typing"
+      if (isTypingRef.current) {
+        isTypingRef.current = false;
+        if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+        channelRef.current?.send({ type: "broadcast", event: "typing", payload: { is_typing: false } });
+      }
+      return;
+    }
+    // First keystroke: signal "started typing"
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      channelRef.current?.send({ type: "broadcast", event: "typing", payload: { is_typing: true } });
+    }
+    // Reset debounce — signal "stopped typing" 1.5s after last keystroke
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(() => {
+      isTypingRef.current = false;
+      channelRef.current?.send({ type: "broadcast", event: "typing", payload: { is_typing: false } });
+    }, 1500);
+  };
+
   // ── Send message ────────────────────────────────────────────────────────────
   const handleSend = async () => {
     const content = input.trim();
@@ -296,6 +356,13 @@ export function MessageThread({ conversation, onRead, onMessageSent }: Props) {
     setSendError(null);
     setSending(true);
     textareaRef.current?.focus();
+
+    // Clear typing state immediately on send
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      channelRef.current?.send({ type: "broadcast", event: "typing", payload: { is_typing: false } });
+    }
 
     try {
       const result = await sendMessage(conversation.id, content);
@@ -443,6 +510,22 @@ export function MessageThread({ conversation, onRead, onMessageSent }: Props) {
         <div ref={bottomRef} />
       </div>
 
+      {/* ── Typing indicator ── */}
+      <div
+        className={`px-5 shrink-0 overflow-hidden transition-all duration-200 ${
+          otherIsTyping ? "h-6 pb-1" : "h-0"
+        }`}
+      >
+        <p className="text-[13px] text-[rgba(0,0,0,0.447)] flex items-center gap-1.5 leading-none">
+          <span>
+            {other_participant.name
+              ? `${other_participant.name} está escribiendo`
+              : "Escribiendo"}
+          </span>
+          <TypingDots />
+        </p>
+      </div>
+
       {/* ── Input ── */}
       <div className="px-4 py-3 border-t border-[rgba(0,0,0,0.08)] bg-white shrink-0">
         {sendError && (
@@ -457,7 +540,7 @@ export function MessageThread({ conversation, onRead, onMessageSent }: Props) {
               ref={textareaRef}
               rows={1}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={handleTextareaChange}
               onKeyDown={handleKeyDown}
               placeholder="Aa"
               className="w-full bg-transparent text-[15px] text-[#202020] placeholder-[rgba(0,0,0,0.35)] outline-none resize-none leading-[22px] max-h-[120px] overflow-y-auto"
