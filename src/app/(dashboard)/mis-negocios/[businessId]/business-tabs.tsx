@@ -12,6 +12,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import type { Product, DashboardKPIs } from "@/lib/supabase/queries";
 import { ACCESS_TYPE_LABELS, BILLING_PERIOD_SUFFIX } from "@/lib/constants/products";
+import { BusinessChat } from "./business-chat";
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
@@ -535,7 +536,7 @@ export function BusinessTabs({
           <AppsContent products={products} base={base} />
         )}
         {activeTab === "chats" && (
-          <SidebarHint label="Chats" base={base} path="chats" />
+          <BusinessChat businessId={businessId} canWrite={true} />
         )}
         {activeTab === "productos" && (
           <ProductsContent products={products} base={base} />
