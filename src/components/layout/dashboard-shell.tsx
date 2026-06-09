@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { TopBar } from "@/components/layout/top-bar";
 import { AIAssistantPanel } from "@/components/layout/ai-assistant-panel";
@@ -11,6 +12,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [aiOpen, setAiOpen] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [dmUnreadCount, setDmUnreadCount] = useState(0);
+
+  const pathname = usePathname();
+
+  // Hide the global sidebar when inside a specific business dashboard.
+  // Matches /mis-negocios/<businessId> and any sub-routes, but NOT /mis-negocios itself.
+  const parts = pathname.split("/").filter(Boolean);
+  const isBusinessDashboard = parts[0] === "mis-negocios" && parts.length >= 2;
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 overflow-hidden">
@@ -23,14 +31,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         dmUnreadCount={dmUnreadCount}
       />
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar wrapper — animates width */}
-        <div
-          className={`transition-all duration-300 ease-in-out overflow-hidden shrink-0 ${
-            sidebarOpen ? "w-[280px]" : "w-0"
-          }`}
-        >
-          <AppSidebar />
-        </div>
+        {/* Global sidebar — hidden when inside a business dashboard */}
+        {!isBusinessDashboard && (
+          <div
+            className={`transition-all duration-300 ease-in-out overflow-hidden shrink-0 ${
+              sidebarOpen ? "w-[280px]" : "w-0"
+            }`}
+          >
+            <AppSidebar />
+          </div>
+        )}
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto min-w-0">
