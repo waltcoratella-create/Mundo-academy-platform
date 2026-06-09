@@ -88,7 +88,14 @@ export default async function BusinessHomePage({
 
         {/* Business info */}
         <div className="mb-5">
-          <h2 className="text-xl font-bold text-gray-900 leading-tight">{business.name}</h2>
+          <div className="flex items-center gap-2">
+            <h2
+              className="text-[24px] font-bold leading-[30px] tracking-[-0.705px] text-[#202020] text-left m-0 p-0 truncate"
+              style={{ fontFamily: 'Inter, "Inter Fallback", -apple-system, system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif' }}
+            >
+              {business.name}
+            </h2>
+          </div>
           <p className="text-sm text-gray-500 mt-1.5 leading-relaxed max-w-lg">
             Comparte tu conocimiento, crece tu comunidad y monetiza tu negocio desde Mundo Academy.
           </p>
