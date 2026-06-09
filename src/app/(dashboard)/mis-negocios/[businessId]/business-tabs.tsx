@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Product, DashboardKPIs } from "@/lib/supabase/queries";
+import { ACCESS_TYPE_LABELS, BILLING_PERIOD_SUFFIX } from "@/lib/constants/products";
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
@@ -331,6 +332,136 @@ function AppsContent({ products, base }: AppsProps) {
   );
 }
 
+// ─── Products tab ─────────────────────────────────────────────────────────────
+
+function formatPrice(product: Product): { main: string; suffix: string } {
+  if (product.access_type === "free" || product.price === 0) {
+    return { main: "Gratis", suffix: "" };
+  }
+  const symbol = product.currency === "USD" ? "$" : `${product.currency} `;
+  const amount = product.price % 1 === 0
+    ? product.price.toFixed(0)
+    : product.price.toFixed(2);
+  const suffix = BILLING_PERIOD_SUFFIX[product.billing_period] ?? "";
+  return { main: `${symbol}${amount}`, suffix };
+}
+
+function ProductCard({ product, base }: { product: Product; base: string }) {
+  const theme   = TYPE_THEME[product.type] ?? DEFAULT_THEME;
+  const { Icon } = theme;
+  const typeLabel   = TYPE_LABEL[product.type] ?? "Producto";
+  const accessLabel = ACCESS_TYPE_LABELS[product.access_type] ?? product.access_type;
+  const { main: priceMain, suffix: priceSuffix } = formatPrice(product);
+  const isFree = product.access_type === "free" || product.price === 0;
+
+  return (
+    <Link
+      href={`${base}/productos/${product.id}`}
+      className="group block bg-white border border-black/[0.07] rounded-2xl overflow-hidden hover:border-black/[0.12] hover:shadow-[0_4px_24px_rgba(0,0,0,0.07)] transition-all duration-150"
+    >
+      {/* Cover area */}
+      <div className={`relative h-[140px] ${theme.bg} flex items-center justify-center overflow-hidden`}>
+        {/* Soft radial highlight */}
+        <div
+          className="absolute inset-0 opacity-40"
+          style={{ background: "radial-gradient(circle at 65% 25%, white, transparent 65%)" }}
+        />
+        <Icon className={`w-12 h-12 ${theme.text} opacity-30`} />
+
+        {/* Access type pill */}
+        <span className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-white/85 backdrop-blur-sm text-[11px] font-semibold text-[#202020] shadow-sm">
+          {accessLabel}
+        </span>
+      </div>
+
+      {/* Info */}
+      <div className="p-4">
+        <p className="text-[16px] font-bold leading-[24px] text-[#202020] truncate group-hover:text-black transition-colors">
+          {product.name}
+        </p>
+
+        {product.description ? (
+          <p className="mt-1 text-[14px] font-normal leading-[20px] text-[rgba(0,0,0,0.61)] line-clamp-2">
+            {product.description}
+          </p>
+        ) : (
+          <p className="mt-1 text-[14px] font-normal leading-[20px] text-[rgba(0,0,0,0.30)] italic">
+            Sin descripción
+          </p>
+        )}
+
+        {/* Bottom row: meta + price */}
+        <div className="flex items-center justify-between mt-3 gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[12px] text-[rgba(0,0,0,0.45)] truncate">{typeLabel}</span>
+            <span className="text-[rgba(0,0,0,0.20)] text-[12px] shrink-0">·</span>
+            <StatusBadge status={product.status} />
+          </div>
+
+          <p className={`text-[16px] font-bold shrink-0 ${isFree ? "text-emerald-600" : "text-[#202020]"}`}>
+            {priceMain}
+            {priceSuffix && (
+              <span className="text-[12px] font-normal text-[rgba(0,0,0,0.45)]">{priceSuffix}</span>
+            )}
+          </p>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function ProductsContent({ products, base }: { products: Product[]; base: string }) {
+  return (
+    <div>
+      {/* Section header */}
+      <div className="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <h3 className="text-[18px] font-bold leading-[26px] text-[#202020]">Products</h3>
+          <p className="mt-1 text-[14px] font-normal leading-[20px] text-[rgba(0,0,0,0.61)] max-w-md">
+            Explora los productos y ofertas disponibles de este negocio.
+          </p>
+        </div>
+        <Link
+          href={`${base}/productos/nuevo`}
+          className="flex items-center gap-1.5 h-9 px-4 rounded-xl bg-[#202020] text-white text-[13px] font-semibold hover:bg-[#333] transition-colors shrink-0"
+        >
+          <Plus className="w-[15px] h-[15px]" />
+          Crear producto
+        </Link>
+      </div>
+
+      {products.length === 0 ? (
+        <div className="flex flex-col items-center gap-4 py-16 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-gray-50 border border-black/[0.06] flex items-center justify-center">
+            <ShoppingBag className="w-6 h-6 text-gray-300" />
+          </div>
+          <div>
+            <p className="text-[15px] font-semibold text-[#202020]">No hay productos todavía</p>
+            <p className="mt-1 text-[14px] text-[rgba(0,0,0,0.61)] max-w-xs">
+              Crea tu primer producto para comenzar a vender.
+            </p>
+          </div>
+          <Link
+            href={`${base}/productos/nuevo`}
+            className="inline-flex items-center gap-1.5 h-9 px-5 rounded-xl bg-[#202020] text-white text-[13px] font-semibold hover:bg-[#333] transition-colors"
+          >
+            <Plus className="w-[15px] h-[15px]" />
+            Crear producto
+          </Link>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {products.map((product) => (
+            <ProductCard key={product.id} product={product} base={base} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Sidebar hint ─────────────────────────────────────────────────────────────
+
 function SidebarHint({ label, base, path }: { label: string; base: string; path: string }) {
   return (
     <div className="flex flex-col items-center gap-3 py-16 text-center">
@@ -407,7 +538,7 @@ export function BusinessTabs({
           <SidebarHint label="Chats" base={base} path="chats" />
         )}
         {activeTab === "productos" && (
-          <SidebarHint label="Productos" base={base} path="productos" />
+          <ProductsContent products={products} base={base} />
         )}
         {activeTab === "acerca" && (
           <SidebarHint label="Acerca" base={base} path="configuraciones" />
