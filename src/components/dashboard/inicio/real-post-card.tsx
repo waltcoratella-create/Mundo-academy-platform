@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Heart,
   MessageCircle,
@@ -19,6 +20,7 @@ import {
   createCommentReply,
   getPostComments,
 } from "@/app/(dashboard)/inicio/actions";
+import { getOrCreateConversation } from "@/app/(dashboard)/messages/actions";
 import type {
   FeedPost,
   FeedComment,
@@ -435,6 +437,42 @@ function CommentSection({
   );
 }
 
+// ── QuickDMButton ─────────────────────────────────────────────────────────────
+
+function QuickDMButton({ targetUserId }: { targetUserId: string }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  async function handleClick(e: React.MouseEvent) {
+    e.preventDefault();
+    if (loading) return;
+    setLoading(true);
+    try {
+      const result = await getOrCreateConversation(targetUserId);
+      if (result.conversationId) {
+        router.push(`/messages?conv=${result.conversationId}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      title="Enviar mensaje"
+      className="p-1.5 rounded-full text-black/[0.447] hover:bg-black/[0.063] hover:text-[#202020] transition-colors shrink-0 disabled:opacity-50"
+    >
+      {loading ? (
+        <span className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin block" />
+      ) : (
+        <MessageCircle className="w-4 h-4" />
+      )}
+    </button>
+  );
+}
+
 // ── RealPostCard ──────────────────────────────────────────────────────────────
 
 interface RealPostCardProps {
@@ -500,9 +538,14 @@ export function RealPostCard({ post, currentUser }: RealPostCardProps) {
             </p>
           </div>
         </div>
-        <button className="p-1.5 rounded-full text-black/[0.447] hover:bg-black/[0.063] hover:text-[#202020] transition-colors shrink-0">
-          <MoreHorizontal className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-0.5 shrink-0">
+          {currentUser && post.user_id !== currentUser.id && (
+            <QuickDMButton targetUserId={post.user_id} />
+          )}
+          <button className="p-1.5 rounded-full text-black/[0.447] hover:bg-black/[0.063] hover:text-[#202020] transition-colors">
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Body */}
