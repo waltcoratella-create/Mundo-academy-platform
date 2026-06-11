@@ -308,6 +308,7 @@ export interface Product {
   currency: string;
   billing_period: string;
   created_at: string;
+  cover_url: string | null; // requires: ALTER TABLE products ADD COLUMN IF NOT EXISTS cover_url text;
 }
 
 function withProductDefaults(row: Record<string, unknown>): Product {
@@ -323,8 +324,18 @@ function withProductDefaults(row: Record<string, unknown>): Product {
     currency:       (row.currency as string) ?? "USD",
     billing_period: normalizeBillingPeriod(row.billing_period as string | undefined),
     created_at:     row.created_at as string,
+    cover_url:      (row.cover_url as string | null) ?? null,
   };
 }
+
+// ── Select strings ────────────────────────────────────────────────────────────
+// cover_url is included; if the column doesn't exist yet (42703) we fall back
+// to the base select so the app never breaks before the migration is run.
+
+const PRODUCT_SELECT_WITH_COVER =
+  "id, name, description, price, type, status, access_type, is_public, currency, billing_period, created_at, cover_url";
+const PRODUCT_SELECT_BASE =
+  "id, name, description, price, type, status, access_type, is_public, currency, billing_period, created_at";
 
 export async function getProductById(
   productId: string,
@@ -332,15 +343,32 @@ export async function getProductById(
 ): Promise<Product | null> {
   try {
     const supabase = createAdminClient();
-    const { data, error } = await supabase
+
+    const primary = await supabase
       .from("products")
-      .select("id, name, description, price, type, status, access_type, is_public, currency, billing_period, created_at")
+      .select(PRODUCT_SELECT_WITH_COVER)
       .eq("id", productId)
       .eq("business_id", businessId)
       .maybeSingle();
 
-    if (error || !data) return null;
-    return withProductDefaults(data as Record<string, unknown>);
+    let row: Record<string, unknown> | null;
+
+    if (primary.error?.code === "42703") {
+      // cover_url column not yet migrated — retry without it
+      const fallback = await supabase
+        .from("products")
+        .select(PRODUCT_SELECT_BASE)
+        .eq("id", productId)
+        .eq("business_id", businessId)
+        .maybeSingle();
+      if (fallback.error || !fallback.data) return null;
+      row = fallback.data as Record<string, unknown>;
+    } else {
+      if (primary.error || !primary.data) return null;
+      row = primary.data as Record<string, unknown>;
+    }
+
+    return withProductDefaults(row);
   } catch {
     return null;
   }
@@ -349,14 +377,30 @@ export async function getProductById(
 export async function getBusinessProducts(businessId: string): Promise<Product[]> {
   try {
     const supabase = createAdminClient();
-    const { data, error } = await supabase
+
+    const primary = await supabase
       .from("products")
-      .select("id, name, description, price, type, status, access_type, is_public, currency, billing_period, created_at")
+      .select(PRODUCT_SELECT_WITH_COVER)
       .eq("business_id", businessId)
       .order("created_at", { ascending: false });
 
-    if (error || !data) return [];
-    return (data as Record<string, unknown>[]).map(withProductDefaults);
+    let rows: Record<string, unknown>[];
+
+    if (primary.error?.code === "42703") {
+      // cover_url column not yet migrated — retry without it
+      const fallback = await supabase
+        .from("products")
+        .select(PRODUCT_SELECT_BASE)
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: false });
+      if (fallback.error || !fallback.data) return [];
+      rows = fallback.data as Record<string, unknown>[];
+    } else {
+      if (primary.error || !primary.data) return [];
+      rows = primary.data as Record<string, unknown>[];
+    }
+
+    return rows.map(withProductDefaults);
   } catch {
     return [];
   }

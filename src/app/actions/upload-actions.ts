@@ -241,3 +241,75 @@ export async function uploadBusinessCover(
   revalidatePath(`/mis-negocios/${businessId}/configuraciones`);
   return { url: result.url };
 }
+
+// ─── Product: upload cover ────────────────────────────────────────────────────
+
+export async function uploadProductCover(
+  productId: string,
+  businessId: string,
+  formData: FormData
+): Promise<{ url?: string; error?: string }> {
+  const { userId: clerkId } = await auth();
+  if (!clerkId) return { error: "No autenticado" };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Archivo requerido" };
+  }
+
+  const supabase = createAdminClient();
+
+  // Verify business ownership
+  const { data: bizRow } = await supabase
+    .from("businesses")
+    .select("owner_id")
+    .eq("id", businessId)
+    .maybeSingle();
+
+  if (!bizRow) return { error: "Negocio no encontrado" };
+
+  const { data: userRow } = await supabase
+    .from("users")
+    .select("id")
+    .eq("clerk_id", clerkId)
+    .maybeSingle();
+
+  if (!userRow?.id || bizRow.owner_id !== userRow.id) {
+    return { error: "Sin permiso para editar este producto" };
+  }
+
+  // Verify product belongs to this business
+  const { data: productRow } = await supabase
+    .from("products")
+    .select("id")
+    .eq("id", productId)
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  if (!productRow) return { error: "Producto no encontrado" };
+
+  const ext = ALLOWED_TYPES[file.type] ?? "jpg";
+  const path = `products/${productId}/cover-${Date.now()}.${ext}`;
+
+  const result = await uploadFile(supabase, path, file);
+  if (result.error) return result;
+
+  const { error: dbError } = await supabase
+    .from("products")
+    .update({ cover_url: result.url })
+    .eq("id", productId);
+
+  if (dbError) {
+    if (dbError.code === "42703") {
+      return {
+        error:
+          "La columna cover_url no existe todavía. Ejecuta el SQL de migración en Supabase → SQL Editor.",
+      };
+    }
+    return { error: "La imagen se subió pero no se pudo guardar." };
+  }
+
+  revalidatePath(`/mis-negocios/${businessId}/productos/${productId}`);
+  revalidatePath(`/mis-negocios/${businessId}`);
+  return { url: result.url };
+}

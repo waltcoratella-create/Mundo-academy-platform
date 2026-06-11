@@ -98,11 +98,16 @@ function AppCard({ product, base }: { product: Product; base: string }) {
       className="group block bg-white border border-black/[0.07] rounded-2xl p-4 hover:bg-gray-50/70 hover:border-black/[0.10] transition-all duration-150"
     >
       <div className="flex items-start gap-3">
-        {/* Icon */}
+        {/* Icon / cover thumbnail */}
         <div
-          className={`w-12 h-12 rounded-xl ${theme.bg} ${theme.text} flex items-center justify-center shrink-0`}
+          className={`w-12 h-12 rounded-xl ${theme.bg} ${theme.text} flex items-center justify-center shrink-0 overflow-hidden`}
         >
-          <Icon className="w-5 h-5" />
+          {product.cover_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={product.cover_url} alt={product.name} className="w-full h-full object-cover" />
+          ) : (
+            <Icon className="w-5 h-5" />
+          )}
         </div>
 
         {/* Content */}
@@ -155,12 +160,17 @@ function HomeProductCard({ product, base }: { product: Product; base: string }) 
     >
       {/* ── Thumbnail — 150px ──────────────────────────────────────── */}
       <div className="relative overflow-hidden" style={{ height: "150px", width: "100%" }}>
-        {/* Type-themed fallback */}
-        <div className={`w-full h-full ${theme.bg} flex items-center justify-center`}>
-          <Icon className={`w-14 h-14 ${theme.text} opacity-20`} />
-        </div>
+        {/* Real cover or type-themed fallback */}
+        {product.cover_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={product.cover_url} alt={product.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className={`w-full h-full ${theme.bg} flex items-center justify-center`}>
+            <Icon className={`w-14 h-14 ${theme.text} opacity-20`} />
+          </div>
+        )}
 
-        {/* Dark gradient overlay */}
+        {/* Dark gradient overlay — always present so title is legible */}
         <div
           className="absolute inset-0"
           style={{ background: "linear-gradient(to top, rgba(0,0,0,.70), transparent)" }}
@@ -519,14 +529,25 @@ function ProductCard({ product, base }: { product: Product; base: string }) {
     >
       {/* Cover area */}
       <div className={`relative h-[140px] ${theme.bg} flex items-center justify-center overflow-hidden`}>
-        {/* Soft radial highlight */}
-        <div
-          className="absolute inset-0 opacity-40"
-          style={{ background: "radial-gradient(circle at 65% 25%, white, transparent 65%)" }}
-        />
-        <Icon className={`w-12 h-12 ${theme.text} opacity-30`} />
+        {product.cover_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={product.cover_url}
+            alt={product.name}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <>
+            {/* Soft radial highlight */}
+            <div
+              className="absolute inset-0 opacity-40"
+              style={{ background: "radial-gradient(circle at 65% 25%, white, transparent 65%)" }}
+            />
+            <Icon className={`w-12 h-12 ${theme.text} opacity-30`} />
+          </>
+        )}
 
-        {/* Access type pill */}
+        {/* Access type pill — always visible */}
         <span className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-white/85 backdrop-blur-sm text-[11px] font-semibold text-[#202020] shadow-sm">
           {accessLabel}
         </span>

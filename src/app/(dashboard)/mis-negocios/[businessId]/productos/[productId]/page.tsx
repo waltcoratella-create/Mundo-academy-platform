@@ -8,6 +8,7 @@ import {
 import { getBusinessById, getProductById } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/utils";
 import { DeleteProductButton } from "./delete-button";
+import { ProductCoverUpload } from "./product-cover-upload";
 
 const TYPE_LABELS: Record<string, string> = {
   curso:     "Curso",
@@ -90,14 +91,17 @@ export default async function ProductDetailPage({
       <div className="max-w-4xl mx-auto px-6 pt-6 pb-12">
         {/* Product header */}
         <div className="flex items-center gap-4 mb-6">
-          <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-md shrink-0`}>
-            <span className="text-2xl font-bold text-white select-none">
-              {product.name.charAt(0).toUpperCase()}
-            </span>
-          </div>
+          <ProductCoverUpload
+            productId={product.id}
+            businessId={params.businessId}
+            initialCoverUrl={product.cover_url}
+            gradient={gradient}
+            productInitial={product.name.charAt(0).toUpperCase()}
+          />
           <div>
             <h1 className="text-xl font-bold text-gray-900 leading-tight">{product.name}</h1>
             <p className="text-sm text-gray-500 mt-0.5">{typeLabel} · {business.name}</p>
+            <p className="text-xs text-gray-400 mt-0.5">Pasa el cursor sobre la imagen para cambiarla</p>
           </div>
         </div>
 
