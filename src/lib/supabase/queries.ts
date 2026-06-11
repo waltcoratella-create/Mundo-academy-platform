@@ -998,6 +998,31 @@ export async function getPublicProducts(): Promise<PublicProduct[]> {
   try {
     const supabase = createAdminClient();
 
+    // ── DEBUG: log env check ──────────────────────────────────────────────
+    console.log("[getPublicProducts] env check:", {
+      SUPABASE_URL:      process.env.NEXT_PUBLIC_SUPABASE_URL ? "SET" : "MISSING",
+      SERVICE_ROLE_KEY:  process.env.SUPABASE_SERVICE_ROLE_KEY ? "SET" : "MISSING",
+    });
+
+    // ── DEBUG: full table dump, no filters ───────────────────────────────
+    const { data: allData, error: allError } = await supabase
+      .from("products")
+      .select("id, name, status, is_public, access_type, business_id")
+      .order("created_at", { ascending: false });
+
+    console.log("[getPublicProducts] ALL products (no filter):", {
+      count: allData?.length ?? 0,
+      error: allError?.message ?? null,
+      rows: allData?.map((r) => ({
+        id: r.id,
+        name: r.name,
+        status: r.status,
+        is_public: r.is_public,
+        access_type: r.access_type,
+        business_id: r.business_id,
+      })),
+    });
+
     // Filter: status published + access_type is NOT 'manual' (or is null — new products default to null).
     // NOTE: .neq("access_type", "manual") excludes NULL rows (SQL NULL semantics).
     // Use .or() to explicitly include NULLs so newly created products are visible.
@@ -1011,20 +1036,36 @@ export async function getPublicProducts(): Promise<PublicProduct[]> {
 
     // Try with cover_url first; gracefully fall back if column doesn't exist yet.
     const primary = await buildQuery(PUBLIC_PRODUCT_SELECT_WITH_COVER);
+
+    console.log("[getPublicProducts] primary query result:", {
+      count: primary.data?.length ?? 0,
+      error: primary.error ? { message: primary.error.message, code: primary.error.code } : null,
+    });
+
     let rows: Record<string, unknown>[];
 
     if (primary.error?.code === "42703") {
       // cover_url column missing — retry without it
+      console.log("[getPublicProducts] cover_url column missing (42703), retrying without it");
       const fallback = await buildQuery(PUBLIC_PRODUCT_SELECT_BASE);
+      console.log("[getPublicProducts] fallback query result:", {
+        count: fallback.data?.length ?? 0,
+        error: fallback.error ? { message: fallback.error.message, code: fallback.error.code } : null,
+      });
       if (fallback.error || !fallback.data) return [];
       rows = fallback.data as unknown as Record<string, unknown>[];
     } else {
-      if (primary.error || !primary.data) return [];
+      if (primary.error || !primary.data) {
+        console.log("[getPublicProducts] returning [] — primary error or no data");
+        return [];
+      }
       rows = primary.data as unknown as Record<string, unknown>[];
     }
 
+    console.log("[getPublicProducts] returning", rows.length, "products");
     return rows.map(mapPublicProduct);
-  } catch {
+  } catch (err) {
+    console.error("[getPublicProducts] CAUGHT EXCEPTION:", err);
     return [];
   }
 }
