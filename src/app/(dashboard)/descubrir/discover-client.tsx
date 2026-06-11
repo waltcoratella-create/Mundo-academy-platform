@@ -120,16 +120,24 @@ function ProductCard({ product }: { product: PublicProduct }) {
     >
       {/* Banner */}
       <div className={`relative aspect-[2/1] overflow-hidden bg-gradient-to-br ${gradCls} shrink-0`}>
-        <div className="absolute inset-0 opacity-[0.07]"
-          style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px)", backgroundSize: "24px 24px" }}
-        />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_30%,rgba(255,255,255,0.12),transparent_70%)]" />
+        {product.cover_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={product.cover_url} alt={product.name} className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <>
+            <div className="absolute inset-0 opacity-[0.07]"
+              style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px)", backgroundSize: "24px 24px" }}
+            />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_30%,rgba(255,255,255,0.12),transparent_70%)]" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 shadow-2xl flex items-center justify-center ring-1 ring-white/20">
+                <span className="text-3xl font-black text-white drop-shadow-lg select-none">{initial}</span>
+              </div>
+            </div>
+          </>
+        )}
+        {/* Scrim — always present so pills are readable over images too */}
         <div className="absolute bottom-0 inset-x-0 h-1/2 bg-gradient-to-t from-black/25 to-transparent" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 shadow-2xl flex items-center justify-center ring-1 ring-white/20">
-            <span className="text-3xl font-black text-white drop-shadow-lg select-none">{initial}</span>
-          </div>
-        </div>
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-10">
           {showNew
             ? <span className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400 text-black shadow-sm">

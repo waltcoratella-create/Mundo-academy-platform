@@ -311,5 +311,6 @@ export async function uploadProductCover(
 
   revalidatePath(`/mis-negocios/${businessId}/productos/${productId}`);
   revalidatePath(`/mis-negocios/${businessId}`);
+  revalidatePath("/descubrir");
   return { url: result.url };
 }

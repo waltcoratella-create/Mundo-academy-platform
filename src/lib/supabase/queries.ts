@@ -963,44 +963,67 @@ export interface PublicProduct {
   business_id: string;
   business_name: string;
   created_at: string;
+  cover_url: string | null;
 }
 
 export interface PublicProductFull extends PublicProduct {
   content_count: number;
 }
 
+const PUBLIC_PRODUCT_SELECT_WITH_COVER =
+  "id, slug, name, description, price, type, access_type, currency, billing_period, business_id, created_at, cover_url, businesses(id, name)";
+const PUBLIC_PRODUCT_SELECT_BASE =
+  "id, slug, name, description, price, type, access_type, currency, billing_period, business_id, created_at, businesses(id, name)";
+
+function mapPublicProduct(row: Record<string, unknown>): PublicProduct {
+  const biz = (row.businesses ?? {}) as Record<string, unknown>;
+  return {
+    id:             row.id as string,
+    slug:           (row.slug as string | null) ?? null,
+    name:           row.name as string,
+    description:    (row.description as string | null) ?? null,
+    price:          Number(row.price ?? 0),
+    type:           (row.type as string) ?? "curso",
+    access_type:    normalizeAccessType(row.access_type as string | undefined),
+    currency:       (row.currency as string) ?? "USD",
+    billing_period: normalizeBillingPeriod(row.billing_period as string | undefined),
+    business_id:    (row.business_id as string) ?? "",
+    business_name:  (biz.name as string) ?? "Mundo Academy",
+    created_at:     row.created_at as string,
+    cover_url:      (row.cover_url as string | null) ?? null,
+  };
+}
+
 export async function getPublicProducts(): Promise<PublicProduct[]> {
   try {
     const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("products")
-      .select(
-        "id, slug, name, description, price, type, access_type, currency, billing_period, business_id, created_at, businesses(id, name)"
-      )
-      .eq("status", "published")
-      .eq("is_public", true)
-      .neq("access_type", "manual")
-      .order("created_at", { ascending: false });
 
-    if (error || !data) return [];
+    // Filter: status published + access_type is NOT 'manual' (or is null — new products default to null).
+    // NOTE: .neq("access_type", "manual") excludes NULL rows (SQL NULL semantics).
+    // Use .or() to explicitly include NULLs so newly created products are visible.
+    const buildQuery = (select: string) =>
+      supabase
+        .from("products")
+        .select(select)
+        .eq("status", "published")
+        .or("access_type.neq.manual,access_type.is.null")
+        .order("created_at", { ascending: false });
 
-    return (data as Record<string, unknown>[]).map((row) => {
-      const biz = (row.businesses ?? {}) as Record<string, unknown>;
-      return {
-        id:            row.id as string,
-        slug:          (row.slug as string | null) ?? null,
-        name:          row.name as string,
-        description:   (row.description as string | null) ?? null,
-        price:         Number(row.price ?? 0),
-        type:          (row.type as string) ?? "curso",
-        access_type:   normalizeAccessType(row.access_type as string | undefined),
-        currency:      (row.currency as string) ?? "USD",
-        billing_period: normalizeBillingPeriod(row.billing_period as string | undefined),
-        business_id:   (row.business_id as string) ?? "",
-        business_name: (biz.name as string) ?? "Mundo Academy",
-        created_at:    row.created_at as string,
-      };
-    });
+    // Try with cover_url first; gracefully fall back if column doesn't exist yet.
+    const primary = await buildQuery(PUBLIC_PRODUCT_SELECT_WITH_COVER);
+    let rows: Record<string, unknown>[];
+
+    if (primary.error?.code === "42703") {
+      // cover_url column missing — retry without it
+      const fallback = await buildQuery(PUBLIC_PRODUCT_SELECT_BASE);
+      if (fallback.error || !fallback.data) return [];
+      rows = fallback.data as unknown as Record<string, unknown>[];
+    } else {
+      if (primary.error || !primary.data) return [];
+      rows = primary.data as unknown as Record<string, unknown>[];
+    }
+
+    return rows.map(mapPublicProduct);
   } catch {
     return [];
   }
@@ -1013,14 +1036,14 @@ export async function getPublicProductFull(
     const supabase = createAdminClient();
 
     const baseSelect =
-      "id, slug, name, description, price, type, access_type, currency, billing_period, business_id, created_at, businesses(id, name)";
+      "id, slug, name, description, price, type, access_type, currency, billing_period, business_id, created_at, cover_url, businesses(id, name)";
 
     const buildQuery = () =>
       supabase
         .from("products")
         .select(baseSelect)
         .eq("status", "published")
-        .eq("is_public", true);
+        .or("access_type.neq.manual,access_type.is.null");
 
     // Try slug first, then fall back to UUID
     const { data: bySlug } = await buildQuery().eq("slug", slugOrId).maybeSingle();
@@ -1051,6 +1074,7 @@ export async function getPublicProductFull(
       business_id:   (row.business_id as string) ?? "",
       business_name: (biz.name as string) ?? "Mundo Academy",
       created_at:    row.created_at as string,
+      cover_url:     (row.cover_url as string | null) ?? null,
       content_count: count ?? 0,
     };
   } catch {
