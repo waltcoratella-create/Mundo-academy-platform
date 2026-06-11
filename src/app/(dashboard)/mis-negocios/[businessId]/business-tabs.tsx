@@ -7,7 +7,7 @@ import {
   Plus, Package, BookOpen, FileText, Calendar, Layers,
   Heart, MessageSquare, Eye, Share2, Pin, Radio,
   Image as ImageIcon, Smile, BarChart2, DollarSign, Users,
-  ArrowRight,
+  ArrowRight, Pencil,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Product, DashboardKPIs } from "@/lib/supabase/queries";
@@ -135,6 +135,86 @@ function AppCard({ product, base }: { product: Product; base: string }) {
   );
 }
 
+// ─── Home product card (Home tab only) ───────────────────────────────────────
+
+function HomeProductCard({ product, base }: { product: Product; base: string }) {
+  const theme = TYPE_THEME[product.type] ?? DEFAULT_THEME;
+  const { Icon } = theme;
+  const { main: priceMain, suffix: priceSuffix } = formatPrice(product);
+
+  return (
+    <Link
+      href={`${base}/productos/${product.id}`}
+      className="shrink-0 flex flex-col bg-white rounded-[12px] overflow-hidden group"
+      style={{
+        width: "266px",
+        minWidth: "220px",
+        height: "219px",
+        boxShadow: "0px 1px 2px rgba(0,0,0,0.05)",
+      }}
+    >
+      {/* ── Thumbnail — 150px ──────────────────────────────────────── */}
+      <div className="relative overflow-hidden" style={{ height: "150px", width: "100%" }}>
+        {/* Type-themed fallback */}
+        <div className={`w-full h-full ${theme.bg} flex items-center justify-center`}>
+          <Icon className={`w-14 h-14 ${theme.text} opacity-20`} />
+        </div>
+
+        {/* Dark gradient overlay */}
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(to top, rgba(0,0,0,.70), transparent)" }}
+        />
+
+        {/* Title inside overlay */}
+        <div className="absolute bottom-0 left-0 right-0" style={{ padding: "24px 12px 10px 12px" }}>
+          <p
+            className="text-white line-clamp-2"
+            style={{ fontSize: "14px", fontWeight: 500, lineHeight: "20px" }}
+          >
+            {product.name}
+          </p>
+        </div>
+      </div>
+
+      {/* ── Price — 32px ───────────────────────────────────────────── */}
+      <div
+        className="flex items-center"
+        style={{ padding: "8px 12px", height: "32px" }}
+      >
+        <p style={{ fontSize: "12px", fontWeight: 500, lineHeight: "16px", letterSpacing: "0.0075px", color: "#345BC8" }}>
+          {priceMain}{priceSuffix}
+        </p>
+      </div>
+
+      {/* ── Action bar — 37px ──────────────────────────────────────── */}
+      <div
+        className="flex items-center justify-between"
+        style={{ padding: "6px 12px", height: "37px", borderTop: "1px solid rgba(0,0,0,.12)" }}
+      >
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={(e) => e.preventDefault()}
+            className="w-6 h-6 rounded-[6px] flex items-center justify-center"
+            style={{ background: "transparent", color: "rgba(0,49,186,.8)" }}
+            title="Ver"
+          >
+            <Eye className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={(e) => e.preventDefault()}
+            className="w-6 h-6 rounded-[6px] flex items-center justify-center"
+            style={{ background: "transparent", color: "rgba(0,49,186,.8)" }}
+            title="Editar"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 // ─── Tab views ────────────────────────────────────────────────────────────────
 
 interface HomeProps {
@@ -142,9 +222,10 @@ interface HomeProps {
   initial: string;
   businessName: string;
   base: string;
+  products: Product[];
 }
 
-function HomeContent({ kpis, initial, businessName, base }: HomeProps) {
+function HomeContent({ kpis, initial, businessName, base, products }: HomeProps) {
   return (
     <div className="space-y-5">
       {/* Products section */}
@@ -164,7 +245,7 @@ function HomeContent({ kpis, initial, businessName, base }: HomeProps) {
           </div>
         </div>
 
-        {kpis.productCount === 0 ? (
+        {products.length === 0 ? (
           <div className="bg-white rounded-xl border border-dashed border-gray-200 py-10 flex flex-col items-center gap-2.5 text-center">
             <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center">
               <Package className="w-5 h-5 text-gray-300" />
@@ -183,20 +264,13 @@ function HomeContent({ kpis, initial, businessName, base }: HomeProps) {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer">
-              <div className="h-24 bg-gradient-to-br from-brand-500 to-brand-700 relative">
-                <div className="absolute bottom-2 left-2">
-                  <span className="bg-white/20 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full backdrop-blur-sm">
-                    Acceso completo
-                  </span>
-                </div>
-              </div>
-              <div className="p-3">
-                <p className="text-xs font-semibold text-gray-900">Membresía {businessName}</p>
-                <p className="text-xs text-gray-400 mt-0.5">Gratis · Acceso inmediato</p>
-              </div>
-            </div>
+          <div
+            className="flex flex-row overflow-x-auto scrollbar-hide pb-1"
+            style={{ gap: "12px" }}
+          >
+            {products.map((product) => (
+              <HomeProductCard key={product.id} product={product} base={base} />
+            ))}
           </div>
         )}
       </div>
@@ -531,6 +605,7 @@ export function BusinessTabs({
             initial={initial}
             businessName={businessName}
             base={base}
+            products={products}
           />
         )}
         {activeTab === "apps" && (
