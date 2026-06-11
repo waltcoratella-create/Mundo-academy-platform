@@ -60,6 +60,16 @@ const POST_ICONS = [
   { Icon: DollarSign,title: "Monetizar" },
 ];
 
+// ─── Product cover helper ─────────────────────────────────────────────────────
+/**
+ * Single source of truth for which URL to render as a product's cover image.
+ * Priority: cover_url → null (caller renders the type-themed fallback).
+ * When thumbnail_url is added to the schema, add it here as a secondary fallback.
+ */
+function getProductCover(product: Product): string | null {
+  return product.cover_url ?? null;
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
@@ -90,7 +100,8 @@ function StatusBadge({ status }: { status: string }) {
 function AppCard({ product, base }: { product: Product; base: string }) {
   const theme = TYPE_THEME[product.type] ?? DEFAULT_THEME;
   const { Icon } = theme;
-  const typeLabel = TYPE_LABEL[product.type] ?? "Producto";
+  const typeLabel  = TYPE_LABEL[product.type] ?? "Producto";
+  const coverUrl   = getProductCover(product);
 
   return (
     <Link
@@ -102,9 +113,9 @@ function AppCard({ product, base }: { product: Product; base: string }) {
         <div
           className={`w-12 h-12 rounded-xl ${theme.bg} ${theme.text} flex items-center justify-center shrink-0 overflow-hidden`}
         >
-          {product.cover_url ? (
+          {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={product.cover_url} alt={product.name} className="w-full h-full object-cover" />
+            <img src={coverUrl} alt={product.name} className="w-full h-full object-cover" />
           ) : (
             <Icon className="w-5 h-5" />
           )}
@@ -143,9 +154,10 @@ function AppCard({ product, base }: { product: Product; base: string }) {
 // ─── Home product card (Home tab only) ───────────────────────────────────────
 
 function HomeProductCard({ product, base }: { product: Product; base: string }) {
-  const theme = TYPE_THEME[product.type] ?? DEFAULT_THEME;
+  const theme    = TYPE_THEME[product.type] ?? DEFAULT_THEME;
   const { Icon } = theme;
   const { main: priceMain, suffix: priceSuffix } = formatPrice(product);
+  const coverUrl = getProductCover(product);
 
   return (
     <Link
@@ -161,9 +173,9 @@ function HomeProductCard({ product, base }: { product: Product; base: string }) 
       {/* ── Thumbnail — 150px ──────────────────────────────────────── */}
       <div className="relative overflow-hidden" style={{ height: "150px", width: "100%" }}>
         {/* Real cover or type-themed fallback */}
-        {product.cover_url ? (
+        {coverUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={product.cover_url} alt={product.name} className="w-full h-full object-cover" />
+          <img src={coverUrl} alt={product.name} className="w-full h-full object-cover" />
         ) : (
           <div className={`w-full h-full ${theme.bg} flex items-center justify-center`}>
             <Icon className={`w-14 h-14 ${theme.text} opacity-20`} />
@@ -520,7 +532,8 @@ function ProductCard({ product, base }: { product: Product; base: string }) {
   const typeLabel   = TYPE_LABEL[product.type] ?? "Producto";
   const accessLabel = ACCESS_TYPE_LABELS[product.access_type] ?? product.access_type;
   const { main: priceMain, suffix: priceSuffix } = formatPrice(product);
-  const isFree = product.access_type === "free" || product.price === 0;
+  const isFree   = product.access_type === "free" || product.price === 0;
+  const coverUrl = getProductCover(product);
 
   return (
     <Link
@@ -529,10 +542,10 @@ function ProductCard({ product, base }: { product: Product; base: string }) {
     >
       {/* Cover area */}
       <div className={`relative h-[140px] ${theme.bg} flex items-center justify-center overflow-hidden`}>
-        {product.cover_url ? (
+        {coverUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={product.cover_url}
+            src={coverUrl}
             alt={product.name}
             className="absolute inset-0 w-full h-full object-cover"
           />

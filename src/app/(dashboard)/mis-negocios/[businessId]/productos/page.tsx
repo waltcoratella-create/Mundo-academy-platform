@@ -24,22 +24,42 @@ const TYPE_GRADIENTS: Record<string, string> = {
   servicio:  "from-slate-500 to-slate-700",
 };
 
+/**
+ * Returns the product's cover URL, or null to render the gradient fallback.
+ * Priority: cover_url → null (component renders gradient).
+ * Add thumbnail_url here as secondary fallback when that column is migrated.
+ */
+function getProductCover(product: Product): string | null {
+  return product.cover_url ?? null;
+}
+
 function ProductCard({ product, businessId }: { product: Product; businessId: string }) {
-  const typeLabel = TYPE_LABELS[product.type] ?? product.type;
-  const gradient = TYPE_GRADIENTS[product.type] ?? "from-gray-500 to-gray-700";
+  const typeLabel  = TYPE_LABELS[product.type] ?? product.type;
+  const gradient   = TYPE_GRADIENTS[product.type] ?? "from-gray-500 to-gray-700";
   const isPublished = product.status === "published";
+  const coverUrl   = getProductCover(product);
 
   return (
     <Link
       href={`/mis-negocios/${businessId}/productos/${product.id}`}
       className="group bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col hover:shadow-lg hover:border-gray-200 transition-all duration-200"
     >
-      {/* Gradient banner */}
-      <div className={`h-28 bg-gradient-to-br ${gradient} relative flex items-end px-4 pb-3`}>
-        <div className="absolute inset-0 opacity-10"
-          style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "20px 20px" }}
-        />
-        <span className="relative z-10 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/25 text-white backdrop-blur-sm">
+      {/* Banner / cover */}
+      <div className="h-28 relative overflow-hidden flex items-end px-4 pb-3">
+        {coverUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={coverUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <>
+            <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`} />
+            <div
+              className="absolute inset-0 opacity-10"
+              style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "20px 20px" }}
+            />
+          </>
+        )}
+        {/* Type pill — always visible over image or gradient */}
+        <span className="relative z-10 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-black/30 text-white backdrop-blur-sm">
           {typeLabel}
         </span>
       </div>
