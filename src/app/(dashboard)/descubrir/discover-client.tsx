@@ -388,6 +388,7 @@ interface EmpezandoBanner {
   subtitle: string;
   avatarGradient: string;
   initial: string;
+  logoUrl: string | null;
 }
 
 const EMPEZANDO_BANNERS: EmpezandoBanner[] = [
@@ -400,6 +401,7 @@ const EMPEZANDO_BANNERS: EmpezandoBanner[] = [
     subtitle: "Historias, cursos y aprendizajes de emprendedores reales",
     avatarGradient: "from-amber-500 to-orange-600",
     initial: "A",
+    logoUrl: "/logos/mundo-logo.png", // Mundo Academy
   },
   {
     id: "b4",
@@ -410,6 +412,7 @@ const EMPEZANDO_BANNERS: EmpezandoBanner[] = [
     subtitle: "Crea, lanza y escala tu negocio digital",
     avatarGradient: "from-blue-500 to-indigo-600",
     initial: "M",
+    logoUrl: "/logos/mundo-logo.png", // Mundo Academy
   },
 ];
 
@@ -444,11 +447,16 @@ function PromoCard({ banner }: { banner: EmpezandoBanner }) {
 
         {/* .promo-card-title-row: flex items-center gap-2 */}
         <div className="flex items-center gap-2">
-          {/* .promo-card-avatar: 24×24 | border-radius 8px */}
+          {/* .promo-card-avatar: 24×24 | border-radius 8px — business logo > initial fallback */}
           <div
-            className={`w-6 h-6 rounded-[8px] bg-gradient-to-br ${banner.avatarGradient} flex items-center justify-center shrink-0`}
+            className={`w-6 h-6 rounded-[8px] bg-gradient-to-br ${banner.avatarGradient} flex items-center justify-center shrink-0 overflow-hidden`}
           >
-            <span className="text-[9px] font-bold text-white leading-none">{banner.initial}</span>
+            {banner.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={banner.logoUrl} alt={banner.title} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-[9px] font-bold text-white leading-none">{banner.initial}</span>
+            )}
           </div>
 
           {/* .promo-card-name: 18px | 700 | lh 26px | ls -0.2925px | white */}
@@ -503,6 +511,7 @@ interface EditorialCardDef {
   href: string;
   gradient: string;
   initial: string;
+  logoUrl: string | null;
 }
 
 const MUNDO_EJECUTIVO_CARDS: EditorialCardDef[] = [
@@ -514,6 +523,7 @@ const MUNDO_EJECUTIVO_CARDS: EditorialCardDef[] = [
     href: "/descubrir",
     gradient: "from-amber-600 via-orange-500 to-red-600",
     initial: "G",
+    logoUrl: "/logos/mundo-logo.png", // Mundo Ejecutivo
   },
   {
     id: "me2",
@@ -523,6 +533,7 @@ const MUNDO_EJECUTIVO_CARDS: EditorialCardDef[] = [
     href: "/descubrir",
     gradient: "from-slate-700 via-slate-600 to-slate-800",
     initial: "N",
+    logoUrl: "/logos/mundo-logo.png", // Mundo Ejecutivo
   },
 ];
 
@@ -547,8 +558,14 @@ function EditorialCard({ card }: { card: EditorialCardDef }) {
 
       {/* Body — avatar + title + description + arrow, no badges/price/metadata */}
       <div className="p-4 flex items-start gap-3">
-        <div className={`w-12 h-12 rounded-[12px] bg-gradient-to-br ${card.gradient} flex items-center justify-center shrink-0 shadow-md`}>
-          <span className="text-base font-black text-white select-none">{card.initial}</span>
+        {/* Business logo > initial fallback */}
+        <div className={`w-12 h-12 rounded-[12px] bg-gradient-to-br ${card.gradient} flex items-center justify-center shrink-0 shadow-md overflow-hidden`}>
+          {card.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={card.logoUrl} alt={card.title} className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-base font-black text-white select-none">{card.initial}</span>
+          )}
         </div>
         <div className="flex-1 min-w-0 pt-0.5">
           <h3 className="text-[16px] font-bold text-gray-900 leading-6 line-clamp-1 group-hover:text-orange-600 transition-colors duration-150">
