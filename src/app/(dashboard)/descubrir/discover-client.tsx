@@ -152,8 +152,18 @@ function ProductCard({ product }: { product: PublicProduct }) {
       {/* Body */}
       <div className="p-4 pr-12 flex-1 flex flex-col gap-3">
         <div className="flex items-start gap-3">
-          <div className={`w-12 h-12 rounded-[12px] bg-gradient-to-br ${gradCls} flex items-center justify-center shrink-0 shadow-md`}>
-            <span className="text-base font-black text-white select-none">{initial}</span>
+          {/* Business logo — Whop pattern: businesses.logo_url > gradient fallback */}
+          <div className={`w-12 h-12 rounded-[12px] bg-gradient-to-br ${gradCls} flex items-center justify-center shrink-0 shadow-md overflow-hidden`}>
+            {product.business_logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={product.business_logo_url}
+                alt={product.business_name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-base font-black text-white select-none">{initial}</span>
+            )}
           </div>
           <div className="flex-1 min-w-0 pt-0.5">
             <h3 className="text-[16px] font-bold text-gray-900 leading-6 line-clamp-1 group-hover:text-orange-600 transition-colors duration-150">

@@ -962,6 +962,7 @@ export interface PublicProduct {
   billing_period: string;
   business_id: string;
   business_name: string;
+  business_logo_url: string | null;
   created_at: string;
   cover_url: string | null;
 }
@@ -971,26 +972,27 @@ export interface PublicProductFull extends PublicProduct {
 }
 
 const PUBLIC_PRODUCT_SELECT_WITH_COVER =
-  "id, slug, name, description, price, type, access_type, currency, billing_period, business_id, created_at, cover_url, businesses(id, name)";
+  "id, slug, name, description, price, type, access_type, currency, billing_period, business_id, created_at, cover_url, businesses(id, name, logo_url)";
 const PUBLIC_PRODUCT_SELECT_BASE =
-  "id, slug, name, description, price, type, access_type, currency, billing_period, business_id, created_at, businesses(id, name)";
+  "id, slug, name, description, price, type, access_type, currency, billing_period, business_id, created_at, businesses(id, name, logo_url)";
 
 function mapPublicProduct(row: Record<string, unknown>): PublicProduct {
   const biz = (row.businesses ?? {}) as Record<string, unknown>;
   return {
-    id:             row.id as string,
-    slug:           (row.slug as string | null) ?? null,
-    name:           row.name as string,
-    description:    (row.description as string | null) ?? null,
-    price:          Number(row.price ?? 0),
-    type:           (row.type as string) ?? "curso",
-    access_type:    normalizeAccessType(row.access_type as string | undefined),
-    currency:       (row.currency as string) ?? "USD",
-    billing_period: normalizeBillingPeriod(row.billing_period as string | undefined),
-    business_id:    (row.business_id as string) ?? "",
-    business_name:  (biz.name as string) ?? "Mundo Academy",
-    created_at:     row.created_at as string,
-    cover_url:      (row.cover_url as string | null) ?? null,
+    id:                row.id as string,
+    slug:              (row.slug as string | null) ?? null,
+    name:              row.name as string,
+    description:       (row.description as string | null) ?? null,
+    price:             Number(row.price ?? 0),
+    type:              (row.type as string) ?? "curso",
+    access_type:       normalizeAccessType(row.access_type as string | undefined),
+    currency:          (row.currency as string) ?? "USD",
+    billing_period:    normalizeBillingPeriod(row.billing_period as string | undefined),
+    business_id:       (row.business_id as string) ?? "",
+    business_name:     (biz.name as string) ?? "Mundo Academy",
+    business_logo_url: (biz.logo_url as string | null) ?? null,
+    created_at:        row.created_at as string,
+    cover_url:         (row.cover_url as string | null) ?? null,
   };
 }
 
@@ -1077,7 +1079,7 @@ export async function getPublicProductFull(
     const supabase = createAdminClient();
 
     const baseSelect =
-      "id, slug, name, description, price, type, access_type, currency, billing_period, business_id, created_at, cover_url, businesses(id, name)";
+      "id, slug, name, description, price, type, access_type, currency, billing_period, business_id, created_at, cover_url, businesses(id, name, logo_url)";
 
     const buildQuery = () =>
       supabase
@@ -1103,20 +1105,21 @@ export async function getPublicProductFull(
     const biz = (row.businesses ?? {}) as Record<string, unknown>;
 
     return {
-      id:            row.id as string,
-      slug:          (row.slug as string | null) ?? null,
-      name:          row.name as string,
-      description:   (row.description as string | null) ?? null,
-      price:         Number(row.price ?? 0),
-      type:          (row.type as string) ?? "curso",
-      access_type:   normalizeAccessType(row.access_type as string | undefined),
-      currency:      (row.currency as string) ?? "USD",
-      billing_period: normalizeBillingPeriod(row.billing_period as string | undefined),
-      business_id:   (row.business_id as string) ?? "",
-      business_name: (biz.name as string) ?? "Mundo Academy",
-      created_at:    row.created_at as string,
-      cover_url:     (row.cover_url as string | null) ?? null,
-      content_count: count ?? 0,
+      id:                row.id as string,
+      slug:              (row.slug as string | null) ?? null,
+      name:              row.name as string,
+      description:       (row.description as string | null) ?? null,
+      price:             Number(row.price ?? 0),
+      type:              (row.type as string) ?? "curso",
+      access_type:       normalizeAccessType(row.access_type as string | undefined),
+      currency:          (row.currency as string) ?? "USD",
+      billing_period:    normalizeBillingPeriod(row.billing_period as string | undefined),
+      business_id:       (row.business_id as string) ?? "",
+      business_name:     (biz.name as string) ?? "Mundo Academy",
+      business_logo_url: (biz.logo_url as string | null) ?? null,
+      created_at:        row.created_at as string,
+      cover_url:         (row.cover_url as string | null) ?? null,
+      content_count:     count ?? 0,
     };
   } catch {
     return null;
