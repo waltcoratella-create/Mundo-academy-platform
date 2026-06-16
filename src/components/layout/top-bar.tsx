@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Menu, Search, MessageCircle, Wallet, Sparkles } from "lucide-react";
 import { NotificationsBell } from "@/components/dashboard/inicio/notifications-bell";
 import { UserMenu } from "@/components/layout/user-menu";
@@ -27,8 +28,16 @@ export function TopBar({ onToggleSidebar, onToggleAI, aiOpen, onToggleMessages, 
       </button>
 
       {/* Logo */}
-      <span className="h-10 px-2 -ml-2 rounded-[10px] flex items-center select-none text-[15px] font-semibold text-[#202020] tracking-tight whitespace-nowrap">
-        🌍 Mundo Academy
+      <span className="h-10 px-2 -ml-2 rounded-[10px] flex items-center select-none">
+        <Image
+          src="/logos/mundo-academy-logo.svg"
+          alt="Mundo Academy"
+          width={32}
+          height={32}
+          priority
+          unoptimized
+          className="h-8 w-auto"
+        />
       </span>
 
       {/* Search */}
