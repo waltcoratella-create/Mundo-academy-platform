@@ -13,8 +13,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   ChevronLeft, ChevronRight, X, Star, Users, Eye,
-  TrendingUp, Sparkles, Gift, BookOpen, Bot, Briefcase,
-  Megaphone, Zap, Package, PlusCircle, DollarSign, Flame, ArrowRight,
+  Sparkles, Package, PlusCircle, ArrowRight,
   Plus, Mic, ArrowUp,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
@@ -235,16 +234,6 @@ function SkeletonCard() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  SECTION ICON MAP
-// ─────────────────────────────────────────────────────────────────────────────
-
-const ICONS: Record<string, React.ElementType> = {
-  trending: Flame, vendidos: TrendingUp, new: Sparkles, free: Gift,
-  ai: Bot, negocios: Briefcase, marketing: Megaphone, wealth: DollarSign,
-  cursos: BookOpen, comunidades: Users, mentoria: Zap, recursos: BookOpen,
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
 //  CAROUSEL SECTION
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -280,20 +269,16 @@ function CarouselSection({ def, products }: { def: SectionDef; products: PublicP
   }, [products, def]);
 
   const empty = items.length === 0;
-  const Icon  = ICONS[def.id] ?? Package;
 
   return (
     <section aria-label={def.title} className="min-w-0 overflow-hidden">
       <div className="flex items-start justify-between mb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <Icon className="w-5 h-5 text-orange-500 shrink-0" />
-            <h2 className="text-[20px] font-bold text-gray-900 tracking-[-0.4125px] leading-tight">
-              {def.title}
-            </h2>
-          </div>
+          <h2 className="text-[20px] font-bold text-gray-900 tracking-[-0.4125px] leading-tight">
+            {def.title}
+          </h2>
           {def.subtitle && (
-            <p className="text-[14px] text-gray-400 mt-0.5 pl-7">{def.subtitle}</p>
+            <p className="text-[14px] text-gray-400 mt-0.5">{def.subtitle}</p>
           )}
         </div>
         {!empty && (
@@ -486,7 +471,6 @@ function EmpezandoSection() {
   return (
     <section className="min-w-0">
       <div className="flex items-center gap-2 mb-4">
-        <Sparkles className="w-5 h-5 text-orange-500" />
         <h2 className="text-[20px] font-bold text-gray-900 tracking-[-0.4125px]">Para empezar</h2>
       </div>
       {/* .empezando-grid: 2 cols desktop / 1 col mobile | gap 16px */}
@@ -533,6 +517,16 @@ const MUNDO_EJECUTIVO_CARDS: EditorialCardDef[] = [
     href: "/descubrir",
     gradient: "from-slate-700 via-slate-600 to-slate-800",
     initial: "N",
+    logoUrl: "/logos/mundo-logo.png", // Mundo Ejecutivo
+  },
+  {
+    id: "me3",
+    title: "Rankings Mundo Ejecutivo",
+    description: "Descubre los rankings y reconocimientos más importantes del mundo empresarial.",
+    src: "/discover/banners/banner-rankings-mundo-ejecutivo.png",
+    href: "#",
+    gradient: "from-amber-600 via-orange-500 to-red-600",
+    initial: "R",
     logoUrl: "/logos/mundo-logo.png", // Mundo Ejecutivo
   },
 ];
@@ -585,10 +579,9 @@ function MundoEjecutivoSection() {
   return (
     <section className="min-w-0">
       <div className="flex items-center gap-2 mb-1">
-        <Briefcase className="w-5 h-5 text-orange-500 shrink-0" />
         <h2 className="text-[20px] font-bold text-gray-900 tracking-[-0.4125px]">Mundo Ejecutivo</h2>
       </div>
-      <p className="text-[14px] text-gray-400 mb-4 pl-7">Contenido, noticias y recursos ejecutivos.</p>
+      <p className="text-[14px] text-gray-400 mb-4">Contenido, noticias y recursos ejecutivos.</p>
       {/* Same carousel track as CarouselSection — cards are 360px, same as ProductCard */}
       <div
         className="flex gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
