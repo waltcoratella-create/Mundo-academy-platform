@@ -1,8 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Menu, Search, MessageCircle, Wallet, Sparkles } from "lucide-react";
-import { NotificationsBell } from "@/components/dashboard/inicio/notifications-bell";
+import { Menu, Search, MessageCircle, Bell, Wallet, Sparkles } from "lucide-react";
 import { UserMenu } from "@/components/layout/user-menu";
 
 interface Props {
@@ -12,9 +11,12 @@ interface Props {
   onToggleMessages: () => void;
   messagesOpen: boolean;
   dmUnreadCount?: number;
+  onToggleNotifications: () => void;
+  notificationsOpen: boolean;
+  notifUnreadCount?: number;
 }
 
-export function TopBar({ onToggleSidebar, onToggleAI, aiOpen, onToggleMessages, messagesOpen, dmUnreadCount = 0 }: Props) {
+export function TopBar({ onToggleSidebar, onToggleAI, aiOpen, onToggleMessages, messagesOpen, dmUnreadCount = 0, onToggleNotifications, notificationsOpen, notifUnreadCount = 0 }: Props) {
   return (
     <header className="h-14 shrink-0 sticky top-0 z-50 bg-white border-b border-[rgba(0,0,0,0.122)] flex items-center px-4 gap-2">
 
@@ -76,7 +78,23 @@ export function TopBar({ onToggleSidebar, onToggleAI, aiOpen, onToggleMessages, 
         </button>
 
         {/* Notifications */}
-        <NotificationsBell />
+        <button
+          onClick={onToggleNotifications}
+          aria-label="Notificaciones"
+          aria-pressed={notificationsOpen}
+          className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+            notificationsOpen
+              ? "bg-black/[0.063] text-[#202020]"
+              : "hover:bg-black/[0.063] text-[#202020]"
+          }`}
+        >
+          <Bell className="w-5 h-5" />
+          {notifUnreadCount > 0 && (
+            <span className="absolute top-0 right-0 min-w-[16px] h-4 px-[3px] rounded-full bg-[#d4544f] flex items-center justify-center text-[10px] font-bold text-white leading-none pointer-events-none">
+              {notifUnreadCount > 99 ? "99+" : notifUnreadCount}
+            </span>
+          )}
+        </button>
 
         {/* AI assistant */}
         <button

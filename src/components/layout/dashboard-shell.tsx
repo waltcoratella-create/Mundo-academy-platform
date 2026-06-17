@@ -6,12 +6,15 @@ import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { TopBar } from "@/components/layout/top-bar";
 import { AIAssistantPanel } from "@/components/layout/ai-assistant-panel";
 import { MessagesPanel } from "@/components/messages/messages-panel";
+import { NotificationsPanel } from "@/components/notifications/notifications-panel";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [aiOpen, setAiOpen] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [dmUnreadCount, setDmUnreadCount] = useState(0);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifUnreadCount, setNotifUnreadCount] = useState(0);
 
   const pathname = usePathname();
 
@@ -29,6 +32,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         onToggleMessages={() => setMessagesOpen((v) => !v)}
         messagesOpen={messagesOpen}
         dmUnreadCount={dmUnreadCount}
+        onToggleNotifications={() => setNotificationsOpen((v) => !v)}
+        notificationsOpen={notificationsOpen}
+        notifUnreadCount={notifUnreadCount}
       />
       <div className="flex flex-1 overflow-hidden">
         {/* Global sidebar — hidden when inside a business dashboard */}
@@ -52,6 +58,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           open={messagesOpen}
           onClose={() => setMessagesOpen(false)}
           onUnreadChange={setDmUnreadCount}
+        />
+
+        {/* Notifications panel — same architecture as Messages */}
+        <NotificationsPanel
+          open={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+          onUnreadChange={setNotifUnreadCount}
         />
 
         {/* AI assistant panel — slides in from right */}
