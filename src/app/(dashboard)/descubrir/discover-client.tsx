@@ -1,14 +1,6 @@
 "use client";
 
-import localFont from "next/font/local";
 import { useState, useMemo, useRef, useCallback } from "react";
-
-const cabinetGrotesk = localFont({
-  src: "../../../../public/fonts/CabinetGrotesk-Regular.woff2",
-  weight: "400",
-  display: "swap",
-  variable: "--font-cabinet",
-});
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -652,10 +644,10 @@ function WhopHero({
 
         {/* Heading group */}
         <div className="flex flex-col items-center gap-3 text-center">
-          <h1 className={`${cabinetGrotesk.className} text-[40px] md:text-[56px] font-normal leading-[1.1] tracking-[-0.04em] max-w-[500px] text-center text-[#202020]`}>
+          <h1 className="font-inter text-[28px] font-bold leading-[34px] tracking-[-1.03px] text-[#202020] max-w-[500px] text-center">
             Donde los negocios despegan.
           </h1>
-          <p className="text-[16px] font-normal leading-[26px] max-w-[512px] text-[#646464] text-center">
+          <p className="font-inter text-[18px] font-normal leading-7 text-[rgba(0,0,0,0.62)] max-w-[512px] text-center">
             Descubre y lanza productos digitales con más de 21M de emprendedores en Mundo Academy.
           </p>
         </div>
