@@ -27,12 +27,12 @@ const CORE: NavItem[] = [
 ];
 
 const ECOSYSTEM: NavItem[] = [
-  { label: "Venture AI",  href: "/venture-ai",  icon: Brain },
-  { label: "Cursos",      href: "/cursos",       icon: GraduationCap },
-  { label: "Eventos",     href: "/eventos",      icon: Calendar, img: "/sidebar/eventos.png" },
-  { label: "Mentorías",   href: "/mentorias",    icon: Target },
+  { label: "Venture AI",  href: "/venture-ai",  icon: Brain,         img: "/sidebar/venture-ai.png" },
+  { label: "Cursos",      href: "/cursos",       icon: GraduationCap, img: "/sidebar/cursos.png" },
+  { label: "Eventos",     href: "/eventos",      icon: Calendar,      img: "/sidebar/eventos.png" },
+  { label: "Mentorías",   href: "/mentorias",    icon: Target,        img: "/sidebar/mentorias.png" },
   { label: "Marketplace", href: "/marketplace",  icon: ShoppingBag },
-  { label: "Shark Tank",  href: "/shark-tank",   icon: Fish },
+  { label: "Shark Tank",  href: "/shark-tank",   icon: Fish,          img: "/sidebar/shark-tank.png" },
 ];
 
 const ACCOUNT: NavItem[] = [
