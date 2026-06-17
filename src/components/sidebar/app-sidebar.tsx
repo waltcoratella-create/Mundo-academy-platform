@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   Home, Search, Zap, Briefcase, Brain, GraduationCap,
@@ -14,6 +15,7 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
+  img?: string; // optional custom icon asset (30×30, rendered instead of `icon`)
 }
 
 const CORE: NavItem[] = [
@@ -27,7 +29,7 @@ const CORE: NavItem[] = [
 const ECOSYSTEM: NavItem[] = [
   { label: "Venture AI",  href: "/venture-ai",  icon: Brain },
   { label: "Cursos",      href: "/cursos",       icon: GraduationCap },
-  { label: "Eventos",     href: "/eventos",      icon: Calendar },
+  { label: "Eventos",     href: "/eventos",      icon: Calendar, img: "/sidebar/eventos.png" },
   { label: "Mentorías",   href: "/mentorias",    icon: Target },
   { label: "Marketplace", href: "/marketplace",  icon: ShoppingBag },
   { label: "Shark Tank",  href: "/shark-tank",   icon: Fish },
@@ -66,7 +68,18 @@ function NavSection({ items, label }: { items: NavItem[]; label?: string }) {
                 : "text-black/60 hover:bg-[#fafafa]"
             )}
           >
-            <item.icon className="w-6 h-6 shrink-0" />
+            {item.img ? (
+              <Image
+                src={item.img}
+                alt={item.label}
+                width={30}
+                height={30}
+                quality={100}
+                className="w-[30px] h-[30px] rounded-[25%] object-cover shrink-0"
+              />
+            ) : (
+              <item.icon className="w-6 h-6 shrink-0" />
+            )}
             {item.label}
           </Link>
         );
