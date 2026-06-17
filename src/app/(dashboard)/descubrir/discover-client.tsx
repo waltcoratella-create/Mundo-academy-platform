@@ -3,7 +3,7 @@
 import localFont from "next/font/local";
 import { useState, useMemo, useRef, useCallback } from "react";
 
-// Kept available in the project (used as a CSS variable on the page root).
+// Hero title font.
 const cabinetGrotesk = localFont({
   src: "../../../../public/fonts/CabinetGrotesk-Regular.woff2",
   weight: "400",
@@ -653,10 +653,10 @@ function WhopHero({
 
         {/* Heading group */}
         <div className="flex flex-col items-center gap-3 text-center">
-          <h1 className="font-inter text-[40px] md:text-[56px] font-bold leading-[1.1] tracking-[-1.03px] text-[#202020] max-w-[500px] text-center">
+          <h1 className={`${cabinetGrotesk.className} text-[40px] md:text-[56px] font-normal leading-[1.1] tracking-[-0.04em] text-[#202020] max-w-[500px] text-center`}>
             Donde los negocios despegan.
           </h1>
-          <p className="font-inter text-[18px] font-normal leading-7 text-[rgba(0,0,0,0.62)] max-w-[512px] text-center">
+          <p className="text-[16px] font-normal leading-[26px] text-[rgba(0,0,0,0.62)] max-w-[512px] text-center">
             Descubre y lanza productos digitales con más de 21M de emprendedores en Mundo Academy.
           </p>
         </div>
@@ -772,7 +772,7 @@ export function DiscoverClient({ products }: { products: PublicProduct[] }) {
   );
 
   return (
-    <div className={`${cabinetGrotesk.variable} min-h-full bg-white w-full overflow-x-hidden`}>
+    <div className="min-h-full bg-white w-full overflow-x-hidden">
       <WhopHero query={query} setQuery={setQuery} activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {activeTab === "create" && <LaunchView />}
