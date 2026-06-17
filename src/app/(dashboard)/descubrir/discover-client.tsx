@@ -1,6 +1,15 @@
 "use client";
 
+import localFont from "next/font/local";
 import { useState, useMemo, useRef, useCallback } from "react";
+
+// Kept available in the project (used as a CSS variable on the page root).
+const cabinetGrotesk = localFont({
+  src: "../../../../public/fonts/CabinetGrotesk-Regular.woff2",
+  weight: "400",
+  display: "swap",
+  variable: "--font-cabinet",
+});
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -644,7 +653,7 @@ function WhopHero({
 
         {/* Heading group */}
         <div className="flex flex-col items-center gap-3 text-center">
-          <h1 className="font-inter text-[28px] font-bold leading-[34px] tracking-[-1.03px] text-[#202020] max-w-[500px] text-center">
+          <h1 className="font-inter text-[40px] md:text-[56px] font-bold leading-[1.1] tracking-[-1.03px] text-[#202020] max-w-[500px] text-center">
             Donde los negocios despegan.
           </h1>
           <p className="font-inter text-[18px] font-normal leading-7 text-[rgba(0,0,0,0.62)] max-w-[512px] text-center">
@@ -763,7 +772,7 @@ export function DiscoverClient({ products }: { products: PublicProduct[] }) {
   );
 
   return (
-    <div className="min-h-full bg-white w-full overflow-x-hidden">
+    <div className={`${cabinetGrotesk.variable} min-h-full bg-white w-full overflow-x-hidden`}>
       <WhopHero query={query} setQuery={setQuery} activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {activeTab === "create" && <LaunchView />}
