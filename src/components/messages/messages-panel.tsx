@@ -97,29 +97,37 @@ function DMAvatar({
   avatarUrl,
   name,
   userId,
-  size = "md",
+  px = 36,
+  shape = "circle",
 }: {
   avatarUrl: string | null;
   name: string | null;
   userId: string;
-  size?: "sm" | "md";
+  px?: number;
+  /** circle → max(25%,9999px) ; square → max(25%,0px) (25% rounded) */
+  shape?: "circle" | "square";
 }) {
-  const dim = size === "sm" ? "w-7 h-7 rounded-[5px]" : "w-10 h-10 rounded-[8px]";
-  const font = size === "sm" ? "text-[9px]" : "text-[11px]";
+  const radius = shape === "circle" ? "rounded-full" : "rounded-[25%]";
+  const style = { width: px, height: px };
   if (avatarUrl) {
     return (
       <img
         src={avatarUrl}
         alt={name ?? "Avatar"}
-        className={`${dim} object-cover shrink-0`}
+        style={style}
+        className={`${radius} object-cover shrink-0`}
       />
     );
   }
   return (
     <div
-      className={`${dim} bg-gradient-to-br ${userGradient(userId)} flex items-center justify-center shrink-0`}
+      style={style}
+      className={`${radius} bg-gradient-to-br ${userGradient(userId)} flex items-center justify-center shrink-0`}
     >
-      <span className={`${font} font-bold text-white leading-none select-none`}>
+      <span
+        style={{ fontSize: Math.round(px * 0.3) }}
+        className="font-bold text-white leading-none select-none"
+      >
         {initials(name)}
       </span>
     </div>
@@ -145,20 +153,19 @@ function ConversationItem({
       )}
       <button
         onClick={onSelect}
-        className="w-full flex items-center h-[68px] gap-2 px-3 rounded-[12px] hover:bg-black/[0.063] transition-colors text-left cursor-pointer"
+        className="group w-full flex items-center h-[68px] gap-3 px-2 rounded-[12px] hover:bg-black/[0.063] transition-colors text-left cursor-pointer"
       >
-        <div className="w-9 h-9 shrink-0 grid place-items-center">
-          <DMAvatar
-            avatarUrl={other_participant.avatar_url}
-            name={other_participant.name}
-            userId={other_participant.user_id}
-            size="md"
-          />
-        </div>
+        <DMAvatar
+          avatarUrl={other_participant.avatar_url}
+          name={other_participant.name}
+          userId={other_participant.user_id}
+          px={36}
+          shape="circle"
+        />
 
         <div className="flex-1 min-w-0 flex flex-col gap-[2px]">
           <span
-            className={`text-[16px] leading-[22px] tracking-[0.4px] text-[#202020] truncate ${
+            className={`text-[16px] leading-[22px] text-[#202020] truncate ${
               hasUnread ? "font-semibold" : "font-medium"
             }`}
           >
@@ -166,10 +173,8 @@ function ConversationItem({
           </span>
           {conv.last_message_preview && (
             <span
-              className={`text-[14px] leading-5 tracking-[0.35px] truncate ${
-                hasUnread
-                  ? "font-semibold text-[#202020]"
-                  : "font-normal text-[rgba(0,0,0,0.447)]"
+              className={`text-[14px] font-normal leading-5 truncate ${
+                hasUnread ? "text-[#202020]" : "text-[rgba(0,0,0,0.486)]"
               }`}
             >
               {conv.last_message_preview}
@@ -181,9 +186,13 @@ function ConversationItem({
           <span className="text-[12px] font-medium text-[rgba(0,0,0,0.447)]">
             {formatConvTime(conv.last_message_at)}
           </span>
-          {hasUnread && (
+          {hasUnread ? (
             <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[rgb(42,83,208)] text-white text-[10px] font-bold leading-none">
               {unread_count > 99 ? "99+" : unread_count}
+            </span>
+          ) : (
+            <span className="w-6 h-6 rounded-[6px] bg-black/[0.063] hidden group-hover:flex items-center justify-center text-[rgba(0,0,0,0.447)]">
+              <span className="text-[14px] leading-none -mt-1">…</span>
             </span>
           )}
         </div>
@@ -451,12 +460,12 @@ function PanelThread({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* ── Thread header ── */}
-      <div className="flex items-center gap-1 px-2 py-3 border-b border-[rgba(0,0,0,0.08)] shrink-0">
+      {/* ── Thread header (73px) ── */}
+      <div className="h-[73px] flex items-center gap-1 px-4 border-b border-[rgba(0,0,0,0.122)] shrink-0">
         <button
           onClick={onBack}
           aria-label="Volver"
-          className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/[0.063] text-[rgba(0,0,0,0.447)] hover:text-[#202020] transition-colors shrink-0"
+          className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/[0.063] text-[rgba(0,0,0,0.512)] hover:text-[#202020] transition-colors shrink-0"
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
@@ -466,31 +475,32 @@ function PanelThread({
             avatarUrl={other_participant.avatar_url}
             name={other_participant.name}
             userId={other_participant.user_id}
-            size="sm"
+            px={40}
+            shape="square"
           />
-          <span className="text-[15px] font-semibold text-[#202020] tracking-[-0.08px] truncate">
+          <h1 className="text-[18px] font-medium text-[#202020] truncate">
             {other_participant.name ?? "Usuario"}
-          </span>
+          </h1>
         </div>
 
         <button
           onClick={onExpandToPage}
           aria-label="Abrir en pantalla completa"
-          className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/[0.063] text-[rgba(0,0,0,0.447)] hover:text-[#202020] transition-colors shrink-0"
+          className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/[0.063] text-[rgba(0,0,0,0.512)] hover:text-[#202020] transition-colors shrink-0"
         >
           <Maximize2 className="w-4 h-4" />
         </button>
         <button
           onClick={onClose}
           aria-label="Cerrar"
-          className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/[0.063] text-[rgba(0,0,0,0.447)] hover:text-[#202020] transition-colors shrink-0"
+          className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/[0.063] text-[rgba(0,0,0,0.512)] hover:text-[#202020] transition-colors shrink-0"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
 
       {/* ── Messages ── */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
         {hasMore && !loading && (
           <div className="flex justify-center pb-2">
             <button
@@ -540,12 +550,10 @@ function PanelThread({
           renderItems.map((item) => {
             if (item.type === "sep") {
               return (
-                <div key={item.key} className="flex items-center gap-2 py-2">
-                  <div className="flex-1 h-px bg-[rgba(0,0,0,0.08)]" />
-                  <span className="text-[10px] font-medium text-[rgba(0,0,0,0.4)] uppercase tracking-wide whitespace-nowrap">
+                <div key={item.key} className="h-6 flex items-center justify-center">
+                  <span className="text-[10px] font-semibold text-[rgba(0,0,0,0.486)] uppercase tracking-wide whitespace-nowrap">
                     {item.label}
                   </span>
-                  <div className="flex-1 h-px bg-[rgba(0,0,0,0.08)]" />
                 </div>
               );
             }
@@ -570,24 +578,25 @@ function PanelThread({
             }
 
             return (
-              <div key={item.key} className={`flex items-end gap-1.5 ${isFirst ? "pt-1.5" : ""}`}>
-                <div className="w-6 shrink-0">
+              <div key={item.key} className={`flex items-end gap-3 ${isFirst ? "pt-1.5" : ""}`}>
+                <div className="w-8 shrink-0">
                   {showAvatar && (
                     <DMAvatar
                       avatarUrl={other_participant.avatar_url}
                       name={msg.sender_name}
                       userId={msg.sender_id}
-                      size="sm"
+                      px={32}
+                      shape="circle"
                     />
                   )}
                 </div>
-                <div className="max-w-[75%] flex flex-col items-start gap-[2px]">
+                <div className="max-w-[min(80%,600px)] flex flex-col items-start gap-[2px]">
                   {isFirst && msg.sender_name && (
-                    <span className="text-[11px] font-medium text-[rgba(0,0,0,0.447)] px-1">
+                    <span className="text-[12px] font-normal text-[rgba(0,0,0,0.512)] pl-2">
                       {msg.sender_name}
                     </span>
                   )}
-                  <div className="bg-black/[0.063] text-[#202020] text-[14px] leading-[21px] tracking-[-0.08px] px-[12px] py-[7px] rounded-[16px] rounded-bl-[4px] break-words whitespace-pre-wrap">
+                  <div className="bg-[#efefef] text-[#202020] text-[15px] font-normal leading-[22.5px] px-3 py-1.5 rounded-[18px] break-words whitespace-pre-wrap">
                     {msg.content}
                   </div>
                   {showAvatar && (
@@ -820,7 +829,7 @@ export function MessagesPanel({ open, onClose, onUnreadChange }: Props) {
 
   return (
     <aside
-      className={`shrink-0 h-full bg-white border-l border-[rgba(0,0,0,0.08)] flex flex-col transition-all duration-300 ease-in-out overflow-hidden ${
+      className={`shrink-0 h-full bg-white border-l border-[rgba(0,0,0,0.122)] flex flex-col transition-all duration-300 ease-in-out overflow-hidden ${
         open ? "w-[384px]" : "w-0"
       }`}
     >
@@ -863,10 +872,10 @@ export function MessagesPanel({ open, onClose, onUnreadChange }: Props) {
                 </div>
               </div>
 
-              {/* Search + Compose */}
-              <div className="flex items-center gap-2 px-4 pb-3 shrink-0">
+              {/* Search header (73px) */}
+              <div className="h-[73px] flex items-center gap-2 px-4 border-b border-[rgba(0,0,0,0.122)] shrink-0">
                 <div className="flex-1 flex items-center gap-2 bg-black/[0.063] rounded-[10px] h-10 px-3">
-                  <Search className="w-4 h-4 text-[rgba(0,0,0,0.447)] shrink-0" />
+                  <Search className="w-5 h-5 text-[rgba(0,0,0,0.447)] shrink-0" />
                   <input
                     type="text"
                     placeholder="Buscar"
@@ -877,18 +886,15 @@ export function MessagesPanel({ open, onClose, onUnreadChange }: Props) {
                 </div>
                 <button
                   aria-label="Nuevo mensaje"
-                  className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-black/[0.063] text-[rgba(0,0,0,0.447)] hover:text-[#202020] transition-colors shrink-0"
+                  className="w-10 h-10 rounded-[10px] flex items-center justify-center hover:bg-black/[0.063] text-[rgba(0,0,0,0.447)] hover:text-[#202020] transition-colors shrink-0"
                 >
-                  <Pencil className="w-4 h-4" />
+                  <Pencil className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Divider */}
-              <div className="h-px bg-[rgba(0,0,0,0.122)] shrink-0" />
-
-              {/* Filter pills */}
-              <div className="flex items-center gap-2 px-4 py-3 shrink-0">
-                <button className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full border border-[rgba(0,0,0,0.122)] text-[14px] font-medium text-[rgba(0,0,0,0.875)] hover:bg-black/[0.031] transition-colors">
+              {/* Filters (52px) */}
+              <div className="h-[52px] flex items-center gap-2 px-4 py-3 shrink-0">
+                <button className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,0.122)] text-[14px] font-medium text-[rgba(0,0,0,0.875)] hover:bg-black/[0.031] transition-colors">
                   No leído
                   {unreadTotal > 0 && (
                     <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-[3.5px] rounded-full bg-[rgb(212,84,83)] text-white text-[10px] font-bold leading-none">
@@ -896,7 +902,7 @@ export function MessagesPanel({ open, onClose, onUnreadChange }: Props) {
                     </span>
                   )}
                 </button>
-                <button className="inline-flex items-center h-7 px-3 rounded-full border border-[rgba(0,0,0,0.122)] text-[14px] font-medium text-[rgba(0,0,0,0.875)] hover:bg-black/[0.031] transition-colors">
+                <button className="inline-flex items-center h-7 px-3 rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,0.122)] text-[14px] font-medium text-[rgba(0,0,0,0.875)] hover:bg-black/[0.031] transition-colors">
                   Solicitudes
                 </button>
               </div>
