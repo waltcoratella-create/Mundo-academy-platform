@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useUser, useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getUserProfileData } from "@/app/(dashboard)/configuracion/actions";
 import {
   Settings,
   ShoppingBag,
@@ -47,7 +48,17 @@ export function UserMenu() {
   const [open, setOpen]             = useState(false);
   const [devMode, setDevMode]       = useState(false);
   const [appearance, setAppearance] = useState<AppearanceMode>("system");
+  const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
   const containerRef  = useRef<HTMLDivElement>(null);
+
+  // Consume the existing profile read so the uploaded avatar (user_profiles.avatar_url)
+  // takes priority over Clerk's image — keeps the TopBar avatar consistent with the
+  // rest of the app (feed, profile, messages, notifications).
+  useEffect(() => {
+    getUserProfileData()
+      .then((d) => setProfileAvatar(d?.avatar_url ?? null))
+      .catch(() => {});
+  }, []);
 
   // Close on outside click + Escape
   useEffect(() => {
@@ -74,7 +85,8 @@ export function UserMenu() {
     user?.firstName ??
     user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] ??
     "Usuario";
-  const avatarUrl = user?.imageUrl ?? null;
+  // Priority: uploaded profile avatar → Clerk image → initials fallback
+  const avatarUrl = profileAvatar ?? user?.imageUrl ?? null;
   const userId    = user?.id ?? "";
   const bg        = avatarColor(userId || "default");
   const label     = initials(displayName);
