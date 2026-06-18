@@ -27,7 +27,7 @@ const CORE: NavItem[] = [
 ];
 
 const ECOSYSTEM: NavItem[] = [
-  { label: "Venture AI",  href: "/venture-ai",  icon: Brain,         img: "/sidebar/venture-ai.png" },
+  { label: "Akka",        href: "/venture-ai",  icon: Brain,         img: "/sidebar/venture-ai.png" },
   { label: "Cursos",      href: "/cursos",       icon: GraduationCap, img: "/sidebar/cursos.png" },
   { label: "Eventos",     href: "/eventos",      icon: Calendar,      img: "/sidebar/eventos.png" },
   { label: "Mentorías",   href: "/mentorias",    icon: Target,        img: "/sidebar/mentorias.png" },
