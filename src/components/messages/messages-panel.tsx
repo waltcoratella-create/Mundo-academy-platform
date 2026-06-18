@@ -29,19 +29,15 @@ type DMRow = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const GRADIENTS = [
-  "from-blue-500 to-indigo-600",
-  "from-emerald-500 to-teal-600",
-  "from-amber-500 to-orange-600",
-  "from-purple-500 to-violet-600",
-  "from-rose-500 to-pink-600",
-  "from-cyan-500 to-blue-600",
+// Canonical avatar fallback palette — same as feed / profile / topbar / notifications.
+const AVATAR_COLORS = [
+  "bg-blue-600", "bg-purple-600", "bg-emerald-600", "bg-orange-500",
+  "bg-pink-600",  "bg-teal-600",  "bg-indigo-600",  "bg-amber-600",
 ];
-
-function userGradient(id: string): string {
+function avatarColor(id: string): string {
   let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % GRADIENTS.length;
-  return GRADIENTS[Math.abs(h)]!;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length]!;
 }
 
 function initials(name: string | null): string {
@@ -104,20 +100,20 @@ function DMAvatar({
   userId: string;
   size?: "sm" | "md";
 }) {
-  const dim = size === "sm" ? "w-7 h-7 rounded-[5px]" : "w-10 h-10 rounded-[8px]";
+  const dim = size === "sm" ? "w-7 h-7" : "w-10 h-10";
   const font = size === "sm" ? "text-[9px]" : "text-[11px]";
   if (avatarUrl) {
     return (
       <img
         src={avatarUrl}
         alt={name ?? "Avatar"}
-        className={`${dim} object-cover shrink-0`}
+        className={`${dim} rounded-full object-cover shrink-0`}
       />
     );
   }
   return (
     <div
-      className={`${dim} bg-gradient-to-br ${userGradient(userId)} flex items-center justify-center shrink-0`}
+      className={`${dim} rounded-full ${avatarColor(userId)} flex items-center justify-center shrink-0`}
     >
       <span className={`${font} font-bold text-white leading-none select-none`}>
         {initials(name)}
