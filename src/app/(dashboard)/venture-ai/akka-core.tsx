@@ -1,91 +1,76 @@
 "use client";
 
 /**
- * AkkaCore — polished orbital "AI core" loader (no dependencies).
+ * AkkaCore — the Magic UI / 21st.dev "AI Loader" (beratberkayg) integrated as-is.
  *
- * Layers: faint static concentric rings, a slowly-rotating conic "scan" sweep
- * masked into a thin ring, particles orbiting on each ring at different speeds,
- * and a breathing central core with a soft neutral halo. Minimal, monochrome,
- * transparent background. `intense` speeds everything up for the analyzing view.
+ * Exact component: a centered word whose letters pulse in sequence
+ * (loaderLetter, staggered animationDelay) over a full circle whose rotating
+ * inset box-shadows create the glowing AI orb (loaderCircle). Keyframes and
+ * box-shadow values are kept identical to the original.
+ *
+ * Minimal adaptations for this project:
+ *  - removed the original fullscreen overlay + background gradient (transparent bg)
+ *  - letters use a dark color so they read on our white surfaces
+ *  - `size` (px), `intense` (faster) and `text` props
+ *  - prefers-reduced-motion support
  */
-export function AkkaCore({ size = 96, intense = false }: { size?: number; intense?: boolean }) {
-  const sweep  = intense ? "2.6s" : "5.5s";
-  const orbitA = intense ? "4.2s" : "9s";
-  const orbitB = intense ? "3.4s" : "7s";
-  const orbitC = intense ? "2.6s" : "5.2s";
-  const breathe = intense ? "1.6s" : "3.2s";
-  const px = (f: number) => Math.max(2, Math.round(size * f));
-
-  // A dot sitting on the top edge of an orbit ring; the wrapper rotation orbits it.
-  const Orbit = ({
-    inset, dur, reverse, dotPx, color, opacity = 1,
-  }: { inset: string; dur: string; reverse?: boolean; dotPx: number; color: string; opacity?: number }) => (
-    <div
-      className="akka-anim absolute"
-      style={{ inset, animation: `${reverse ? "akkaSpinRev" : "akkaSpin"} ${dur} linear infinite` }}
-    >
-      <span
-        className="absolute rounded-full"
-        style={{
-          width: dotPx, height: dotPx, background: color, opacity,
-          top: 0, left: "50%", transform: "translate(-50%,-50%)",
-          boxShadow: `0 0 ${Math.round(dotPx * 1.4)}px ${color}`,
-        }}
-      />
-    </div>
-  );
+export function AkkaCore({
+  size = 96,
+  intense = false,
+  text = "Akka",
+}: {
+  size?: number;
+  intense?: boolean;
+  text?: string;
+}) {
+  const circleDur = intense ? "2.5s" : "5s";
+  const letterDur = intense ? "1.6s" : "3s";
+  const letters = text.split("");
 
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }} aria-hidden="true">
+    <div
+      className="relative flex items-center justify-center font-inter select-none shrink-0"
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+    >
       <style>{`
-        @keyframes akkaSpin    { to { transform: rotate(360deg); } }
-        @keyframes akkaSpinRev { to { transform: rotate(-360deg); } }
-        @keyframes akkaBreathe { 0%,100% { transform: scale(1);    opacity:.9 } 50% { transform: scale(1.12); opacity:1 } }
-        @keyframes akkaHalo    { 0%,100% { transform: scale(1);    opacity:.18 } 50% { transform: scale(1.25); opacity:.34 } }
-        @media (prefers-reduced-motion: reduce) { .akka-anim { animation: none !important; } }
+        @keyframes loaderCircle {
+          0%   { transform: rotate(90deg);  box-shadow: 0 6px 12px 0 #38bdf8 inset, 0 12px 18px 0 #005dff inset, 0 36px 36px 0 #1e40af inset, 0 0 3px 1.2px rgba(56,189,248,0.3), 0 0 6px 1.8px rgba(0,93,255,0.2); }
+          50%  { transform: rotate(270deg); box-shadow: 0 6px 12px 0 #60a5fa inset, 0 12px 6px 0 #0284c7 inset, 0 24px 36px 0 #005dff inset, 0 0 3px 1.2px rgba(56,189,248,0.3), 0 0 6px 1.8px rgba(0,93,255,0.2); }
+          100% { transform: rotate(450deg); box-shadow: 0 6px 12px 0 #4dc8fd inset, 0 12px 18px 0 #005dff inset, 0 36px 36px 0 #1e40af inset, 0 0 3px 1.2px rgba(56,189,248,0.3), 0 0 6px 1.8px rgba(0,93,255,0.2); }
+        }
+        @keyframes loaderLetter {
+          0%, 100% { opacity: 0.4; transform: translateY(0); }
+          20%      { opacity: 1;   transform: scale(1.15); }
+          40%      { opacity: 0.7; transform: translateY(0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .akka-circle, .akka-letter { animation: none !important; }
+        }
       `}</style>
 
-      {/* Static concentric rings (r = 46 / 34 / 22 on a 100 viewBox) */}
-      <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full">
-        <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(0,0,0,0.07)" strokeWidth="1" />
-        <circle cx="50" cy="50" r="34" fill="none" stroke="rgba(0,0,0,0.06)" strokeWidth="1" />
-        <circle cx="50" cy="50" r="22" fill="none" stroke="rgba(0,0,0,0.06)" strokeWidth="1" />
-      </svg>
+      {letters.map((ch, i) => (
+        <span
+          key={i}
+          className="akka-letter inline-block text-[#0f172a] opacity-40"
+          style={{
+            animationName: "loaderLetter",
+            animationDuration: letterDur,
+            animationIterationCount: "infinite",
+            animationDelay: `${i * 0.1}s`,
+          }}
+        >
+          {ch}
+        </span>
+      ))}
 
-      {/* Rotating conic "scan" sweep, masked into a thin outer ring */}
       <div
-        className="akka-anim absolute inset-[4%] rounded-full"
+        className="akka-circle absolute inset-0 rounded-full"
         style={{
-          background: "conic-gradient(from 0deg, transparent 0deg, rgba(0,0,0,0.22) 70deg, transparent 150deg)",
-          WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1.5px))",
-          mask: "radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1.5px))",
-          animation: `akkaSpin ${sweep} linear infinite`,
-        }}
-      />
-
-      {/* Orbiting particles — aligned to the three rings */}
-      <Orbit inset="4%"  dur={orbitA} dotPx={px(0.045)} color="#202020" />
-      <Orbit inset="16%" dur={orbitB} reverse dotPx={px(0.035)} color="rgba(0,0,0,0.45)" />
-      <Orbit inset="28%" dur={orbitC} dotPx={px(0.03)} color="#202020" opacity={0.85} />
-
-      {/* Soft neutral halo behind the core */}
-      <div
-        className="akka-anim absolute rounded-full"
-        style={{
-          inset: "30%",
-          background: "radial-gradient(circle, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0) 70%)",
-          animation: `akkaHalo ${breathe} ease-in-out infinite`,
-        }}
-      />
-
-      {/* Central core */}
-      <div
-        className="akka-anim absolute rounded-full"
-        style={{
-          inset: "41%",
-          background: "radial-gradient(circle at 35% 30%, #4a4a4a, #1a1a1a)",
-          boxShadow: `0 0 ${px(0.1)}px rgba(0,0,0,0.25)`,
-          animation: `akkaBreathe ${breathe} ease-in-out infinite`,
+          animationName: "loaderCircle",
+          animationDuration: circleDur,
+          animationTimingFunction: "linear",
+          animationIterationCount: "infinite",
         }}
       />
     </div>
