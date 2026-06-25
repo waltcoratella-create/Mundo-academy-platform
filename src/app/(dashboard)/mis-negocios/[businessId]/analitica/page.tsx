@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 import { getBusinessById } from "@/lib/supabase/queries";
 import "./analytics.css";
-import { MOCK_DATA } from "./mock-data";
+import { getAnalyticsData } from "./data";
 import { FilterBar } from "./components/FilterBar";
 import { TodaySection } from "./components/TodaySection";
 import { StatGrid } from "./components/StatGrid";
@@ -24,7 +24,13 @@ export default async function AnaliticaPage({
   const business = await getBusinessById(params.businessId, userId);
   if (!business) notFound();
 
-  const { today, stats, breakdown, filter } = MOCK_DATA;
+  const { today, stats, breakdown, filter } = await getAnalyticsData({
+    businessId: business.id,
+    range: "7d",
+    comparison: "previous",
+    granularity: "daily",
+    productId: null,
+  });
 
   return (
     <div className="analytics-page">
