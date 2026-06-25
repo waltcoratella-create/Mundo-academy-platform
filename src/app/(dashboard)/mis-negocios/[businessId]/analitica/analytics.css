@@ -123,6 +123,44 @@
 
 .analytics-page .separator { height: 1px; background: var(--border-stroke); width: 100%; }
 
+/* Filter dropdown menu (functional control — keeps the surface look) */
+.analytics-page .menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 200px;
+  background: #ffffff;
+  border: 1px solid var(--gray-a5, rgba(0,0,0,0.122));
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+  padding: 4px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.analytics-page .menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: var(--whop-font-inter), sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--gray-12);
+  cursor: pointer;
+  white-space: nowrap;
+  text-align: left;
+}
+.analytics-page .menu-item:hover { background: var(--gray-a3); }
+.analytics-page .menu-item[data-active="true"] { background: var(--gray-a3); }
+
 .analytics-page .analytics-container { container-type: inline-size; }
 
 .analytics-page .stats-grid {

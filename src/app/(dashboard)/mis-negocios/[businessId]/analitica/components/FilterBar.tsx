@@ -1,7 +1,14 @@
+"use client";
+
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useState, useRef, useEffect } from "react";
 import type { FilterState } from "../types";
+import { RANGE_OPTIONS, COMPARISON_OPTIONS, GRANULARITY_OPTIONS, type Option } from "../filters";
 
 interface FilterBarProps {
   filter: FilterState;
+  selected: { range: string; comparison: string; granularity: string; productId: string };
+  products: { id: string; name: string }[];
 }
 
 function Chevron() {
@@ -36,27 +43,85 @@ function GearIcon() {
 }
 
 const labelStyle: React.CSSProperties = {
-  fontSize: "14px",
-  fontWeight: 400,
-  lineHeight: "20px",
-  color: "var(--gray-a11, rgba(0,0,0,0.608))",
-  whiteSpace: "nowrap",
+  fontSize: "14px", fontWeight: 400, lineHeight: "20px",
+  color: "var(--gray-a11, rgba(0,0,0,0.608))", whiteSpace: "nowrap",
 };
 
+function Dropdown({ display, options, value, onSelect }: {
+  display: string;
+  options: Option[];
+  value: string;
+  onSelect: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button type="button" className="btn-surface" onClick={() => setOpen((o) => !o)}>
+        {display}
+        <Chevron />
+      </button>
+      {open && (
+        <div className="menu">
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              className="menu-item"
+              data-active={o.value === value}
+              onClick={() => { onSelect(o.value); setOpen(false); }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
- * Stats filter bar — surface buttons + inline "compared to" / "on" labels,
- * with Add / Editar pushed to the right. Visual only for now.
+ * Stats filter bar — surface buttons drive URL searchParams; the server
+ * component re-fetches on change. Add / Editar remain visual for now.
  */
-export function FilterBar({ filter }: FilterBarProps) {
+export function FilterBar({ filter, selected, products }: FilterBarProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+
+  function setParam(key: string, value: string) {
+    const params = new URLSearchParams(sp.toString());
+    params.set(key, value);
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  const productOptions: Option[] = [
+    { value: "all", label: "Todos los productos" },
+    ...products.map((p) => ({ value: p.id, label: p.name })),
+  ];
+
   return (
     <div className="hide-scrollbar" style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", paddingBottom: "2px" }}>
-      <button type="button" className="btn-surface">{filter.timeRange}<Chevron /></button>
+      <Dropdown display={filter.timeRange} options={RANGE_OPTIONS} value={selected.range} onSelect={(v) => setParam("range", v)} />
+
       <button type="button" className="btn-surface"><CalendarIcon />{filter.dateLabel}</button>
+
       <span style={labelStyle}>compared to</span>
-      <button type="button" className="btn-surface">{filter.comparisonPeriod}<Chevron /></button>
-      <button type="button" className="btn-surface">{filter.granularity}<Chevron /></button>
+      <Dropdown display={filter.comparisonPeriod} options={COMPARISON_OPTIONS} value={selected.comparison} onSelect={(v) => setParam("comparison", v)} />
+
+      <Dropdown display={filter.granularity} options={GRANULARITY_OPTIONS} value={selected.granularity} onSelect={(v) => setParam("granularity", v)} />
+
       <span style={labelStyle}>on</span>
-      <button type="button" className="btn-surface">{filter.product}<Chevron /></button>
+      <Dropdown display={filter.product} options={productOptions} value={selected.productId} onSelect={(v) => setParam("productId", v)} />
 
       <div style={{ marginLeft: "auto", display: "flex", gap: "8px", flexShrink: 0 }}>
         <button type="button" className="btn-surface"><PlusIcon />Add</button>
