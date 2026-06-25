@@ -23,11 +23,11 @@ export const MOCK_DATA: AnalyticsPageData = {
     product: "Todos los productos",
   },
   stats: [
-    { id: "gross-revenue", title: "Ingresos brutos", value: "0,00 US$", chartData: [], startLabel: "jun 14", endLabel: "Hoy" },
-    { id: "net-revenue",   title: "Ingresos netos",  value: "0,00 US$", chartData: [], startLabel: "jun 14", endLabel: "Hoy" },
-    { id: "new-users",     title: "Nuevos usuarios", value: "0",        chartData: [], startLabel: "jun 14", endLabel: "Hoy" },
-    { id: "mrr",           title: "MRR",             value: "0,00 US$", chartData: [], startLabel: "jun 14", endLabel: "Hoy" },
-    { id: "arr",           title: "ARR",             value: "0,00 US$", chartData: [], startLabel: "jun 14", endLabel: "Hoy" },
+    { id: "gross-revenue", title: "Ingresos brutos", value: "0,00 US$", chartData: [], startLabel: "jun 14", endLabel: "Hoy", delta: null },
+    { id: "net-revenue",   title: "Ingresos netos",  value: "0,00 US$", chartData: [], startLabel: "jun 14", endLabel: "Hoy", delta: null },
+    { id: "new-users",     title: "Nuevos usuarios", value: "0",        chartData: [], startLabel: "jun 14", endLabel: "Hoy", delta: null },
+    { id: "mrr",           title: "MRR",             value: "0,00 US$", chartData: [], startLabel: "jun 14", endLabel: "Hoy", delta: null },
+    { id: "arr",           title: "ARR",             value: "0,00 US$", chartData: [], startLabel: "jun 14", endLabel: "Hoy", delta: null },
   ],
   breakdown: [
     { label: "Fallido",     value: null, color: "#E83B2F", percentage: 33.33 },

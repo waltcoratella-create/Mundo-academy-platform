@@ -39,6 +39,9 @@ export default async function AnaliticaPage({
   const from = first(searchParams.from);
   const to = first(searchParams.to);
 
+  // Dev-only sample data for manual chart/delta testing — never reachable in production.
+  const preview = process.env.NODE_ENV !== "production" && first(searchParams.preview) === "1";
+
   const { today, stats, breakdown, filter } = await getAnalyticsData({
     businessId: business.id,
     range,
@@ -47,6 +50,7 @@ export default async function AnaliticaPage({
     productId,
     from,
     to,
+    preview,
   });
 
   return (

@@ -5,6 +5,7 @@ export interface StatCardData {
   chartData: number[];   // [] → empty state
   startLabel: string;    // "jun 14"
   endLabel: string;      // "Hoy"
+  delta: number | null;  // % vs comparison period; null → hidden (e.g. comparison=none)
 }
 
 export interface BreakdownItem {

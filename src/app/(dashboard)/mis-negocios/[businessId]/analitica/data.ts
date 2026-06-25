@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatNumber, formatDateLabel } from "./format";
 import type { AnalyticsPageData, StatCardData, BreakdownItem, TodayData, FilterState } from "./types";
 import { MOCK_DATA } from "./mock-data";
 import {
@@ -9,11 +9,12 @@ import {
 export interface GetAnalyticsParams {
   businessId: string;
   range?: string;        // 7d | 30d | 90d | this_month | last_month | custom
-  comparison?: string;   // previous_period | last_month | last_year | none (label only for now)
+  comparison?: string;   // previous_period | last_month | last_year | none
   granularity?: string;  // daily | weekly | monthly
   productId?: string;    // "all" or a real product id
   from?: string;         // custom range (ISO date)
   to?: string;
+  preview?: boolean;     // dev-only sample data for manual testing (never in production)
 }
 
 const DAY = 86_400_000;
@@ -21,10 +22,6 @@ const BREAKDOWN_COLORS = {
   Fallido: "#E83B2F", Atrasado: "#2953CF", Pagado: "#55A271",
   Cancelado: "#8551C0", Reembolsado: "#FFEB38",
 } as const;
-
-function monthDay(d: Date): string {
-  return `${d.toLocaleDateString("es-MX", { month: "short" }).replace(".", "")} ${d.getDate()}`;
-}
 
 function windowFor(range: string, from: string | undefined, to: string | undefined, now: Date): { start: Date; end: Date } {
   switch (range) {
@@ -42,6 +39,30 @@ function windowFor(range: string, from: string | undefined, to: string | undefin
     case "7d":
     default: return { start: new Date(now.getTime() - 7 * DAY), end: now };
   }
+}
+
+/** Comparison window for deltas; null when comparison=none. */
+function prevWindow(comparison: string, start: Date, end: Date): { start: Date; end: Date } | null {
+  if (comparison === "previous_period") {
+    const len = end.getTime() - start.getTime();
+    return { start: new Date(start.getTime() - len), end: new Date(start.getTime()) };
+  }
+  if (comparison === "last_month") {
+    const s = new Date(start); s.setMonth(s.getMonth() - 1);
+    const e = new Date(end); e.setMonth(e.getMonth() - 1);
+    return { start: s, end: e };
+  }
+  if (comparison === "last_year") {
+    const s = new Date(start); s.setFullYear(s.getFullYear() - 1);
+    const e = new Date(end); e.setFullYear(e.getFullYear() - 1);
+    return { start: s, end: e };
+  }
+  return null;
+}
+
+function pctDelta(cur: number, prev: number | null): number | null {
+  if (prev === null || prev === 0) return null;
+  return Math.round(((cur - prev) / prev) * 1000) / 10;
 }
 
 function bucketIndex(d: Date, start: Date, gran: string): number {
@@ -67,11 +88,37 @@ function series(rows: { created_at: string; amount?: number | string }[], start:
   return b.some((v) => v > 0) ? b : [];
 }
 
+// Dev-only sample (verifies chart + delta rendering). Gated by the page so it
+// can never be reached in production.
+const SAMPLE: AnalyticsPageData = {
+  today: {
+    grossRevenueToday: formatCurrency(1240), grossRevenueYesterday: formatCurrency(980), lastUpdated: "1:07 PM",
+    chartData: [0, 0, 0, 30, 0, 120, 0, 0, 200, 0, 0, 90, 0, 0, 300, 0, 0, 150, 0, 0, 80, 0, 0, 0],
+    totalBalance: formatCurrency(15230), availableBalance: `${formatCurrency(15230)} disponible`,
+    totalPayments: formatCurrency(15230), verifyIdentityWarning: true,
+  },
+  stats: [
+    { id: "gross-revenue", title: "Ingresos brutos", value: formatCurrency(8420), chartData: [120, 300, 80, 420, 260, 510, 330], startLabel: "jun 14", endLabel: "Hoy", delta: 12.4 },
+    { id: "net-revenue",   title: "Ingresos netos",  value: formatCurrency(7980), chartData: [110, 280, 70, 400, 250, 480, 320], startLabel: "jun 14", endLabel: "Hoy", delta: 9.1 },
+    { id: "new-users",     title: "Nuevos usuarios", value: "34", chartData: [2, 5, 1, 8, 4, 9, 5], startLabel: "jun 14", endLabel: "Hoy", delta: -4.5 },
+    { id: "mrr",           title: "MRR",             value: formatCurrency(3200), chartData: [], startLabel: "jun 14", endLabel: "Hoy", delta: null },
+    { id: "arr",           title: "ARR",             value: formatCurrency(38400), chartData: [], startLabel: "jun 14", endLabel: "Hoy", delta: null },
+  ],
+  breakdown: [
+    { label: "Fallido", value: "3", color: "#E83B2F", percentage: 15 },
+    { label: "Atrasado", value: "2", color: "#2953CF", percentage: 10 },
+    { label: "Pagado", value: "12", color: "#55A271", percentage: 60 },
+    { label: "Cancelado", value: "1", color: "#8551C0", percentage: 5 },
+    { label: "Reembolsado", value: "2", color: "#FFEB38", percentage: 10 },
+  ],
+  filter: MOCK_DATA.filter,
+};
+
 /**
  * Real analytics for a business mapped to AnalyticsPageData. Honors range,
- * granularity and productId (transactions + members are filtered). comparison
- * updates the label for now. Empty states preserved when there is no data;
- * falls back to MOCK_DATA's empty shape on error.
+ * granularity, productId (transactions + members filtered) and comparison
+ * (deltas vs the previous/last-month/last-year window). Empty states preserved
+ * when there is no data; falls back to MOCK_DATA's empty shape on error.
  */
 export async function getAnalyticsData({
   businessId,
@@ -81,7 +128,10 @@ export async function getAnalyticsData({
   productId = DEFAULTS.productId,
   from,
   to,
+  preview = false,
 }: GetAnalyticsParams): Promise<AnalyticsPageData> {
+  if (preview) return SAMPLE;
+
   try {
     const supabase = createAdminClient();
     const now = new Date();
@@ -91,56 +141,56 @@ export async function getAnalyticsData({
     const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
     const startOfYesterday = new Date(startOfToday.getTime() - DAY);
     const hasProduct = productId !== "all" && !!productId;
+    const pw = prevWindow(comparison, start, end);
 
     type TxRow = { amount: number | string; status: string; product_id: string | null; created_at: string };
 
-    const rangeTxQ = () => {
-      let q = supabase.from("transactions").select("amount, status, product_id, created_at")
-        .eq("business_id", businessId).gte("created_at", startISO).lte("created_at", endISO);
-      if (hasProduct) q = q.eq("product_id", productId);
-      return q;
-    };
-    const todayTxQ = () => {
-      let q = supabase.from("transactions").select("amount, status, created_at")
-        .eq("business_id", businessId).gte("created_at", startOfToday.toISOString());
-      if (hasProduct) q = q.eq("product_id", productId);
-      return q;
-    };
-    const yesterdayTxQ = () => {
-      let q = supabase.from("transactions").select("amount")
-        .eq("business_id", businessId).eq("status", "succeeded")
-        .gte("created_at", startOfYesterday.toISOString()).lt("created_at", startOfToday.toISOString());
-      if (hasProduct) q = q.eq("product_id", productId);
-      return q;
-    };
-    const membersRangeQ = () => {
-      let q = supabase.from("members").select("created_at")
-        .eq("business_id", businessId).gte("created_at", startISO).lte("created_at", endISO);
-      if (hasProduct) q = q.eq("product_id", productId);
-      return q;
-    };
-    const activeMembersQ = () => {
-      let q = supabase.from("members").select("product_id").eq("business_id", businessId).eq("status", "active");
-      if (hasProduct) q = q.eq("product_id", productId);
-      return q;
-    };
-    const cancelledQ = () => {
-      let q = supabase.from("members").select("id", { count: "exact", head: true })
-        .eq("business_id", businessId).eq("status", "cancelled").gte("created_at", startISO).lte("created_at", endISO);
-      if (hasProduct) q = q.eq("product_id", productId);
-      return q;
-    };
+    const rangeTxBase = supabase.from("transactions").select("amount, status, product_id, created_at")
+      .eq("business_id", businessId).gte("created_at", startISO).lte("created_at", endISO);
+    const rangeTxQ = hasProduct ? rangeTxBase.eq("product_id", productId) : rangeTxBase;
 
-    const [rangeTxR, allSucceededR, todayTxR, yesterdayR, membersRangeR, activeMembersR, productsR, cancelledR] =
+    const todayTxBase = supabase.from("transactions").select("amount, status, created_at")
+      .eq("business_id", businessId).gte("created_at", startOfToday.toISOString());
+    const todayTxQ = hasProduct ? todayTxBase.eq("product_id", productId) : todayTxBase;
+
+    const yesterdayBase = supabase.from("transactions").select("amount").eq("business_id", businessId).eq("status", "succeeded")
+      .gte("created_at", startOfYesterday.toISOString()).lt("created_at", startOfToday.toISOString());
+    const yesterdayTxQ = hasProduct ? yesterdayBase.eq("product_id", productId) : yesterdayBase;
+
+    const membersRangeBase = supabase.from("members").select("created_at").eq("business_id", businessId)
+      .gte("created_at", startISO).lte("created_at", endISO);
+    const membersRangeQ = hasProduct ? membersRangeBase.eq("product_id", productId) : membersRangeBase;
+
+    const activeMembersBase = supabase.from("members").select("product_id").eq("business_id", businessId).eq("status", "active");
+    const activeMembersQ = hasProduct ? activeMembersBase.eq("product_id", productId) : activeMembersBase;
+
+    const cancelledBase = supabase.from("members").select("id", { count: "exact", head: true })
+      .eq("business_id", businessId).eq("status", "cancelled").gte("created_at", startISO).lte("created_at", endISO);
+    const cancelledQ = hasProduct ? cancelledBase.eq("product_id", productId) : cancelledBase;
+
+    // Comparison-window queries (skipped when comparison=none)
+    const prevTxQ = pw
+      ? (() => {
+          const b = supabase.from("transactions").select("amount, status").eq("business_id", businessId)
+            .gte("created_at", pw.start.toISOString()).lte("created_at", pw.end.toISOString());
+          return hasProduct ? b.eq("product_id", productId) : b;
+        })()
+      : Promise.resolve({ data: [] as { amount: number | string; status: string }[] });
+    const prevMembersQ = pw
+      ? (() => {
+          const b = supabase.from("members").select("id", { count: "exact", head: true }).eq("business_id", businessId)
+            .gte("created_at", pw.start.toISOString()).lte("created_at", pw.end.toISOString());
+          return hasProduct ? b.eq("product_id", productId) : b;
+        })()
+      : Promise.resolve({ count: 0 });
+
+    const [rangeTxR, allSucceededR, todayTxR, yesterdayR, membersRangeR, activeMembersR, productsR, cancelledR, prevTxR, prevMembersR] =
       await Promise.all([
-        rangeTxQ(),
+        rangeTxQ,
         supabase.from("transactions").select("amount").eq("business_id", businessId).eq("status", "succeeded"),
-        todayTxQ(),
-        yesterdayTxQ(),
-        membersRangeQ(),
-        activeMembersQ(),
+        todayTxQ, yesterdayTxQ, membersRangeQ, activeMembersQ,
         supabase.from("products").select("id, name, price, billing_period").eq("business_id", businessId),
-        cancelledQ(),
+        cancelledQ, prevTxQ, prevMembersQ,
       ]);
 
     const rangeTx = (rangeTxR.data ?? []) as TxRow[];
@@ -152,6 +202,7 @@ export async function getAnalyticsData({
     const membersRange = (membersRangeR.data ?? []) as { created_at: string }[];
     const activeMembers = (activeMembersR.data ?? []) as { product_id: string | null }[];
     const products = (productsR.data ?? []) as { id: string; name: string; price: number | string; billing_period: string }[];
+    const prevTx = (prevTxR.data ?? []) as { amount: number | string; status: string }[];
 
     const sum = (rows: { amount: number | string }[]) => rows.reduce((s, r) => s + Number(r.amount), 0);
 
@@ -159,6 +210,12 @@ export async function getAnalyticsData({
     const net = gross - sum(refunded);
     const newUsers = membersRange.length;
     const allTimeTotal = sum(allSucceeded);
+
+    // Comparison deltas
+    const prevSucceeded = prevTx.filter((t) => t.status === "succeeded");
+    const prevGross = pw ? sum(prevSucceeded) : null;
+    const prevNet = pw ? prevGross! - sum(prevTx.filter((t) => t.status === "refunded")) : null;
+    const prevUsers = pw ? (prevMembersR as { count: number | null }).count ?? 0 : null;
 
     const productMap = new Map(products.map((p) => [p.id, { name: p.name, price: Number(p.price), bp: p.billing_period }]));
     let mrr = 0;
@@ -170,13 +227,13 @@ export async function getAnalyticsData({
     }
     const arr = mrr * 12;
 
-    const sLabel = monthDay(start);
+    const sLabel = formatDateLabel(start);
     const stats: StatCardData[] = [
-      { id: "gross-revenue", title: "Ingresos brutos", value: formatCurrency(gross), chartData: series(succeeded, start, end, granularity, "sum"), startLabel: sLabel, endLabel: "Hoy" },
-      { id: "net-revenue",   title: "Ingresos netos",  value: formatCurrency(net),   chartData: series(succeeded, start, end, granularity, "sum"), startLabel: sLabel, endLabel: "Hoy" },
-      { id: "new-users",     title: "Nuevos usuarios", value: String(newUsers),      chartData: series(membersRange, start, end, granularity, "count"), startLabel: sLabel, endLabel: "Hoy" },
-      { id: "mrr",           title: "MRR",             value: formatCurrency(mrr),   chartData: [], startLabel: sLabel, endLabel: "Hoy" },
-      { id: "arr",           title: "ARR",             value: formatCurrency(arr),   chartData: [], startLabel: sLabel, endLabel: "Hoy" },
+      { id: "gross-revenue", title: "Ingresos brutos", value: formatCurrency(gross), chartData: series(succeeded, start, end, granularity, "sum"), startLabel: sLabel, endLabel: "Hoy", delta: pctDelta(gross, prevGross) },
+      { id: "net-revenue",   title: "Ingresos netos",  value: formatCurrency(net),   chartData: series(succeeded, start, end, granularity, "sum"), startLabel: sLabel, endLabel: "Hoy", delta: pctDelta(net, prevNet) },
+      { id: "new-users",     title: "Nuevos usuarios", value: formatNumber(newUsers), chartData: series(membersRange, start, end, granularity, "count"), startLabel: sLabel, endLabel: "Hoy", delta: pctDelta(newUsers, prevUsers) },
+      { id: "mrr",           title: "MRR",             value: formatCurrency(mrr),   chartData: [], startLabel: sLabel, endLabel: "Hoy", delta: null },
+      { id: "arr",           title: "ARR",             value: formatCurrency(arr),   chartData: [], startLabel: sLabel, endLabel: "Hoy", delta: null },
     ];
 
     const grossToday = sum(todayTx);
@@ -205,7 +262,7 @@ export async function getAnalyticsData({
     const totalEvents = Object.values(counts).reduce((s, v) => s + v, 0);
     const breakdown: BreakdownItem[] = (Object.keys(BREAKDOWN_COLORS) as (keyof typeof BREAKDOWN_COLORS)[]).map((label) => ({
       label,
-      value: totalEvents > 0 ? String(counts[label]) : null,
+      value: totalEvents > 0 ? formatNumber(counts[label]) : null,
       color: BREAKDOWN_COLORS[label],
       percentage: totalEvents > 0 ? Math.round((counts[label] / totalEvents) * 10000) / 100 : 0,
     }));
