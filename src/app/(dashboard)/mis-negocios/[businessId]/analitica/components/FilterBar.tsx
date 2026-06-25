@@ -9,6 +9,10 @@ interface FilterBarProps {
   filter: FilterState;
   selected: { range: string; comparison: string; granularity: string; productId: string };
   products: { id: string; name: string }[];
+  editMode: boolean;
+  editPending: boolean;
+  onAdd: () => void;
+  onToggleEdit: () => void;
 }
 
 function Chevron() {
@@ -93,7 +97,7 @@ function Dropdown({ display, options, value, onSelect }: {
  * Stats filter bar — surface buttons drive URL searchParams; the server
  * component re-fetches on change. Add / Editar remain visual for now.
  */
-export function FilterBar({ filter, selected, products }: FilterBarProps) {
+export function FilterBar({ filter, selected, products, editMode, editPending, onAdd, onToggleEdit }: FilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -124,8 +128,12 @@ export function FilterBar({ filter, selected, products }: FilterBarProps) {
       <Dropdown display={filter.product} options={productOptions} value={selected.productId} onSelect={(v) => setParam("productId", v)} />
 
       <div style={{ marginLeft: "auto", display: "flex", gap: "8px", flexShrink: 0 }}>
-        <button type="button" className="btn-surface"><PlusIcon />Add</button>
-        <button type="button" className="btn-surface"><GearIcon />Editar</button>
+        {editMode && (
+          <button type="button" className="btn-surface" onClick={onAdd}><PlusIcon />Add</button>
+        )}
+        <button type="button" className="btn-surface" onClick={onToggleEdit} disabled={editPending}>
+          <GearIcon />{editMode ? (editPending ? "Guardando…" : "Guardar") : "Editar"}
+        </button>
       </div>
     </div>
   );
