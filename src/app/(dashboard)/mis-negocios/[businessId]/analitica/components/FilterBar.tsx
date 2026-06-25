@@ -4,32 +4,64 @@ interface FilterBarProps {
   filter: FilterState;
 }
 
-function ChevronDown() {
+function Chevron() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
       <path d="M6 9l6 6 6-6" stroke="var(--gray-11, #636363)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
+function CalendarIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <rect x="3" y="4" width="18" height="17" rx="2" stroke="var(--gray-11, #636363)" strokeWidth="2" />
+      <path d="M3 9h18M8 2v4M16 2v4" stroke="var(--gray-11, #636363)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+function PlusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path d="M12 5v14M5 12h14" stroke="var(--gray-12, #202020)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+function GearIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="3" stroke="var(--gray-12, #202020)" strokeWidth="2" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 7 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3 15.4 1.65 1.65 0 0 0 1.83 14H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9 1.65 1.65 0 0 0 4.27 7.18l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09c.36.14.66.4.86.74" stroke="var(--gray-12, #202020)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+const labelStyle: React.CSSProperties = {
+  fontSize: "14px",
+  fontWeight: 400,
+  lineHeight: "20px",
+  color: "var(--gray-a11, rgba(0,0,0,0.608))",
+  whiteSpace: "nowrap",
+};
 
 /**
- * Top filter row — surface buttons reflecting the current FilterState.
- * Visual only for now; wire each button to real filtering later.
+ * Stats filter bar — surface buttons + inline "compared to" / "on" labels,
+ * with Add / Editar pushed to the right. Visual only for now.
  */
 export function FilterBar({ filter }: FilterBarProps) {
-  const buttons = [filter.timeRange, filter.dateLabel, filter.comparisonPeriod, filter.granularity, filter.product];
-
   return (
-    <div
-      className="hide-scrollbar"
-      style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", paddingBottom: "2px" }}
-    >
-      {buttons.map((label) => (
-        <button key={label} type="button" className="btn-surface">
-          {label}
-          <ChevronDown />
-        </button>
-      ))}
+    <div className="hide-scrollbar" style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", paddingBottom: "2px" }}>
+      <button type="button" className="btn-surface">{filter.timeRange}<Chevron /></button>
+      <button type="button" className="btn-surface"><CalendarIcon />{filter.dateLabel}</button>
+      <span style={labelStyle}>compared to</span>
+      <button type="button" className="btn-surface">{filter.comparisonPeriod}<Chevron /></button>
+      <button type="button" className="btn-surface">{filter.granularity}<Chevron /></button>
+      <span style={labelStyle}>on</span>
+      <button type="button" className="btn-surface">{filter.product}<Chevron /></button>
+
+      <div style={{ marginLeft: "auto", display: "flex", gap: "8px", flexShrink: 0 }}>
+        <button type="button" className="btn-surface"><PlusIcon />Add</button>
+        <button type="button" className="btn-surface"><GearIcon />Editar</button>
+      </div>
     </div>
   );
 }

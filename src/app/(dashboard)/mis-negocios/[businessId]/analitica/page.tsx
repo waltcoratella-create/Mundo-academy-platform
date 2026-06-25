@@ -28,10 +28,30 @@ export default async function AnaliticaPage({
 
   return (
     <div className="analytics-page">
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "24px" }}>
-        <FilterBar filter={filter} />
+      <div style={{ display: "flex", flexDirection: "column", gap: "24px", padding: "24px" }}>
         <TodaySection today={today} />
-        <StatGrid stats={stats} breakdown={breakdown} />
+
+        {today.verifyIdentityWarning && (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 16px", borderRadius: "12px", background: "var(--gray-2, #F9F9F9)" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+              <path d="M12 3 2 20h20L12 3z" stroke="#B7791F" strokeWidth="2" strokeLinejoin="round" />
+              <path d="M12 10v4M12 17h.01" stroke="#B7791F" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <span style={{ fontSize: "14px", fontWeight: 400, lineHeight: "20px", color: "var(--gray-12, #202020)" }}>
+              <span style={{ color: "#B7791F", fontWeight: 500 }}>Verifica tu identidad</span> para seguir recibiendo pagos y para retirar.
+            </span>
+          </div>
+        )}
+
+        <section>
+          <h2 style={{ fontSize: "28px", fontWeight: 700, lineHeight: "36px", letterSpacing: "-0.025em", color: "var(--gray-12, #202020)" }}>
+            Stats
+          </h2>
+          <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
+            <FilterBar filter={filter} />
+            <StatGrid stats={stats} breakdown={breakdown} />
+          </div>
+        </section>
       </div>
     </div>
   );
