@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import type { FilterState, StatCardData, BreakdownItem } from "../types";
 import {
-  WIDGET_LABEL, DEFAULT_CONFIG, type WidgetConfig, type WidgetKey,
+  WIDGET_LABEL, WIDGET_CATEGORY, CATEGORY_ORDER, DEFAULT_CONFIG, type WidgetConfig, type WidgetKey,
 } from "../widgets-config";
 import { saveAnalyticsWidgets, resetAnalyticsWidgets } from "../widgets-actions";
 import { FilterBar } from "./FilterBar";
@@ -110,10 +110,17 @@ export function StatsManager({ businessId, filter, selected, products, stats, br
               Todos los widgets ya están visibles
             </span>
           ) : (
-            hidden.map((w) => (
-              <button key={w.key} type="button" className="menu-item" onClick={() => add(w.key)}>
-                + {WIDGET_LABEL[w.key]}
-              </button>
+            CATEGORY_ORDER.filter((cat) => hidden.some((h) => WIDGET_CATEGORY[h.key] === cat)).map((cat) => (
+              <div key={cat}>
+                <div style={{ padding: "6px 8px 2px", fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.3px", color: "var(--gray-9, #8D8D8D)" }}>
+                  {cat}
+                </div>
+                {hidden.filter((h) => WIDGET_CATEGORY[h.key] === cat).map((w) => (
+                  <button key={w.key} type="button" className="menu-item" onClick={() => add(w.key)}>
+                    + {WIDGET_LABEL[w.key]}
+                  </button>
+                ))}
+              </div>
             ))
           )}
         </div>

@@ -1,10 +1,10 @@
 export const ANALYTICS_WIDGETS = [
-  { key: "gross-revenue", label: "Ingresos brutos" },
-  { key: "net-revenue", label: "Ingresos netos" },
-  { key: "new-users", label: "Nuevos usuarios" },
-  { key: "mrr", label: "MRR" },
-  { key: "arr", label: "ARR" },
-  { key: "payment-breakdown", label: "Desglose de pagos" },
+  { key: "gross-revenue", label: "Ingresos brutos", category: "Ingresos" },
+  { key: "net-revenue", label: "Ingresos netos", category: "Ingresos" },
+  { key: "new-users", label: "Nuevos usuarios", category: "Usuarios" },
+  { key: "mrr", label: "MRR", category: "Ingresos" },
+  { key: "arr", label: "ARR", category: "Ingresos" },
+  { key: "payment-breakdown", label: "Desglose de pagos", category: "Pagos" },
 ] as const;
 
 export type WidgetKey = (typeof ANALYTICS_WIDGETS)[number]["key"];
@@ -17,6 +17,10 @@ export interface WidgetConfig {
 export const WIDGET_LABEL: Record<string, string> = Object.fromEntries(
   ANALYTICS_WIDGETS.map((w) => [w.key, w.label]),
 );
+export const WIDGET_CATEGORY: Record<string, string> = Object.fromEntries(
+  ANALYTICS_WIDGETS.map((w) => [w.key, w.category]),
+);
+export const CATEGORY_ORDER = ["Usuarios", "Ingresos", "Pagos"];
 
 const VALID_KEYS = new Set<string>(ANALYTICS_WIDGETS.map((w) => w.key));
 
