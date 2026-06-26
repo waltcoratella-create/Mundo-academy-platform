@@ -3,7 +3,7 @@
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import type { FilterState } from "../types";
-import { RANGE_OPTIONS, COMPARISON_OPTIONS, GRANULARITY_OPTIONS, type Option } from "../filters";
+import { RANGE_OPTIONS, COMPARISON_OPTIONS, granularityOptionsForRange, type Option } from "../filters";
 
 interface FilterBarProps {
   filter: FilterState;
@@ -122,7 +122,7 @@ export function FilterBar({ filter, selected, products, editMode, editPending, o
       <span style={labelStyle}>compared to</span>
       <Dropdown display={filter.comparisonPeriod} options={COMPARISON_OPTIONS} value={selected.comparison} onSelect={(v) => setParam("comparison", v)} />
 
-      <Dropdown display={filter.granularity} options={GRANULARITY_OPTIONS} value={selected.granularity} onSelect={(v) => setParam("granularity", v)} />
+      <Dropdown display={filter.granularity} options={granularityOptionsForRange(selected.range)} value={selected.granularity} onSelect={(v) => setParam("granularity", v)} />
 
       <span style={labelStyle}>on</span>
       <Dropdown display={filter.product} options={productOptions} value={selected.productId} onSelect={(v) => setParam("productId", v)} />

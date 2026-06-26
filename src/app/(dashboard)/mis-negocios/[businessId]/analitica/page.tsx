@@ -33,7 +33,7 @@ export default async function AnaliticaPage({
   // Validate params → safe defaults
   const range = validateRange(first(searchParams.range));
   const comparison = validateComparison(first(searchParams.comparison));
-  const granularity = validateGranularity(first(searchParams.granularity));
+  const granularity = validateGranularity(first(searchParams.granularity), range);
   const rawProduct = first(searchParams.productId);
   const productId = rawProduct && products.some((p) => p.id === rawProduct) ? rawProduct : DEFAULTS.productId;
   const from = first(searchParams.from);

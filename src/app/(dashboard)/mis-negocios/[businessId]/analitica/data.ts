@@ -24,14 +24,16 @@ const BREAKDOWN_COLORS = {
 } as const;
 
 function windowFor(range: string, from: string | undefined, to: string | undefined, now: Date): { start: Date; end: Date } {
+  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
   switch (range) {
-    case "30d": return { start: new Date(now.getTime() - 30 * DAY), end: now };
-    case "90d": return { start: new Date(now.getTime() - 90 * DAY), end: now };
-    case "this_month": return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now };
-    case "last_month": return {
-      start: new Date(now.getFullYear(), now.getMonth() - 1, 1),
-      end: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999),
-    };
+    case "today": return { start: startOfToday, end: now };
+    case "4w": return { start: new Date(now.getTime() - 28 * DAY), end: now };
+    case "3m": { const s = new Date(now); s.setMonth(s.getMonth() - 3); return { start: s, end: now }; }
+    case "12m": { const s = new Date(now); s.setFullYear(s.getFullYear() - 1); return { start: s, end: now }; }
+    case "all": return { start: new Date(0), end: now };
+    case "month_to_date": return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now };
+    case "quarter_to_date": return { start: new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1), end: now };
+    case "year_to_date": return { start: new Date(now.getFullYear(), 0, 1), end: now };
     case "custom": return {
       start: from ? new Date(from) : new Date(now.getTime() - 7 * DAY),
       end: to ? new Date(`${to}T23:59:59`) : now,
