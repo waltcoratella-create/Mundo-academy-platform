@@ -4,6 +4,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import type { FilterState } from "../types";
 import { RANGE_OPTIONS, COMPARISON_OPTIONS, granularityOptionsForRange, type Option } from "../filters";
+import { DateRangePicker } from "./DateRangePicker";
 
 interface FilterBarProps {
   filter: FilterState;
@@ -50,6 +51,39 @@ const labelStyle: React.CSSProperties = {
   fontSize: "14px", fontWeight: 400, lineHeight: "20px",
   color: "var(--gray-a11, rgba(0,0,0,0.608))", whiteSpace: "nowrap",
 };
+
+function DatePill({ label, initialFrom, initialTo, onApply }: {
+  label: string;
+  initialFrom?: string;
+  initialTo?: string;
+  onApply: (from: string, to: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button type="button" className="btn-surface" onClick={() => setOpen((o) => !o)}>
+        <CalendarIcon />
+        {label}
+      </button>
+      {open && (
+        <DateRangePicker
+          initialFrom={initialFrom}
+          initialTo={initialTo}
+          onApply={(f, t) => { onApply(f, t); setOpen(false); }}
+          onCancel={() => setOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
 
 function Dropdown({ display, options, value, onSelect }: {
   display: string;
@@ -103,8 +137,11 @@ export function FilterBar({ filter, selected, products, editMode, editPending, o
   const sp = useSearchParams();
 
   function setParam(key: string, value: string) {
+    setParams({ [key]: value });
+  }
+  function setParams(obj: Record<string, string>) {
     const params = new URLSearchParams(sp.toString());
-    params.set(key, value);
+    for (const k in obj) params.set(k, obj[k]);
     router.push(`${pathname}?${params.toString()}`);
   }
 
@@ -117,10 +154,24 @@ export function FilterBar({ filter, selected, products, editMode, editPending, o
     <div className="hide-scrollbar" style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", paddingBottom: "2px" }}>
       <Dropdown display={filter.timeRange} options={RANGE_OPTIONS} value={selected.range} onSelect={(v) => setParam("range", v)} />
 
-      <button type="button" className="btn-surface"><CalendarIcon />{filter.dateLabel}</button>
+      <DatePill
+        label={filter.dateLabel}
+        initialFrom={sp.get("from") ?? undefined}
+        initialTo={sp.get("to") ?? undefined}
+        onApply={(f, t) => setParams({ range: "custom", from: f, to: t })}
+      />
 
       <span style={labelStyle}>compared to</span>
       <Dropdown display={filter.comparisonPeriod} options={COMPARISON_OPTIONS} value={selected.comparison} onSelect={(v) => setParam("comparison", v)} />
+
+      {selected.comparison === "custom" && (
+        <DatePill
+          label={sp.get("compareFrom") && sp.get("compareTo") ? `${sp.get("compareFrom")} → ${sp.get("compareTo")}` : "Elegir rango"}
+          initialFrom={sp.get("compareFrom") ?? undefined}
+          initialTo={sp.get("compareTo") ?? undefined}
+          onApply={(f, t) => setParams({ comparison: "custom", compareFrom: f, compareTo: t })}
+        />
+      )}
 
       <Dropdown display={filter.granularity} options={granularityOptionsForRange(selected.range)} value={selected.granularity} onSelect={(v) => setParam("granularity", v)} />
 
