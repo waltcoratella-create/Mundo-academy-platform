@@ -38,12 +38,14 @@ export default async function AnaliticaPage({
   const productId = rawProduct && products.some((p) => p.id === rawProduct) ? rawProduct : DEFAULTS.productId;
   const from = first(searchParams.from);
   const to = first(searchParams.to);
+  const compareFrom = first(searchParams.compareFrom);
+  const compareTo = first(searchParams.compareTo);
 
   // Dev-only sample data for manual chart/delta testing — never reachable in production.
   const preview = process.env.NODE_ENV !== "production" && first(searchParams.preview) === "1";
 
   const [{ today, stats, breakdown, filter }, widgetsInitial] = await Promise.all([
-    getAnalyticsData({ businessId: business.id, range, comparison, granularity, productId, from, to, preview }),
+    getAnalyticsData({ businessId: business.id, range, comparison, granularity, productId, from, to, compareFrom, compareTo, preview }),
     getAnalyticsWidgets({ businessId: business.id }),
   ]);
 

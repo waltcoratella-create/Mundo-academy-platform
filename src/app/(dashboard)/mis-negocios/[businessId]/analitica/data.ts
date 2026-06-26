@@ -14,6 +14,8 @@ export interface GetAnalyticsParams {
   productId?: string;    // "all" or a real product id
   from?: string;         // custom range (ISO date)
   to?: string;
+  compareFrom?: string;  // custom comparison range (ISO date)
+  compareTo?: string;
   preview?: boolean;     // dev-only sample data for manual testing (never in production)
 }
 
@@ -43,21 +45,23 @@ function windowFor(range: string, from: string | undefined, to: string | undefin
   }
 }
 
-/** Comparison window for deltas; null when comparison=none. */
-function prevWindow(comparison: string, start: Date, end: Date): { start: Date; end: Date } | null {
+/** Comparison window for deltas; null when it can't be determined. */
+function prevWindow(
+  comparison: string, start: Date, end: Date,
+  compareFrom: string | undefined, compareTo: string | undefined,
+): { start: Date; end: Date } | null {
   if (comparison === "previous_period") {
     const len = end.getTime() - start.getTime();
     return { start: new Date(start.getTime() - len), end: new Date(start.getTime()) };
-  }
-  if (comparison === "last_month") {
-    const s = new Date(start); s.setMonth(s.getMonth() - 1);
-    const e = new Date(end); e.setMonth(e.getMonth() - 1);
-    return { start: s, end: e };
   }
   if (comparison === "last_year") {
     const s = new Date(start); s.setFullYear(s.getFullYear() - 1);
     const e = new Date(end); e.setFullYear(e.getFullYear() - 1);
     return { start: s, end: e };
+  }
+  if (comparison === "custom") {
+    if (!compareFrom || !compareTo) return null;
+    return { start: new Date(compareFrom), end: new Date(`${compareTo}T23:59:59`) };
   }
   return null;
 }
@@ -130,6 +134,8 @@ export async function getAnalyticsData({
   productId = DEFAULTS.productId,
   from,
   to,
+  compareFrom,
+  compareTo,
   preview = false,
 }: GetAnalyticsParams): Promise<AnalyticsPageData> {
   if (preview) return SAMPLE;
@@ -143,7 +149,7 @@ export async function getAnalyticsData({
     const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
     const startOfYesterday = new Date(startOfToday.getTime() - DAY);
     const hasProduct = productId !== "all" && !!productId;
-    const pw = prevWindow(comparison, start, end);
+    const pw = prevWindow(comparison, start, end, compareFrom, compareTo);
 
     type TxRow = { amount: number | string; status: string; product_id: string | null; created_at: string };
 
