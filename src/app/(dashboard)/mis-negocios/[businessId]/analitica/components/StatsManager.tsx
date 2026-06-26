@@ -9,6 +9,7 @@ import { saveAnalyticsWidgets, resetAnalyticsWidgets } from "../widgets-actions"
 import { FilterBar } from "./FilterBar";
 import { StatCard } from "./StatCard";
 import { BreakdownCard } from "./BreakdownCard";
+import { ShareModal } from "./ShareModal";
 
 interface StatsManagerProps {
   businessId: string;
@@ -24,6 +25,7 @@ export function StatsManager({ businessId, filter, selected, products, stats, br
   const [widgets, setWidgets] = useState<WidgetConfig[]>(widgetsInitial);
   const [editMode, setEditMode] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [shareWidget, setShareWidget] = useState<StatCardData | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const statsById = new Map(stats.map((s) => [s.id, s]));
@@ -131,12 +133,14 @@ export function StatsManager({ businessId, filter, selected, products, stats, br
               {w.key === "payment-breakdown" ? (
                 <BreakdownCard items={breakdown} />
               ) : statsById.has(w.key) ? (
-                <StatCard data={statsById.get(w.key)!} />
+                <StatCard data={statsById.get(w.key)!} onShare={(id) => setShareWidget(statsById.get(id) ?? null)} />
               ) : null}
             </div>
           ))}
         </div>
       </div>
+
+      {shareWidget && <ShareModal data={shareWidget} onClose={() => setShareWidget(null)} />}
     </>
   );
 }
