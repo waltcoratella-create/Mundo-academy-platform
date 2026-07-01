@@ -19,7 +19,8 @@ const CHART_H = 123; // chart area height (y = 0 → 123)
 export function ChartWidget({ data = [], startLabel, endLabel, width: propWidth }: ChartWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(propWidth ?? 326.5);
-  const isEmpty = data.length === 0;
+  const nums = data.map((v) => Number(v) || 0);
+  const isEmpty = !nums.some((v) => v > 0);
 
   useEffect(() => {
     if (propWidth) return;
@@ -32,7 +33,7 @@ export function ChartWidget({ data = [], startLabel, endLabel, width: propWidth 
 
   const totalHeight = CHART_H + 38; // 123 + 38px for labels
   const gridYValues = Array.from({ length: 5 }, (_, i) => Math.round(((CHART_H / 4) * i) * 100) / 100);
-  const maxVal = data.length ? Math.max(...data, 1) : 1;
+  const maxVal = Math.max(...nums, 1);
 
   return (
     <div ref={containerRef} className="relative w-full flex-1" style={{ minHeight: `${totalHeight}px` }}>
@@ -45,10 +46,10 @@ export function ChartWidget({ data = [], startLabel, endLabel, width: propWidth 
 
         {!isEmpty && (
           <g transform="translate(0, 10)">
-            {data.map((val, i) => {
-              const barW = (width / data.length) * 0.7;
-              const x = (width / data.length) * i + (width / data.length) * 0.15;
-              const barH = (val / maxVal) * CHART_H;
+            {nums.map((val, i) => {
+              const barW = (width / nums.length) * 0.7;
+              const x = (width / nums.length) * i + (width / nums.length) * 0.15;
+              const barH = val > 0 ? Math.max((val / maxVal) * CHART_H, 2) : 0;
               const y = CHART_H - barH;
               return <rect key={i} x={x} y={y} width={barW} height={barH} fill="var(--gray-a5, rgba(0,0,0,0.122))" rx={1} />;
             })}

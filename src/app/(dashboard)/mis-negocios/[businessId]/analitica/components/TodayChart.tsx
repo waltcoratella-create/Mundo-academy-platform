@@ -19,7 +19,8 @@ const CHART_HEIGHT = 160;
 export function TodayChart({ data = [], startLabel = "12:00 AM", endLabel = "12:00 AM" }: TodayChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(737);
-  const isEmpty = data.length === 0;
+  const nums = data.map((v) => Number(v) || 0);
+  const isEmpty = !nums.some((v) => v > 0);
 
   useEffect(() => {
     const ro = new ResizeObserver((entries) => {
@@ -31,8 +32,8 @@ export function TodayChart({ data = [], startLabel = "12:00 AM", endLabel = "12:
 
   const verticalLines = Array.from({ length: 25 }, (_, i) => Math.round((width / 24) * i));
   const baselineY = Math.round(CHART_HEIGHT * 0.8);
-  const maxVal = data.length ? Math.max(...data, 1) : 1;
-  const barWidth = data.length ? (width / data.length) * 0.6 : 0;
+  const maxVal = Math.max(...nums, 1);
+  const barWidth = nums.length ? (width / nums.length) * 0.6 : 0;
 
   return (
     <div ref={containerRef} className="relative w-full" style={{ height: `${CHART_HEIGHT}px` }}>
@@ -46,9 +47,9 @@ export function TodayChart({ data = [], startLabel = "12:00 AM", endLabel = "12:
         <line x1={0} y1={baselineY} x2={width} y2={baselineY} stroke="var(--gray-4, #E8E8E8)" strokeWidth={1} />
 
         {!isEmpty &&
-          data.map((val, i) => {
-            const barH = (val / maxVal) * baselineY;
-            const x = (width / data.length) * i + (width / data.length) * 0.2;
+          nums.map((val, i) => {
+            const barH = val > 0 ? Math.max((val / maxVal) * baselineY, 2) : 0;
+            const x = (width / nums.length) * i + (width / nums.length) * 0.2;
             const y = baselineY - barH;
             return <rect key={i} x={x} y={y} width={barWidth} height={barH} fill="var(--gray-a5, rgba(0,0,0,0.122))" rx={2} />;
           })}

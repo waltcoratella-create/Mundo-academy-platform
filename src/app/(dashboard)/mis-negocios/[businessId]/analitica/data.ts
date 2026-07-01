@@ -107,8 +107,8 @@ const SAMPLE: AnalyticsPageData = {
     { id: "gross-revenue", title: "Ingresos brutos", value: formatCurrency(8420), chartData: [120, 300, 80, 420, 260, 510, 330], startLabel: "jun 14", endLabel: "Hoy", delta: 12.4 },
     { id: "net-revenue",   title: "Ingresos netos",  value: formatCurrency(7980), chartData: [110, 280, 70, 400, 250, 480, 320], startLabel: "jun 14", endLabel: "Hoy", delta: 9.1 },
     { id: "new-users",     title: "Nuevos usuarios", value: "34", chartData: [2, 5, 1, 8, 4, 9, 5], startLabel: "jun 14", endLabel: "Hoy", delta: -4.5 },
-    { id: "mrr",           title: "MRR",             value: formatCurrency(3200), chartData: [], startLabel: "jun 14", endLabel: "Hoy", delta: null },
-    { id: "arr",           title: "ARR",             value: formatCurrency(38400), chartData: [], startLabel: "jun 14", endLabel: "Hoy", delta: null },
+    { id: "mrr",           title: "MRR",             value: formatCurrency(3200), chartData: [2600, 2750, 2800, 2950, 3050, 3120, 3200], startLabel: "jun 14", endLabel: "Hoy", delta: 6.2 },
+    { id: "arr",           title: "ARR",             value: formatCurrency(38400), chartData: [31200, 33000, 33600, 35400, 36600, 37440, 38400], startLabel: "jun 14", endLabel: "Hoy", delta: 6.2 },
   ],
   breakdown: [
     { label: "Fallido", value: "3", color: "#E83B2F", percentage: 15 },
