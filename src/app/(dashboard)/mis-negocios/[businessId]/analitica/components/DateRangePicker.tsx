@@ -53,7 +53,7 @@ export function DateRangePicker({ initialFrom, initialTo, onApply, onCancel }: P
   const inRange = (d: Date) => !!from && !!to && d >= from && d <= to;
 
   return (
-    <div className="menu" style={{ width: "280px", padding: "12px", gap: "8px" }}>
+    <div className="menu-panel" style={{ width: "280px", padding: "12px", gap: "8px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", gap: "4px" }}>
           <button type="button" className="whop-icon-badge" onClick={() => shiftYear(-1)} aria-label="Año anterior">«</button>

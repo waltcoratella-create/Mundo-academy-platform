@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { useState, useRef, useEffect } from "react";
 import type { FilterState } from "../types";
 import { RANGE_OPTIONS, COMPARISON_OPTIONS, granularityOptionsForRange, type Option } from "../filters";
 import { DateRangePicker } from "./DateRangePicker";
+import { Popover } from "./Popover";
 
 interface FilterBarProps {
   filter: FilterState;
@@ -58,30 +58,24 @@ function DatePill({ label, initialFrom, initialTo, onApply }: {
   initialTo?: string;
   onApply: (from: string, to: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [open]);
   return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button type="button" className="btn-surface" onClick={() => setOpen((o) => !o)}>
-        <CalendarIcon />
-        {label}
-      </button>
-      {open && (
+    <Popover
+      trigger={({ toggle }) => (
+        <button type="button" className="btn-surface" onClick={toggle}>
+          <CalendarIcon />
+          {label}
+        </button>
+      )}
+    >
+      {(close) => (
         <DateRangePicker
           initialFrom={initialFrom}
           initialTo={initialTo}
-          onApply={(f, t) => { onApply(f, t); setOpen(false); }}
-          onCancel={() => setOpen(false)}
+          onApply={(f, t) => { onApply(f, t); close(); }}
+          onCancel={close}
         />
       )}
-    </div>
+    </Popover>
   );
 }
 
@@ -91,39 +85,31 @@ function Dropdown({ display, options, value, onSelect }: {
   value: string;
   onSelect: (value: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [open]);
-
   return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button type="button" className="btn-surface" onClick={() => setOpen((o) => !o)}>
-        {display}
-        <Chevron />
-      </button>
-      {open && (
-        <div className="menu">
+    <Popover
+      trigger={({ open, toggle }) => (
+        <button type="button" className="btn-surface" onClick={toggle} aria-expanded={open}>
+          {display}
+          <Chevron />
+        </button>
+      )}
+    >
+      {(close) => (
+        <div className="menu-panel" style={{ minWidth: "200px" }}>
           {options.map((o) => (
             <button
               key={o.value}
               type="button"
               className="menu-item"
               data-active={o.value === value}
-              onClick={() => { onSelect(o.value); setOpen(false); }}
+              onClick={() => { onSelect(o.value); close(); }}
             >
               {o.label}
             </button>
           ))}
         </div>
       )}
-    </div>
+    </Popover>
   );
 }
 
