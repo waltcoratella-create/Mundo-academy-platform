@@ -6,8 +6,7 @@ import { getAnalyticsData } from "./data";
 import { validateRange, validateComparison, validateGranularity, DEFAULTS } from "./filters";
 import { getAnalyticsWidgets } from "./widgets-actions";
 import { getSharePreferences } from "./share-actions";
-import { TodaySection } from "./components/TodaySection";
-import { StatsManager } from "./components/StatsManager";
+import { AnalyticsLive } from "./components/AnalyticsLive";
 
 const first = (v: string | string[] | undefined): string | undefined => (Array.isArray(v) ? v[0] : v);
 
@@ -54,38 +53,17 @@ export default async function AnaliticaPage({
   return (
     <div className="analytics-page">
       <div style={{ display: "flex", flexDirection: "column", gap: "24px", padding: "24px" }}>
-        <TodaySection today={today} />
-
-        {today.verifyIdentityWarning && (
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 16px", borderRadius: "12px", background: "var(--gray-2, #F9F9F9)" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
-              <path d="M12 3 2 20h20L12 3z" stroke="#B7791F" strokeWidth="2" strokeLinejoin="round" />
-              <path d="M12 10v4M12 17h.01" stroke="#B7791F" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            <span style={{ fontSize: "14px", fontWeight: 400, lineHeight: "20px", color: "var(--gray-12, #202020)" }}>
-              <span style={{ color: "#B7791F", fontWeight: 500 }}>Verifica tu identidad</span> para seguir recibiendo pagos y para retirar.
-            </span>
-          </div>
-        )}
-
-        <section>
-          <h2 style={{ fontSize: "28px", fontWeight: 700, lineHeight: "36px", letterSpacing: "-0.025em", color: "var(--gray-12, #202020)" }}>
-            Stats
-          </h2>
-          <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
-            <StatsManager
-              businessId={business.id}
-              businessName={business.name}
-              sharePrefs={sharePrefs}
-              filter={filter}
-              selected={{ range, comparison, granularity, productId }}
-              products={products.map((p) => ({ id: p.id, name: p.name }))}
-              stats={stats}
-              breakdown={breakdown}
-              widgetsInitial={widgetsInitial}
-            />
-          </div>
-        </section>
+        <AnalyticsLive
+          businessId={business.id}
+          businessName={business.name}
+          sharePrefs={sharePrefs}
+          params={{ businessId: business.id, range, comparison, granularity, productId, from, to, compareFrom, compareTo }}
+          filter={filter}
+          selected={{ range, comparison, granularity, productId }}
+          products={products.map((p) => ({ id: p.id, name: p.name }))}
+          widgetsInitial={widgetsInitial}
+          initial={{ today, stats, breakdown }}
+        />
       </div>
     </div>
   );

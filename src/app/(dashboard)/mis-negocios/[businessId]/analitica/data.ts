@@ -6,17 +6,31 @@ import {
   RANGE_OPTIONS, COMPARISON_OPTIONS, GRANULARITY_OPTIONS, labelFor, DEFAULTS,
 } from "./filters";
 
-export interface GetAnalyticsParams {
+export interface SliceParams {
   businessId: string;
-  range?: string;        // 7d | 30d | 90d | this_month | last_month | custom
-  comparison?: string;   // previous_period | last_month | last_year | none
-  granularity?: string;  // daily | weekly | monthly
-  productId?: string;    // "all" or a real product id
-  from?: string;         // custom range (ISO date)
+  range?: string;
+  comparison?: string;
+  granularity?: string;
+  productId?: string;
+  from?: string;
   to?: string;
-  compareFrom?: string;  // custom comparison range (ISO date)
+  compareFrom?: string;
   compareTo?: string;
-  preview?: boolean;     // dev-only sample data for manual testing (never in production)
+}
+
+export interface GetAnalyticsParams extends SliceParams {
+  preview?: boolean; // dev-only sample data (never in production)
+}
+
+/** Transaction-derived slice (updated on `transactions` realtime events). */
+export interface TransactionSlice {
+  today: TodayData;
+  breakdown: BreakdownItem[];
+  stats: StatCardData[]; // [gross-revenue, net-revenue]
+}
+/** Member-derived slice (updated on `members` realtime events). */
+export interface MemberSlice {
+  stats: StatCardData[]; // [new-users, mrr, arr]
 }
 
 const DAY = 86_400_000;
@@ -45,7 +59,6 @@ function windowFor(range: string, from: string | undefined, to: string | undefin
   }
 }
 
-/** Comparison window for deltas; null when it can't be determined. */
 function prevWindow(
   comparison: string, start: Date, end: Date,
   compareFrom: string | undefined, compareTo: string | undefined,
@@ -94,8 +107,185 @@ function series(rows: { created_at: string; amount?: number | string }[], start:
   return b.some((v) => v > 0) ? b : [];
 }
 
-// Dev-only sample (verifies chart + delta rendering). Gated by the page so it
-// can never be reached in production.
+const sum = (rows: { amount: number | string }[]) => rows.reduce((s, r) => s + Number(r.amount), 0);
+
+// ─── Transaction slice ──────────────────────────────────────────────────────────
+
+export async function computeTransactionSlice({
+  businessId, range = DEFAULTS.range, comparison = DEFAULTS.comparison, granularity = DEFAULTS.granularity,
+  productId = DEFAULTS.productId, from, to, compareFrom, compareTo,
+}: SliceParams): Promise<TransactionSlice> {
+  const supabase = createAdminClient();
+  const now = new Date();
+  const { start, end } = windowFor(range, from, to, now);
+  const startISO = start.toISOString(), endISO = end.toISOString();
+  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
+  const startOfYesterday = new Date(startOfToday.getTime() - DAY);
+  const hasProduct = productId !== "all" && !!productId;
+  const pw = prevWindow(comparison, start, end, compareFrom, compareTo);
+  type TxRow = { amount: number | string; status: string; product_id: string | null; created_at: string };
+
+  const rangeTxBase = supabase.from("transactions").select("amount, status, product_id, created_at")
+    .eq("business_id", businessId).gte("created_at", startISO).lte("created_at", endISO);
+  const rangeTxQ = hasProduct ? rangeTxBase.eq("product_id", productId) : rangeTxBase;
+  const todayTxBase = supabase.from("transactions").select("amount, status, created_at")
+    .eq("business_id", businessId).gte("created_at", startOfToday.toISOString());
+  const todayTxQ = hasProduct ? todayTxBase.eq("product_id", productId) : todayTxBase;
+  const yesterdayBase = supabase.from("transactions").select("amount").eq("business_id", businessId).eq("status", "succeeded")
+    .gte("created_at", startOfYesterday.toISOString()).lt("created_at", startOfToday.toISOString());
+  const yesterdayTxQ = hasProduct ? yesterdayBase.eq("product_id", productId) : yesterdayBase;
+  const cancelledBase = supabase.from("members").select("id", { count: "exact", head: true })
+    .eq("business_id", businessId).eq("status", "cancelled").gte("created_at", startISO).lte("created_at", endISO);
+  const cancelledQ = hasProduct ? cancelledBase.eq("product_id", productId) : cancelledBase;
+  const prevTxQ = pw
+    ? (() => {
+        const b = supabase.from("transactions").select("amount, status").eq("business_id", businessId)
+          .gte("created_at", pw.start.toISOString()).lte("created_at", pw.end.toISOString());
+        return hasProduct ? b.eq("product_id", productId) : b;
+      })()
+    : Promise.resolve({ data: [] as { amount: number | string; status: string }[] });
+
+  const [rangeTxR, allSucceededR, todayTxR, yesterdayR, cancelledR, prevTxR] = await Promise.all([
+    rangeTxQ,
+    supabase.from("transactions").select("amount").eq("business_id", businessId).eq("status", "succeeded"),
+    todayTxQ, yesterdayTxQ, cancelledQ, prevTxQ,
+  ]);
+
+  const rangeTx = (rangeTxR.data ?? []) as TxRow[];
+  const succeeded = rangeTx.filter((t) => t.status === "succeeded");
+  const refunded = rangeTx.filter((t) => t.status === "refunded");
+  const allSucceeded = (allSucceededR.data ?? []) as { amount: number | string }[];
+  const todayTx = ((todayTxR.data ?? []) as TxRow[]).filter((t) => t.status === "succeeded");
+  const yesterdayTx = (yesterdayR.data ?? []) as { amount: number | string }[];
+  const prevTx = (prevTxR.data ?? []) as { amount: number | string; status: string }[];
+
+  const gross = sum(succeeded);
+  const net = gross - sum(refunded);
+  const allTimeTotal = sum(allSucceeded);
+  const prevSucceeded = prevTx.filter((t) => t.status === "succeeded");
+  const prevGross = pw ? sum(prevSucceeded) : null;
+  const prevNet = pw ? prevGross! - sum(prevTx.filter((t) => t.status === "refunded")) : null;
+
+  const sLabel = formatDateLabel(start);
+  const stats: StatCardData[] = [
+    { id: "gross-revenue", title: "Ingresos brutos", value: formatCurrency(gross), chartData: series(succeeded, start, end, granularity, "sum"), startLabel: sLabel, endLabel: "Hoy", delta: pctDelta(gross, prevGross) },
+    { id: "net-revenue",   title: "Ingresos netos",  value: formatCurrency(net),   chartData: series(succeeded, start, end, granularity, "sum"), startLabel: sLabel, endLabel: "Hoy", delta: pctDelta(net, prevNet) },
+  ];
+
+  const grossToday = sum(todayTx);
+  const grossYesterday = sum(yesterdayTx);
+  const hourly = new Array(24).fill(0);
+  for (const t of todayTx) hourly[new Date(t.created_at).getHours()] += Number(t.amount);
+
+  const today: TodayData = {
+    grossRevenueToday: grossToday > 0 ? formatCurrency(grossToday) : null,
+    grossRevenueYesterday: grossYesterday > 0 ? formatCurrency(grossYesterday) : null,
+    lastUpdated: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+    chartData: hourly.some((v) => v > 0) ? hourly : [],
+    totalBalance: formatCurrency(allTimeTotal),
+    availableBalance: `${formatCurrency(allTimeTotal)} disponible`,
+    totalPayments: allSucceeded.length > 0 ? formatCurrency(allTimeTotal) : null,
+    verifyIdentityWarning: true,
+  };
+
+  const counts: Record<keyof typeof BREAKDOWN_COLORS, number> = {
+    Fallido: rangeTx.filter((t) => t.status === "failed").length,
+    Atrasado: rangeTx.filter((t) => t.status === "pending").length,
+    Pagado: succeeded.length,
+    Cancelado: cancelledR.count ?? 0,
+    Reembolsado: refunded.length,
+  };
+  const totalEvents = Object.values(counts).reduce((s, v) => s + v, 0);
+  const breakdown: BreakdownItem[] = (Object.keys(BREAKDOWN_COLORS) as (keyof typeof BREAKDOWN_COLORS)[]).map((label) => ({
+    label,
+    value: totalEvents > 0 ? formatNumber(counts[label]) : null,
+    color: BREAKDOWN_COLORS[label],
+    percentage: totalEvents > 0 ? Math.round((counts[label] / totalEvents) * 10000) / 100 : 0,
+  }));
+
+  return { today, breakdown, stats };
+}
+
+// ─── Member slice ─────────────────────────────────────────────────────────────
+
+export async function computeMemberSlice({
+  businessId, range = DEFAULTS.range, comparison = DEFAULTS.comparison, granularity = DEFAULTS.granularity,
+  productId = DEFAULTS.productId, from, to, compareFrom, compareTo,
+}: SliceParams): Promise<MemberSlice> {
+  const supabase = createAdminClient();
+  const now = new Date();
+  const { start, end } = windowFor(range, from, to, now);
+  const startISO = start.toISOString(), endISO = end.toISOString();
+  const hasProduct = productId !== "all" && !!productId;
+  const pw = prevWindow(comparison, start, end, compareFrom, compareTo);
+
+  const membersRangeBase = supabase.from("members").select("created_at").eq("business_id", businessId)
+    .gte("created_at", startISO).lte("created_at", endISO);
+  const membersRangeQ = hasProduct ? membersRangeBase.eq("product_id", productId) : membersRangeBase;
+  const activeMembersBase = supabase.from("members").select("product_id").eq("business_id", businessId).eq("status", "active");
+  const activeMembersQ = hasProduct ? activeMembersBase.eq("product_id", productId) : activeMembersBase;
+  const prevMembersQ = pw
+    ? (() => {
+        const b = supabase.from("members").select("id", { count: "exact", head: true }).eq("business_id", businessId)
+          .gte("created_at", pw.start.toISOString()).lte("created_at", pw.end.toISOString());
+        return hasProduct ? b.eq("product_id", productId) : b;
+      })()
+    : Promise.resolve({ count: 0 });
+
+  const [membersRangeR, activeMembersR, productsR, prevMembersR] = await Promise.all([
+    membersRangeQ, activeMembersQ,
+    supabase.from("products").select("id, price, billing_period").eq("business_id", businessId),
+    prevMembersQ,
+  ]);
+
+  const membersRange = (membersRangeR.data ?? []) as { created_at: string }[];
+  const activeMembers = (activeMembersR.data ?? []) as { product_id: string | null }[];
+  const products = (productsR.data ?? []) as { id: string; price: number | string; billing_period: string }[];
+
+  const newUsers = membersRange.length;
+  const prevUsers = pw ? (prevMembersR as { count: number | null }).count ?? 0 : null;
+
+  const productMap = new Map(products.map((p) => [p.id, { price: Number(p.price), bp: p.billing_period }]));
+  let mrr = 0;
+  for (const m of activeMembers) {
+    const p = m.product_id ? productMap.get(m.product_id) : null;
+    if (!p) continue;
+    if (p.bp === "monthly") mrr += p.price;
+    else if (p.bp === "annual") mrr += p.price / 12;
+  }
+  const arr = mrr * 12;
+
+  const sLabel = formatDateLabel(start);
+  const stats: StatCardData[] = [
+    { id: "new-users", title: "Nuevos usuarios", value: formatNumber(newUsers), chartData: series(membersRange, start, end, granularity, "count"), startLabel: sLabel, endLabel: "Hoy", delta: pctDelta(newUsers, prevUsers) },
+    { id: "mrr",       title: "MRR",             value: formatCurrency(mrr),    chartData: [], startLabel: sLabel, endLabel: "Hoy", delta: null },
+    { id: "arr",       title: "ARR",             value: formatCurrency(arr),    chartData: [], startLabel: sLabel, endLabel: "Hoy", delta: null },
+  ];
+
+  return { stats };
+}
+
+// ─── Filter labels ────────────────────────────────────────────────────────────
+
+async function resolveProductName(businessId: string, productId: string): Promise<string> {
+  const supabase = createAdminClient();
+  const { data } = await supabase.from("products").select("name").eq("id", productId).eq("business_id", businessId).maybeSingle();
+  return (data?.name as string | undefined) ?? "Producto";
+}
+
+function buildFilter(p: SliceParams, productLabel: string): FilterState {
+  const now = new Date();
+  const { start, end } = windowFor(p.range ?? DEFAULTS.range, p.from, p.to, now);
+  return {
+    timeRange: p.range === "custom" ? "Personalizado" : labelFor(RANGE_OPTIONS, p.range ?? DEFAULTS.range, "Últimos 7 días"),
+    dateLabel: `${start.getDate()} - ${end.getDate()} ${end.toLocaleDateString("es-MX", { month: "short" }).replace(".", "")} ${end.getFullYear()}`,
+    comparisonPeriod: labelFor(COMPARISON_OPTIONS, p.comparison ?? DEFAULTS.comparison, "Período anterior"),
+    granularity: labelFor(GRANULARITY_OPTIONS, p.granularity ?? DEFAULTS.granularity, "Diario"),
+    product: productLabel,
+  };
+}
+
+// Dev-only sample; gated by the page so it can never be reached in production.
 const SAMPLE: AnalyticsPageData = {
   today: {
     grossRevenueToday: formatCurrency(1240), grossRevenueYesterday: formatCurrency(980), lastUpdated: "1:07 PM",
@@ -121,169 +311,24 @@ const SAMPLE: AnalyticsPageData = {
 };
 
 /**
- * Real analytics for a business mapped to AnalyticsPageData. Honors range,
- * granularity, productId (transactions + members filtered) and comparison
- * (deltas vs the previous/last-month/last-year window). Empty states preserved
- * when there is no data; falls back to MOCK_DATA's empty shape on error.
+ * Full analytics page data, composed from the transaction + member slices.
+ * Public shape (AnalyticsPageData) is unchanged. Falls back to MOCK_DATA on error.
  */
-export async function getAnalyticsData({
-  businessId,
-  range = DEFAULTS.range,
-  comparison = DEFAULTS.comparison,
-  granularity = DEFAULTS.granularity,
-  productId = DEFAULTS.productId,
-  from,
-  to,
-  compareFrom,
-  compareTo,
-  preview = false,
-}: GetAnalyticsParams): Promise<AnalyticsPageData> {
-  if (preview) return SAMPLE;
-
+export async function getAnalyticsData(params: GetAnalyticsParams): Promise<AnalyticsPageData> {
+  if (params.preview) return SAMPLE;
   try {
-    const supabase = createAdminClient();
-    const now = new Date();
-    const { start, end } = windowFor(range, from, to, now);
-    const startISO = start.toISOString();
-    const endISO = end.toISOString();
-    const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
-    const startOfYesterday = new Date(startOfToday.getTime() - DAY);
-    const hasProduct = productId !== "all" && !!productId;
-    const pw = prevWindow(comparison, start, end, compareFrom, compareTo);
-
-    type TxRow = { amount: number | string; status: string; product_id: string | null; created_at: string };
-
-    const rangeTxBase = supabase.from("transactions").select("amount, status, product_id, created_at")
-      .eq("business_id", businessId).gte("created_at", startISO).lte("created_at", endISO);
-    const rangeTxQ = hasProduct ? rangeTxBase.eq("product_id", productId) : rangeTxBase;
-
-    const todayTxBase = supabase.from("transactions").select("amount, status, created_at")
-      .eq("business_id", businessId).gte("created_at", startOfToday.toISOString());
-    const todayTxQ = hasProduct ? todayTxBase.eq("product_id", productId) : todayTxBase;
-
-    const yesterdayBase = supabase.from("transactions").select("amount").eq("business_id", businessId).eq("status", "succeeded")
-      .gte("created_at", startOfYesterday.toISOString()).lt("created_at", startOfToday.toISOString());
-    const yesterdayTxQ = hasProduct ? yesterdayBase.eq("product_id", productId) : yesterdayBase;
-
-    const membersRangeBase = supabase.from("members").select("created_at").eq("business_id", businessId)
-      .gte("created_at", startISO).lte("created_at", endISO);
-    const membersRangeQ = hasProduct ? membersRangeBase.eq("product_id", productId) : membersRangeBase;
-
-    const activeMembersBase = supabase.from("members").select("product_id").eq("business_id", businessId).eq("status", "active");
-    const activeMembersQ = hasProduct ? activeMembersBase.eq("product_id", productId) : activeMembersBase;
-
-    const cancelledBase = supabase.from("members").select("id", { count: "exact", head: true })
-      .eq("business_id", businessId).eq("status", "cancelled").gte("created_at", startISO).lte("created_at", endISO);
-    const cancelledQ = hasProduct ? cancelledBase.eq("product_id", productId) : cancelledBase;
-
-    // Comparison-window queries (skipped when comparison=none)
-    const prevTxQ = pw
-      ? (() => {
-          const b = supabase.from("transactions").select("amount, status").eq("business_id", businessId)
-            .gte("created_at", pw.start.toISOString()).lte("created_at", pw.end.toISOString());
-          return hasProduct ? b.eq("product_id", productId) : b;
-        })()
-      : Promise.resolve({ data: [] as { amount: number | string; status: string }[] });
-    const prevMembersQ = pw
-      ? (() => {
-          const b = supabase.from("members").select("id", { count: "exact", head: true }).eq("business_id", businessId)
-            .gte("created_at", pw.start.toISOString()).lte("created_at", pw.end.toISOString());
-          return hasProduct ? b.eq("product_id", productId) : b;
-        })()
-      : Promise.resolve({ count: 0 });
-
-    const [rangeTxR, allSucceededR, todayTxR, yesterdayR, membersRangeR, activeMembersR, productsR, cancelledR, prevTxR, prevMembersR] =
-      await Promise.all([
-        rangeTxQ,
-        supabase.from("transactions").select("amount").eq("business_id", businessId).eq("status", "succeeded"),
-        todayTxQ, yesterdayTxQ, membersRangeQ, activeMembersQ,
-        supabase.from("products").select("id, name, price, billing_period").eq("business_id", businessId),
-        cancelledQ, prevTxQ, prevMembersQ,
-      ]);
-
-    const rangeTx = (rangeTxR.data ?? []) as TxRow[];
-    const succeeded = rangeTx.filter((t) => t.status === "succeeded");
-    const refunded = rangeTx.filter((t) => t.status === "refunded");
-    const allSucceeded = (allSucceededR.data ?? []) as { amount: number | string }[];
-    const todayTx = ((todayTxR.data ?? []) as TxRow[]).filter((t) => t.status === "succeeded");
-    const yesterdayTx = (yesterdayR.data ?? []) as { amount: number | string }[];
-    const membersRange = (membersRangeR.data ?? []) as { created_at: string }[];
-    const activeMembers = (activeMembersR.data ?? []) as { product_id: string | null }[];
-    const products = (productsR.data ?? []) as { id: string; name: string; price: number | string; billing_period: string }[];
-    const prevTx = (prevTxR.data ?? []) as { amount: number | string; status: string }[];
-
-    const sum = (rows: { amount: number | string }[]) => rows.reduce((s, r) => s + Number(r.amount), 0);
-
-    const gross = sum(succeeded);
-    const net = gross - sum(refunded);
-    const newUsers = membersRange.length;
-    const allTimeTotal = sum(allSucceeded);
-
-    // Comparison deltas
-    const prevSucceeded = prevTx.filter((t) => t.status === "succeeded");
-    const prevGross = pw ? sum(prevSucceeded) : null;
-    const prevNet = pw ? prevGross! - sum(prevTx.filter((t) => t.status === "refunded")) : null;
-    const prevUsers = pw ? (prevMembersR as { count: number | null }).count ?? 0 : null;
-
-    const productMap = new Map(products.map((p) => [p.id, { name: p.name, price: Number(p.price), bp: p.billing_period }]));
-    let mrr = 0;
-    for (const m of activeMembers) {
-      const p = m.product_id ? productMap.get(m.product_id) : null;
-      if (!p) continue;
-      if (p.bp === "monthly") mrr += p.price;
-      else if (p.bp === "annual") mrr += p.price / 12;
-    }
-    const arr = mrr * 12;
-
-    const sLabel = formatDateLabel(start);
-    const stats: StatCardData[] = [
-      { id: "gross-revenue", title: "Ingresos brutos", value: formatCurrency(gross), chartData: series(succeeded, start, end, granularity, "sum"), startLabel: sLabel, endLabel: "Hoy", delta: pctDelta(gross, prevGross) },
-      { id: "net-revenue",   title: "Ingresos netos",  value: formatCurrency(net),   chartData: series(succeeded, start, end, granularity, "sum"), startLabel: sLabel, endLabel: "Hoy", delta: pctDelta(net, prevNet) },
-      { id: "new-users",     title: "Nuevos usuarios", value: formatNumber(newUsers), chartData: series(membersRange, start, end, granularity, "count"), startLabel: sLabel, endLabel: "Hoy", delta: pctDelta(newUsers, prevUsers) },
-      { id: "mrr",           title: "MRR",             value: formatCurrency(mrr),   chartData: [], startLabel: sLabel, endLabel: "Hoy", delta: null },
-      { id: "arr",           title: "ARR",             value: formatCurrency(arr),   chartData: [], startLabel: sLabel, endLabel: "Hoy", delta: null },
-    ];
-
-    const grossToday = sum(todayTx);
-    const grossYesterday = sum(yesterdayTx);
-    const hourly = new Array(24).fill(0);
-    for (const t of todayTx) hourly[new Date(t.created_at).getHours()] += Number(t.amount);
-
-    const today: TodayData = {
-      grossRevenueToday: grossToday > 0 ? formatCurrency(grossToday) : null,
-      grossRevenueYesterday: grossYesterday > 0 ? formatCurrency(grossYesterday) : null,
-      lastUpdated: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
-      chartData: hourly.some((v) => v > 0) ? hourly : [],
-      totalBalance: formatCurrency(allTimeTotal),
-      availableBalance: `${formatCurrency(allTimeTotal)} disponible`,
-      totalPayments: allSucceeded.length > 0 ? formatCurrency(allTimeTotal) : null,
-      verifyIdentityWarning: true,
+    const hasProduct = params.productId !== "all" && !!params.productId;
+    const [tx, mem, productLabel] = await Promise.all([
+      computeTransactionSlice(params),
+      computeMemberSlice(params),
+      hasProduct ? resolveProductName(params.businessId, params.productId!) : Promise.resolve("Todos los productos"),
+    ]);
+    return {
+      today: tx.today,
+      stats: [...tx.stats, ...mem.stats],
+      breakdown: tx.breakdown,
+      filter: buildFilter(params, productLabel),
     };
-
-    const counts: Record<keyof typeof BREAKDOWN_COLORS, number> = {
-      Fallido: rangeTx.filter((t) => t.status === "failed").length,
-      Atrasado: rangeTx.filter((t) => t.status === "pending").length,
-      Pagado: succeeded.length,
-      Cancelado: cancelledR.count ?? 0,
-      Reembolsado: refunded.length,
-    };
-    const totalEvents = Object.values(counts).reduce((s, v) => s + v, 0);
-    const breakdown: BreakdownItem[] = (Object.keys(BREAKDOWN_COLORS) as (keyof typeof BREAKDOWN_COLORS)[]).map((label) => ({
-      label,
-      value: totalEvents > 0 ? formatNumber(counts[label]) : null,
-      color: BREAKDOWN_COLORS[label],
-      percentage: totalEvents > 0 ? Math.round((counts[label] / totalEvents) * 10000) / 100 : 0,
-    }));
-
-    const filter: FilterState = {
-      timeRange: range === "custom" ? "Personalizado" : labelFor(RANGE_OPTIONS, range, "Últimos 7 días"),
-      dateLabel: `${start.getDate()} - ${end.getDate()} ${end.toLocaleDateString("es-MX", { month: "short" }).replace(".", "")} ${end.getFullYear()}`,
-      comparisonPeriod: labelFor(COMPARISON_OPTIONS, comparison, "Período anterior"),
-      granularity: labelFor(GRANULARITY_OPTIONS, granularity, "Diario"),
-      product: hasProduct ? (productMap.get(productId)?.name ?? "Producto") : "Todos los productos",
-    };
-
-    return { today, stats, breakdown, filter };
   } catch {
     return MOCK_DATA;
   }
