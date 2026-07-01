@@ -5,6 +5,7 @@ import "./analytics.css";
 import { getAnalyticsData } from "./data";
 import { validateRange, validateComparison, validateGranularity, DEFAULTS } from "./filters";
 import { getAnalyticsWidgets } from "./widgets-actions";
+import { getSharePreferences } from "./share-actions";
 import { TodaySection } from "./components/TodaySection";
 import { StatsManager } from "./components/StatsManager";
 
@@ -44,9 +45,10 @@ export default async function AnaliticaPage({
   // Dev-only sample data for manual chart/delta testing — never reachable in production.
   const preview = process.env.NODE_ENV !== "production" && first(searchParams.preview) === "1";
 
-  const [{ today, stats, breakdown, filter }, widgetsInitial] = await Promise.all([
+  const [{ today, stats, breakdown, filter }, widgetsInitial, sharePrefs] = await Promise.all([
     getAnalyticsData({ businessId: business.id, range, comparison, granularity, productId, from, to, compareFrom, compareTo, preview }),
     getAnalyticsWidgets({ businessId: business.id }),
+    getSharePreferences({ businessId: business.id }),
   ]);
 
   return (
@@ -73,6 +75,8 @@ export default async function AnaliticaPage({
           <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
             <StatsManager
               businessId={business.id}
+              businessName={business.name}
+              sharePrefs={sharePrefs}
               filter={filter}
               selected={{ range, comparison, granularity, productId }}
               products={products.map((p) => ({ id: p.id, name: p.name }))}

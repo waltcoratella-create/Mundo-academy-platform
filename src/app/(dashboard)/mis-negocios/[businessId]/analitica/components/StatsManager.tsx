@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { FilterState, StatCardData, BreakdownItem } from "../types";
+import type { FilterState, StatCardData, BreakdownItem, ShareData } from "../types";
+import type { SharePreferences } from "../share-config";
 import {
   WIDGET_LABEL, WIDGET_CATEGORY, CATEGORY_ORDER, DEFAULT_CONFIG, type WidgetConfig, type WidgetKey,
 } from "../widgets-config";
@@ -13,6 +14,8 @@ import { ShareModal } from "./ShareModal";
 
 interface StatsManagerProps {
   businessId: string;
+  businessName: string;
+  sharePrefs: SharePreferences;
   filter: FilterState;
   selected: { range: string; comparison: string; granularity: string; productId: string };
   products: { id: string; name: string }[];
@@ -21,11 +24,11 @@ interface StatsManagerProps {
   widgetsInitial: WidgetConfig[];
 }
 
-export function StatsManager({ businessId, filter, selected, products, stats, breakdown, widgetsInitial }: StatsManagerProps) {
+export function StatsManager({ businessId, businessName, sharePrefs, filter, selected, products, stats, breakdown, widgetsInitial }: StatsManagerProps) {
   const [widgets, setWidgets] = useState<WidgetConfig[]>(widgetsInitial);
   const [editMode, setEditMode] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const [shareWidget, setShareWidget] = useState<StatCardData | null>(null);
+  const [shareData, setShareData] = useState<ShareData | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const statsById = new Map(stats.map((s) => [s.id, s]));
@@ -138,16 +141,33 @@ export function StatsManager({ businessId, filter, selected, products, stats, br
                 </div>
               )}
               {w.key === "payment-breakdown" ? (
-                <BreakdownCard items={breakdown} />
+                <BreakdownCard
+                  items={breakdown}
+                  onShare={() => setShareData({ widgetKey: "payment-breakdown", title: "Desglose de pagos", breakdown })}
+                />
               ) : statsById.has(w.key) ? (
-                <StatCard data={statsById.get(w.key)!} onShare={(id) => setShareWidget(statsById.get(id) ?? null)} />
+                <StatCard
+                  data={statsById.get(w.key)!}
+                  onShare={(id) => {
+                    const s = statsById.get(id);
+                    if (s) setShareData({ widgetKey: s.id, title: s.title, value: s.value, delta: s.delta, chartData: s.chartData });
+                  }}
+                />
               ) : null}
             </div>
           ))}
         </div>
       </div>
 
-      {shareWidget && <ShareModal data={shareWidget} onClose={() => setShareWidget(null)} />}
+      {shareData && (
+        <ShareModal
+          data={shareData}
+          businessName={businessName}
+          initialPrefs={sharePrefs}
+          businessId={businessId}
+          onClose={() => setShareData(null)}
+        />
+      )}
     </>
   );
 }

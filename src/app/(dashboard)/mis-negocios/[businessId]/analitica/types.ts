@@ -40,3 +40,13 @@ export interface AnalyticsPageData {
   breakdown: BreakdownItem[];
   filter: FilterState;
 }
+
+/** Normalized payload the share modal renders for any card type. */
+export interface ShareData {
+  widgetKey: string;
+  title: string;
+  value?: string | null;
+  delta?: number | null;
+  chartData?: number[];
+  breakdown?: BreakdownItem[];
+}

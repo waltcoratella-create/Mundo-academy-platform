@@ -1,7 +1,9 @@
 import type { BreakdownItem } from "../types";
+import { WhopIconButton } from "./WhopIcon";
 
 interface BreakdownCardProps {
   items: BreakdownItem[];
+  onShare?: () => void;
 }
 
 /**
@@ -9,14 +11,17 @@ interface BreakdownCardProps {
  * When every item has no value the bar + legend are dimmed and the empty badge
  * is shown over the content (matching the reference no-data state).
  */
-export function BreakdownCard({ items }: BreakdownCardProps) {
+export function BreakdownCard({ items, onShare }: BreakdownCardProps) {
   const isEmpty = items.every((it) => it.value === null);
 
   return (
     <div className="elevated-card" style={{ position: "relative", height: "272px", padding: "16px", gap: "16px" }}>
-      <span style={{ fontSize: "14px", fontWeight: 500, lineHeight: "20px", color: "var(--gray-12, #202020)" }}>
-        Desglose de pagos
-      </span>
+      <div className="flex items-center gap-1" style={{ marginTop: "-2px", marginBottom: "2px" }}>
+        <span style={{ fontSize: "14px", fontWeight: 500, lineHeight: "20px", color: "var(--gray-12, #202020)" }}>
+          Desglose de pagos
+        </span>
+        <WhopIconButton onClick={onShare} />
+      </div>
 
       <div className="stacked-bar" style={{ opacity: isEmpty ? 0.55 : 1 }}>
         {items.map((it) => (
