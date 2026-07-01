@@ -37,10 +37,19 @@ export function AnalyticsLive({
   const [stats, setStats] = useState<StatCardData[]>(initial.stats);
   const [breakdown, setBreakdown] = useState<BreakdownItem[]>(initial.breakdown);
   const [status, setStatus] = useState<ConnStatus>("connecting");
+  const [reconnectKey, setReconnectKey] = useState(0);
+  const [events, setEvents] = useState<{ count: number; last: { table: string; type: string } | null; latencyMs: number | null }>({ count: 0, last: null, latencyMs: null });
+
+  const DEBUG = process.env.NODE_ENV !== "production";
 
   // Always read the latest filters/params inside realtime callbacks.
   const paramsRef = useRef(params);
   useEffect(() => { paramsRef.current = params; });
+
+  const record = useCallback((table: string, payload: { commit_timestamp?: string; eventType?: string }) => {
+    const ts = payload?.commit_timestamp ? new Date(payload.commit_timestamp).getTime() : null;
+    setEvents((e) => ({ count: e.count + 1, last: { table, type: payload?.eventType ?? "?" }, latencyMs: ts ? Date.now() - ts : null }));
+  }, []);
 
   const txTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const memTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -78,8 +87,8 @@ export function AnalyticsLive({
     const supabase = createClient();
     const channel = supabase
       .channel(`analytics_${businessId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "transactions", filter: `business_id=eq.${businessId}` }, () => { scheduleTx(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "members", filter: `business_id=eq.${businessId}` }, () => { scheduleMembers(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "transactions", filter: `business_id=eq.${businessId}` }, (payload) => { record("transactions", payload); scheduleTx(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "members", filter: `business_id=eq.${businessId}` }, (payload) => { record("members", payload); scheduleMembers(); })
       .subscribe((s) => {
         if (s === "SUBSCRIBED") setStatus("connected");
         else if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") setStatus("degraded");
@@ -90,9 +99,26 @@ export function AnalyticsLive({
       if (memTimer.current) clearTimeout(memTimer.current);
       supabase.removeChannel(channel);
     };
-  }, [businessId, scheduleTx, scheduleMembers]);
+  }, [businessId, scheduleTx, scheduleMembers, record, reconnectKey]);
 
-  void status; // status UI added in a later commit
+  // Offline detection + auto-reconnect (re-subscribes by bumping reconnectKey).
+  useEffect(() => {
+    const goOffline = () => setStatus("offline");
+    const goOnline = () => { setStatus("connecting"); setReconnectKey((k) => k + 1); };
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+    return () => {
+      window.removeEventListener("offline", goOffline);
+      window.removeEventListener("online", goOnline);
+    };
+  }, []);
+
+  // Fallback polling while realtime is not connected — never leaves data stale.
+  useEffect(() => {
+    if (status === "connected") return;
+    const id = setInterval(() => { refetchTransactions(); refetchMembers(); }, 30_000);
+    return () => clearInterval(id);
+  }, [status, refetchTransactions, refetchMembers]);
 
   return (
     <>
@@ -128,6 +154,14 @@ export function AnalyticsLive({
           />
         </div>
       </section>
+
+      {DEBUG && (
+        <div style={{ position: "fixed", bottom: "12px", right: "12px", zIndex: 2000, background: "#111", color: "#fff", fontSize: "11px", lineHeight: "16px", padding: "8px 10px", borderRadius: "8px", fontFamily: "monospace", opacity: 0.85, pointerEvents: "none" }}>
+          RT: {status} · eventos: {events.count}
+          {events.last ? ` · ${events.last.table}/${events.last.type}` : " · —"}
+          {events.latencyMs != null ? ` · ${events.latencyMs}ms` : ""}
+        </div>
+      )}
     </>
   );
 }
