@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { TodayData, StatCardData, BreakdownItem, FilterState } from "../types";
 import type { SliceParams } from "../data";
 import type { SharePreferences } from "../share-config";
 import type { WidgetConfig } from "../widgets-config";
+import { getTransactionMetrics } from "../realtime-actions";
 import { TodaySection } from "./TodaySection";
 import { StatsManager } from "./StatsManager";
 
@@ -36,24 +37,46 @@ export function AnalyticsLive({
   const [stats, setStats] = useState<StatCardData[]>(initial.stats);
   const [breakdown, setBreakdown] = useState<BreakdownItem[]>(initial.breakdown);
   const [status, setStatus] = useState<ConnStatus>("connecting");
-  const eventCount = useRef(0);
+
+  // Always read the latest filters/params inside realtime callbacks.
+  const paramsRef = useRef(params);
+  useEffect(() => { paramsRef.current = params; });
+
+  const txTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const refetchTransactions = useCallback(async () => {
+    const slice = await getTransactionMetrics(paramsRef.current);
+    if (!slice) return;
+    setToday(slice.today);
+    setBreakdown(slice.breakdown);
+    const map = new Map(slice.stats.map((s) => [s.id, s]));
+    setStats((prev) => prev.map((s) => map.get(s.id) ?? s));
+  }, []);
+
+  // Debounce bursts of events into a single slice re-fetch.
+  const scheduleTx = useCallback(() => {
+    if (txTimer.current) clearTimeout(txTimer.current);
+    txTimer.current = setTimeout(refetchTransactions, 500);
+  }, [refetchTransactions]);
 
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
       .channel(`analytics_${businessId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "transactions", filter: `business_id=eq.${businessId}` }, () => { eventCount.current += 1; })
-      .on("postgres_changes", { event: "*", schema: "public", table: "members", filter: `business_id=eq.${businessId}` }, () => { eventCount.current += 1; })
+      .on("postgres_changes", { event: "*", schema: "public", table: "transactions", filter: `business_id=eq.${businessId}` }, () => { scheduleTx(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "members", filter: `business_id=eq.${businessId}` }, () => { /* members handled in the next commit */ })
       .subscribe((s) => {
         if (s === "SUBSCRIBED") setStatus("connected");
         else if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") setStatus("degraded");
       });
 
-    return () => { supabase.removeChannel(channel); };
-  }, [businessId]);
+    return () => {
+      if (txTimer.current) clearTimeout(txTimer.current);
+      supabase.removeChannel(channel);
+    };
+  }, [businessId, scheduleTx]);
 
-  // Setters + status are consumed by realtime slices / status UI in later commits.
-  void setToday; void setStats; void setBreakdown; void status;
+  void status; // status UI added in a later commit
 
   return (
     <>
