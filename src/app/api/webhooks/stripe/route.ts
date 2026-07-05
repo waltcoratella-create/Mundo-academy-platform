@@ -523,6 +523,53 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case "charge.refunded": {
+        // Record a `refunded` transaction so Analytics net revenue and the
+        // payment breakdown update (and Realtime pushes it to the dashboard).
+        const charge = event.data.object as Stripe.Charge;
+        const piId = typeof charge.payment_intent === "string"
+          ? charge.payment_intent
+          : charge.payment_intent?.id ?? null;
+        if (!piId) { console.warn("[charge.refunded] no payment_intent — skipping"); break; }
+
+        const supabase = createAdminClient();
+        const { data: original } = await supabase
+          .from("transactions")
+          .select("business_id, product_id, member_id, user_id, currency")
+          .eq("stripe_payment_intent_id", piId)
+          .eq("status", "succeeded")
+          .maybeSingle();
+
+        if (!original) {
+          console.warn("[charge.refunded] no original transaction for pi:", piId);
+          break;
+        }
+
+        // One row per refund object (partial refunds fire multiple events).
+        const refundId = charge.refunds?.data?.[0]?.id ?? charge.id;
+        const refundAmount = (charge.refunds?.data?.[0]?.amount ?? charge.amount_refunded ?? 0) / 100;
+        const dedupKey = `refund_${refundId}`;
+
+        if (await transactionExists(supabase, null, dedupKey)) {
+          console.log("[charge.refunded] refund already recorded — skipping");
+          break;
+        }
+
+        await insertTransaction(supabase, {
+          business_id: original.business_id,
+          product_id: original.product_id,
+          member_id: original.member_id,
+          user_id: original.user_id,
+          amount: refundAmount,
+          currency: original.currency ?? (charge.currency ?? "usd").toUpperCase(),
+          status: "refunded",
+          stripe_payment_intent_id: dedupKey,
+          stripe_session_id: null,
+        });
+        console.log("[charge.refunded] refund recorded:", { refundAmount, piId });
+        break;
+      }
+
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
         const email = await resolveEmailFromInvoice(invoice);
