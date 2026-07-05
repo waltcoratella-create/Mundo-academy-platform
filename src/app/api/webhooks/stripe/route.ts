@@ -53,6 +53,85 @@ async function resolveOrCreateSupabaseUser(
   }
 }
 
+/** Map a Stripe subscription status to the members.status enum. */
+function memberStatusFromStripe(status: Stripe.Subscription.Status): string {
+  switch (status) {
+    case "trialing": return "trial";
+    case "active": return "active";
+    case "past_due":
+    case "paused": return "paused";
+    default: return "cancelled"; // canceled | unpaid | incomplete | incomplete_expired
+  }
+}
+
+/**
+ * Create or update the analytics `members` row for (business, product, user).
+ * Find-then-write (no reliance on a unique constraint) so it works before and
+ * after the stripe-sales migration. Returns the member id, or null.
+ */
+async function upsertBusinessMember(
+  supabase: ReturnType<typeof createAdminClient>,
+  args: {
+    businessId: string;
+    productId: string;
+    userId: string;
+    status: string;
+    stripeSubscriptionId: string | null;
+    currentPeriodEnd: string | null;
+  }
+): Promise<string | null> {
+  const { data: existing } = await supabase
+    .from("members")
+    .select("id")
+    .eq("business_id", args.businessId)
+    .eq("product_id", args.productId)
+    .eq("user_id", args.userId)
+    .maybeSingle();
+
+  const fields = {
+    status: args.status,
+    stripe_subscription_id: args.stripeSubscriptionId,
+    current_period_end: args.currentPeriodEnd,
+  };
+
+  if (existing?.id) {
+    const { error } = await supabase.from("members").update(fields).eq("id", existing.id);
+    if (error) console.error("[member] update error:", error.message);
+    return existing.id as string;
+  }
+
+  const { data: created, error } = await supabase
+    .from("members")
+    .insert({
+      business_id: args.businessId,
+      product_id: args.productId,
+      user_id: args.userId,
+      ...fields,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    console.error("[member] insert error:", error.message);
+    return null;
+  }
+  console.log("[member] created:", created?.id);
+  return (created?.id as string) ?? null;
+}
+
+/** Resolve the current_period_end of a subscription (ISO) — null on failure. */
+async function subscriptionPeriodEnd(subscriptionId: string): Promise<{ end: string | null; status: Stripe.Subscription.Status | null }> {
+  try {
+    const sub = await getStripe().subscriptions.retrieve(subscriptionId);
+    return {
+      end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+      status: sub.status,
+    };
+  } catch {
+    return { end: null, status: null };
+  }
+}
+
 /**
  * True if a transaction for this checkout session / payment intent already
  * exists (Stripe retries webhooks — inserts must be idempotent). Falls back to
@@ -180,10 +259,23 @@ async function handleProductPurchase(
     console.log("[purchase] product_members upserted — user has access");
   }
 
+  // Analytics member (members table feeds new-users / MRR / ARR)
+  const { end: periodEnd } = subscriptionId
+    ? await subscriptionPeriodEnd(subscriptionId)
+    : { end: null };
+  const analyticsMemberId = await upsertBusinessMember(supabase, {
+    businessId,
+    productId,
+    userId: supabaseUserId,
+    status: "active",
+    stripeSubscriptionId: subscriptionId,
+    currentPeriodEnd: periodEnd,
+  });
+
   await insertTransaction(supabase, {
     business_id: businessId,
     product_id: productId,
-    member_id: null,
+    member_id: analyticsMemberId,
     user_id: supabaseUserId,
     amount,
     currency,
@@ -329,6 +421,48 @@ export async function POST(req: NextRequest) {
           ? invoice.subscription
           : invoice.subscription?.id;
 
+        // Subscription renewal for a business product → renewal transaction +
+        // extend the member period. The FIRST invoice (subscription_create) is
+        // already recorded by checkout.session.completed — skip it here.
+        if (subscriptionId && invoice.billing_reason === "subscription_cycle") {
+          const supabase = createAdminClient();
+          const { data: member } = await supabase
+            .from("members")
+            .select("id, business_id, product_id, user_id")
+            .eq("stripe_subscription_id", subscriptionId)
+            .maybeSingle();
+
+          if (member) {
+            const invoicePi = typeof invoice.payment_intent === "string"
+              ? invoice.payment_intent
+              : invoice.payment_intent?.id ?? null;
+            const dedupKey = invoicePi ?? `invoice_${invoice.id}`;
+
+            if (!(await transactionExists(supabase, null, dedupKey))) {
+              await insertTransaction(supabase, {
+                business_id: member.business_id,
+                product_id: member.product_id,
+                member_id: member.id,
+                user_id: member.user_id,
+                amount: (invoice.amount_paid ?? 0) / 100,
+                currency: (invoice.currency ?? "usd").toUpperCase(),
+                status: "succeeded",
+                stripe_payment_intent_id: dedupKey,
+                stripe_session_id: null,
+              });
+              console.log("[invoice.paid] renewal transaction recorded for member:", member.id);
+            }
+
+            const periodEnd = invoice.lines?.data?.[0]?.period?.end;
+            if (periodEnd) {
+              await supabase
+                .from("members")
+                .update({ status: "active", current_period_end: new Date(periodEnd * 1000).toISOString() })
+                .eq("id", member.id);
+            }
+          }
+        }
+
         const email = await resolveEmailFromInvoice(invoice);
         if (email) {
           await grantProByEmail(clerk, email, subscriptionId);
@@ -338,8 +472,38 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case "customer.subscription.created":
+      case "customer.subscription.updated": {
+        const sub = event.data.object as Stripe.Subscription;
+        const supabase = createAdminClient();
+        const { error } = await supabase
+          .from("members")
+          .update({
+            status: memberStatusFromStripe(sub.status),
+            current_period_end: sub.current_period_end
+              ? new Date(sub.current_period_end * 1000).toISOString()
+              : null,
+          })
+          .eq("stripe_subscription_id", sub.id);
+        if (error) console.error(`[${event.type}] member update error:`, error.message);
+        else console.log(`[${event.type}] member synced for sub:`, sub.id, "→", memberStatusFromStripe(sub.status));
+        break;
+      }
+
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
+
+        // Cancel the analytics member tied to this subscription
+        {
+          const supabase = createAdminClient();
+          const { error } = await supabase
+            .from("members")
+            .update({ status: "cancelled" })
+            .eq("stripe_subscription_id", sub.id);
+          if (error) console.error("[subscription.deleted] member cancel error:", error.message);
+          else console.log("[subscription.deleted] member cancelled for sub:", sub.id);
+        }
+
         const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
         const email = await resolveEmailFromCustomerId(customerId);
         if (email) {
