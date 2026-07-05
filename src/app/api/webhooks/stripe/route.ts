@@ -53,6 +53,49 @@ async function resolveOrCreateSupabaseUser(
   }
 }
 
+/**
+ * True if a transaction for this checkout session / payment intent already
+ * exists (Stripe retries webhooks — inserts must be idempotent). Falls back to
+ * the payment-intent check if stripe_session_id hasn't been migrated yet (42703).
+ */
+async function transactionExists(
+  supabase: ReturnType<typeof createAdminClient>,
+  sessionId: string | null,
+  paymentIntentId: string | null
+): Promise<boolean> {
+  if (sessionId) {
+    const bySession = await supabase
+      .from("transactions").select("id").eq("stripe_session_id", sessionId).maybeSingle();
+    if (!bySession.error) return !!bySession.data;
+    if (bySession.error.code !== "42703") return false;
+  }
+  if (paymentIntentId) {
+    const byPi = await supabase
+      .from("transactions").select("id").eq("stripe_payment_intent_id", paymentIntentId).maybeSingle();
+    return !!byPi.data;
+  }
+  return false;
+}
+
+/** Insert a transaction; retries without stripe_session_id if not migrated yet. */
+async function insertTransaction(
+  supabase: ReturnType<typeof createAdminClient>,
+  row: Record<string, unknown>
+): Promise<void> {
+  const { error } = await supabase.from("transactions").insert(row);
+  if (error?.code === "42703" && "stripe_session_id" in row) {
+    const { stripe_session_id: _omit, ...rest } = row;
+    const retry = await supabase.from("transactions").insert(rest);
+    if (retry.error) console.error("[tx] insert error (fallback):", retry.error.message);
+    return;
+  }
+  if (error) {
+    // 23505 = unique violation → a concurrent retry already inserted it; that's fine.
+    if (error.code === "23505") console.log("[tx] duplicate ignored (unique index)");
+    else console.error("[tx] insert error:", error.message);
+  }
+}
+
 async function handleProductPurchase(
   session: Stripe.Checkout.Session,
   clerk: ClerkInstance
@@ -86,6 +129,12 @@ async function handleProductPurchase(
     typeof session.subscription === "string" ? session.subscription : null;
   const amount   = (session.amount_total ?? 0) / 100;
   const currency = (session.currency ?? "usd").toUpperCase();
+
+  // Idempotency: Stripe retries webhooks — never double-count a sale.
+  if (await transactionExists(supabase, session.id, paymentIntentId)) {
+    console.log("[purchase] transaction already recorded for session — skipping");
+    return;
+  }
 
   const { data: purchase, error: purchaseError } = await supabase
     .from("purchases")
@@ -131,14 +180,18 @@ async function handleProductPurchase(
     console.log("[purchase] product_members upserted — user has access");
   }
 
-  await supabase.from("transactions").insert({
+  await insertTransaction(supabase, {
     business_id: businessId,
     product_id: productId,
+    member_id: null,
     user_id: supabaseUserId,
     amount,
     currency,
     status: "succeeded",
+    stripe_payment_intent_id: paymentIntentId,
+    stripe_session_id: session.id,
   });
+  console.log("[purchase] transaction recorded:", { amount, currency, paymentIntentId });
 }
 
 async function grantProByUserId(clerk: ClerkInstance, userId: string, subscriptionId?: string) {
@@ -234,6 +287,38 @@ export async function POST(req: NextRequest) {
         } else {
           console.warn("checkout.session.completed — could not resolve userId or email");
         }
+        break;
+      }
+
+      case "payment_intent.succeeded": {
+        // Checkout payments are recorded via checkout.session.completed; this
+        // handler only guards against gaps. Without our metadata there is no
+        // business/product context, so we log and skip (idempotent either way).
+        const pi = event.data.object as Stripe.PaymentIntent;
+        const supabase = createAdminClient();
+        if (await transactionExists(supabase, null, pi.id)) {
+          console.log("[pi.succeeded] already recorded — skipping");
+          break;
+        }
+        const { productId, businessId, clerkUserId } = (pi.metadata ?? {}) as Record<string, string | undefined>;
+        if (!productId || !businessId) {
+          console.log("[pi.succeeded] no product metadata — handled by session.completed");
+          break;
+        }
+        const buyerId = clerkUserId
+          ? await resolveOrCreateSupabaseUser(clerk, clerkUserId, pi.receipt_email ?? null)
+          : null;
+        await insertTransaction(supabase, {
+          business_id: businessId,
+          product_id: productId,
+          member_id: null,
+          user_id: buyerId,
+          amount: (pi.amount_received ?? pi.amount ?? 0) / 100,
+          currency: (pi.currency ?? "usd").toUpperCase(),
+          status: "succeeded",
+          stripe_payment_intent_id: pi.id,
+          stripe_session_id: null,
+        });
         break;
       }
 
