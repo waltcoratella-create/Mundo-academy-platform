@@ -219,15 +219,17 @@ export async function computeMemberSlice({
   const hasProduct = productId !== "all" && !!productId;
   const pw = prevWindow(comparison, start, end, compareFrom, compareTo);
 
+  // Subscription members only (product_id set). Excludes team rows (role) so
+  // "Nuevos usuarios" stays consistent with MRR/ARR.
   const membersRangeBase = supabase.from("members").select("created_at").eq("business_id", businessId)
-    .gte("created_at", startISO).lte("created_at", endISO);
+    .not("product_id", "is", null).gte("created_at", startISO).lte("created_at", endISO);
   const membersRangeQ = hasProduct ? membersRangeBase.eq("product_id", productId) : membersRangeBase;
   const activeMembersBase = supabase.from("members").select("product_id").eq("business_id", businessId).eq("status", "active");
   const activeMembersQ = hasProduct ? activeMembersBase.eq("product_id", productId) : activeMembersBase;
   const prevMembersQ = pw
     ? (() => {
         const b = supabase.from("members").select("id", { count: "exact", head: true }).eq("business_id", businessId)
-          .gte("created_at", pw.start.toISOString()).lte("created_at", pw.end.toISOString());
+          .not("product_id", "is", null).gte("created_at", pw.start.toISOString()).lte("created_at", pw.end.toISOString());
         return hasProduct ? b.eq("product_id", productId) : b;
       })()
     : Promise.resolve({ count: 0 });
