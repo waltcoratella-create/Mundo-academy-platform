@@ -145,9 +145,12 @@ export async function computeTransactionSlice({
       })()
     : Promise.resolve({ data: [] as { amount: number | string; status: string }[] });
 
+  // Balance / payments (all-time succeeded) must respect the product filter too.
+  const allSucceededBase = supabase.from("transactions").select("amount").eq("business_id", businessId).eq("status", "succeeded");
+  const allSucceededQ = hasProduct ? allSucceededBase.eq("product_id", productId) : allSucceededBase;
+
   const [rangeTxR, allSucceededR, todayTxR, yesterdayR, cancelledR, prevTxR] = await Promise.all([
-    rangeTxQ,
-    supabase.from("transactions").select("amount").eq("business_id", businessId).eq("status", "succeeded"),
+    rangeTxQ, allSucceededQ,
     todayTxQ, yesterdayTxQ, cancelledQ, prevTxQ,
   ]);
 
