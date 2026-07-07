@@ -1,0 +1,270 @@
+/* Ads-dashboard styles. Piggyback on the Frosted-UI tokens already defined on
+   .analytics-page (the wrapper carries both classes), so gray-scale, radii,
+   shadows and the Inter stack are shared with Analytics — nothing new leaks
+   globally. Only Ads-specific pieces (amber billing states, the on/off switch,
+   the brand-blue primary button) live here. */
+.ads-page {
+  --amber-2: #FFFBEB; --amber-3: #FEF6DA; --amber-6: #F6D365;
+  --amber-9: #F0B429; --amber-10: #E0A400; --amber-11: #8A6D0B; --amber-12: #4A3808;
+  --brand-500: #3b5bdb; --brand-600: #2f4ac5; --brand-50: #f0f4ff;
+}
+
+/* Primary CTA — Nueva campaña */
+.ads-page .ads-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--brand-500);
+  border: none;
+  box-shadow: none;
+  font-family: var(--whop-font-inter), sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: #ffffff;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 120ms ease;
+}
+.ads-page .ads-btn-primary:hover { background: var(--brand-600); }
+
+/* 24×24 icon button (gear / help) — same surface look as whop-icon-badge but 32px */
+.ads-page .ads-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--gray-1);
+  border: none;
+  box-shadow: var(--shadow-button);
+  color: var(--gray-11);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 120ms ease;
+}
+.ads-page .ads-icon-btn:hover { background: #ffffff; }
+
+/* Side cards — Stats / Profitability. gray-2 surface, no shadow. */
+.ads-page .ads-side-card {
+  background: var(--gray-2);
+  border-radius: 8px;
+  padding: 12px 16px 4px;
+  display: flex;
+  flex-direction: column;
+}
+.ads-page .ads-side-card__title {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--gray-11);
+  margin-bottom: 4px;
+}
+.ads-page .ads-side-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--gray-a4);
+}
+.ads-page .ads-side-row:last-child { border-bottom: none; }
+.ads-page .ads-side-row__label { font-size: 14px; line-height: 20px; color: var(--gray-11); }
+.ads-page .ads-side-row__value { font-size: 16px; line-height: 24px; color: var(--gray-12); font-weight: 500; }
+
+/* Billing banner — amber */
+.ads-page .ads-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--amber-2);
+  border: 1px solid var(--amber-6);
+  border-radius: 8px;
+  padding: 16px;
+}
+.ads-page .ads-banner__body { display: flex; align-items: flex-start; gap: 12px; }
+.ads-page .ads-banner__title { font-size: 14px; font-weight: 600; line-height: 20px; color: var(--amber-12); }
+.ads-page .ads-banner__text { font-size: 13px; font-weight: 400; line-height: 18px; color: var(--amber-11); margin-top: 2px; }
+.ads-page .ads-banner__btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: none;
+  background: var(--amber-9);
+  color: var(--amber-12);
+  font-family: var(--whop-font-inter), sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease;
+}
+.ads-page .ads-banner__btn:hover { background: var(--amber-10); }
+
+/* Tabs */
+.ads-page .ads-tabs { display: flex; align-items: center; gap: 24px; }
+.ads-page .ads-tab {
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: var(--whop-font-inter), sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 40px;
+  color: var(--gray-9);
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+}
+.ads-page .ads-tab[data-active="true"] { color: var(--gray-12); }
+.ads-page .ads-tab[data-active="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 2px;
+  background: var(--gray-12);
+  border-radius: 2px;
+}
+
+/* Search input */
+.ads-page .ads-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 226px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: var(--gray-1);
+  box-shadow: var(--shadow-button);
+  color: var(--gray-11);
+}
+.ads-page .ads-search input {
+  border: none;
+  outline: none;
+  background: transparent;
+  width: 100%;
+  font-family: var(--whop-font-inter), sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--gray-12);
+}
+.ads-page .ads-search input::placeholder { color: var(--gray-9); }
+
+/* Campaign table */
+.ads-page .ads-table-wrap { width: 100%; overflow-x: auto; }
+.ads-page .ads-table { width: 100%; border-collapse: collapse; min-width: 860px; }
+.ads-page .ads-table thead th {
+  text-align: left;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--gray-11);
+  border-bottom: 1px solid var(--gray-a4);
+  white-space: nowrap;
+}
+.ads-page .ads-table tbody td {
+  height: 48px;
+  padding: 0 16px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--gray-12);
+  border-bottom: 1px solid var(--gray-a3);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.ads-page .ads-table tbody tr[data-draft="true"] { background: var(--amber-2); }
+.ads-page .ads-table tbody tr[data-draft="true"]:hover { background: var(--amber-3); }
+.ads-page .ads-table tbody tr:hover { background: var(--gray-2); }
+
+.ads-page .ads-delivery {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gray-11);
+}
+.ads-page .ads-delivery__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gray-9); flex-shrink: 0; }
+
+.ads-page .ads-cell-title { display: inline-flex; align-items: center; gap: 10px; font-weight: 500; }
+
+/* On/Off switch — 38×22 pill */
+.ads-page .ads-switch {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  border: none;
+  background: var(--gray-6);
+  cursor: pointer;
+  padding: 0;
+  transition: background 140ms ease;
+  flex-shrink: 0;
+}
+.ads-page .ads-switch[data-on="true"] { background: var(--brand-500); }
+.ads-page .ads-switch__knob {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: rgba(0,0,0,0.15) 0px 1px 2px 0px;
+  transition: transform 140ms ease;
+}
+.ads-page .ads-switch[data-on="true"] .ads-switch__knob { transform: translateX(16px); }
+
+/* Support footer */
+.ads-page .ads-support {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--gray-a4);
+  padding: 20px 4px 4px;
+}
+.ads-page .ads-support__title { font-size: 14px; font-weight: 600; line-height: 20px; color: var(--gray-12); }
+.ads-page .ads-support__text { font-size: 13px; font-weight: 400; line-height: 18px; color: var(--gray-11); margin-top: 2px; }
+.ads-page .ads-support__btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: none;
+  background: var(--brand-50);
+  color: var(--brand-500);
+  font-family: var(--whop-font-inter), sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 120ms ease;
+}
+.ads-page .ads-support__btn:hover { background: #e6ecff; }
+
+/* Layout: chart (flex) + side column (fixed) */
+.ads-page .ads-top { display: flex; flex-direction: column; gap: 16px; }
+.ads-page .ads-side-col { display: flex; flex-direction: column; gap: 16px; width: 100%; }
+@container (min-width: 900px) {
+  .ads-page .ads-top { flex-direction: row; align-items: stretch; }
+  .ads-page .ads-side-col { width: 350px; flex-shrink: 0; }
+}
