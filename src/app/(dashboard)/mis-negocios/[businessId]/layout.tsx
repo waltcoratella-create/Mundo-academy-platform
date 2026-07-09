@@ -18,7 +18,11 @@ export default async function BusinessLayout({
 
   return (
     <div className="flex h-full">
-      <BusinessSidebar businessId={params.businessId} businessName={business.name} />
+      <BusinessSidebar
+        businessId={params.businessId}
+        businessName={business.name}
+        logoUrl={business.logo_url}
+      />
       <main className="flex-1 overflow-y-auto">
         {children}
       </main>

@@ -4,6 +4,7 @@ import { normalizeAccessType, normalizeBillingPeriod } from "@/lib/constants/pro
 export interface Business {
   id: string;
   name: string;
+  logo_url: string | null;
 }
 
 /** Richer business info used for list/overview pages. */
@@ -170,13 +171,18 @@ export async function getBusinessById(
 
     const { data, error } = await supabase
       .from("businesses")
-      .select("id, name")
+      .select("id, name, logo_url")
       .eq("id", businessId)
       .eq("owner_id", supabaseUserId)
       .maybeSingle();
 
     if (error || !data) return null;
-    return data as Business;
+    const row = data as Record<string, unknown>;
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      logo_url: (row.logo_url as string | null) ?? null,
+    };
   } catch {
     return null;
   }

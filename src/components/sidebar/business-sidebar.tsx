@@ -9,13 +9,15 @@ import {
   TrendingUp, Code2, Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BusinessSwitcher } from "./business-switcher";
 
 interface Props {
   businessId: string;
   businessName: string;
+  logoUrl?: string | null;
 }
 
-export function BusinessSidebar({ businessId, businessName }: Props) {
+export function BusinessSidebar({ businessId, businessName, logoUrl }: Props) {
   const pathname = usePathname();
   const base = `/mis-negocios/${businessId}`;
 
@@ -119,11 +121,13 @@ export function BusinessSidebar({ businessId, businessName }: Props) {
           Mis negocios
         </Link>
 
-        {/* Business name */}
-        <div className="px-[9px] mt-1.5">
-          <p className="text-[16px] font-semibold text-[#202020] truncate tracking-[-0.35px] leading-[22px]">
-            {businessName}
-          </p>
+        {/* Business switcher — split card (link + chevron trigger) */}
+        <div className="mt-1.5">
+          <BusinessSwitcher
+            businessId={businessId}
+            businessName={businessName}
+            logoUrl={logoUrl}
+          />
         </div>
       </div>
 
