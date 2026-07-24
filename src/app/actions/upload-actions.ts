@@ -18,6 +18,15 @@ const ALLOWED_TYPES: Record<string, string> = {
   "image/avif":  "avif",
 };
 
+// Ad creatives also accept video, which needs a larger cap than the 5 MB used
+// for avatars/covers.
+const AD_VIDEO_TYPES: Record<string, string> = {
+  "video/mp4":       "mp4",
+  "video/webm":      "webm",
+  "video/quicktime": "mov",
+};
+const AD_MAX_BYTES = 50 * 1024 * 1024; // 50 MB
+
 // ─── Shared upload helper ─────────────────────────────────────────────────────
 
 async function uploadFile(
@@ -240,6 +249,74 @@ export async function uploadBusinessCover(
   revalidatePath(`/mis-negocios/${businessId}`);
   revalidatePath(`/mis-negocios/${businessId}/configuraciones`);
   return { url: result.url };
+}
+
+// ─── Ads: upload campaign creative ────────────────────────────────────────────
+
+/**
+ * Upload an ad creative (image or video) and return its public URL. Unlike the
+ * other uploaders this writes no DB row — the URL is held in the wizard's draft
+ * and persisted with the campaign when it is saved.
+ */
+export async function uploadAdCreative(
+  businessId: string,
+  formData: FormData
+): Promise<{ url?: string; error?: string }> {
+  const { userId: clerkId } = await auth();
+  if (!clerkId) return { error: "No autenticado" };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Archivo requerido" };
+  }
+
+  const isVideo = file.type in AD_VIDEO_TYPES;
+  const ext = AD_VIDEO_TYPES[file.type] ?? ALLOWED_TYPES[file.type];
+  if (!ext) {
+    return { error: "Tipo de archivo no permitido. Usa JPG, PNG, WebP, GIF, MP4, WebM o MOV." };
+  }
+  if (file.size > AD_MAX_BYTES) {
+    return { error: "El archivo supera el límite de 50 MB." };
+  }
+
+  const supabase = createAdminClient();
+
+  // Verify ownership — businessId comes from the client.
+  const { data: bizRow } = await supabase
+    .from("businesses")
+    .select("owner_id")
+    .eq("id", businessId)
+    .maybeSingle();
+
+  if (!bizRow) return { error: "Negocio no encontrado" };
+
+  const { data: userRow } = await supabase
+    .from("users")
+    .select("id")
+    .eq("clerk_id", clerkId)
+    .maybeSingle();
+
+  if (!userRow?.id || bizRow.owner_id !== userRow.id) {
+    return { error: "Sin permiso para este negocio" };
+  }
+
+  const path = `ads/${businessId}/creative-${Date.now()}.${ext}`;
+
+  // Video bypasses uploadFile's image-only MIME allowlist and 5 MB cap.
+  if (isVideo) {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, buffer, { contentType: file.type, upsert: true });
+
+    if (uploadError) {
+      return { error: `Error al subir el vídeo: ${uploadError.message}` };
+    }
+    const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    return { url: publicUrl };
+  }
+
+  return uploadFile(supabase, path, file);
 }
 
 // ─── Product: upload cover ────────────────────────────────────────────────────

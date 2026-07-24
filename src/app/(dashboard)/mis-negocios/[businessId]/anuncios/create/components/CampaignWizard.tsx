@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, AlertCircle } from "lucide-react";
+import { uploadAdCreative } from "@/app/actions/upload-actions";
 import type { CampaignDraft, Errors } from "../campaign-types";
 import { TOTAL_STEPS, emptyDraft, validateStep, validateAll } from "../campaign-types";
+import { saveDraftCampaign } from "../../campaign-actions";
 import { StepObjective } from "./StepObjective";
 import { StepProduct, type PaymentLinkOption, type ProductOption } from "./StepProduct";
 import { StepAudience } from "./StepAudience";
@@ -31,6 +34,7 @@ export interface CampaignWizardProps {
 }
 
 export function CampaignWizard({
+  businessId,
   adsHref,
   appOrigin,
   products,
@@ -38,6 +42,7 @@ export function CampaignWizard({
   paymentLinksAvailable,
   defaultCurrency,
 }: CampaignWizardProps) {
+  const router = useRouter();
   const [draft, setDraft] = useState<CampaignDraft>(() => emptyDraft(defaultCurrency));
   const [step, setStep] = useState(1);
   const [maxVisited, setMaxVisited] = useState(1);
@@ -127,14 +132,33 @@ export function CampaignWizard({
     setSaving(true);
     setSaveError(null);
     try {
-      // Persistence is wired in the next commit; the builder keeps the draft in
-      // memory for now so the flow and validation can be exercised end to end.
+      // Both buttons store a draft — Meta is not connected, so nothing can go
+      // live. `publishIntent` only changes the confirmation copy.
+      const res = await saveDraftCampaign(businessId, draft);
+      if (!res.ok) {
+        setSaveError(res.error);
+        return;
+      }
       setDirty(false);
       setDone({ published: publishIntent });
+      // Refresh so the new draft is in the dashboard table on return.
+      router.refresh();
+    } catch {
+      setSaveError("No se pudo guardar la campaña. Inténtalo de nuevo.");
     } finally {
       setSaving(false);
     }
   }
+
+  /** Bound uploader passed to the creative step (businessId is re-checked server-side). */
+  const uploadMedia = useCallback(
+    async (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      return uploadAdCreative(businessId, fd);
+    },
+    [businessId]
+  );
 
   // ── Saved confirmation ──────────────────────────────────────────────────────
 
@@ -224,7 +248,9 @@ export function CampaignWizard({
         )}
         {step === 3 && <StepAudience draft={draft} errors={errors} onChange={update} />}
         {step === 4 && <StepBudget draft={draft} errors={errors} onChange={update} />}
-        {step === 5 && <StepCreative draft={draft} errors={errors} onChange={update} />}
+        {step === 5 && (
+          <StepCreative draft={draft} errors={errors} uploadMedia={uploadMedia} onChange={update} />
+        )}
         {step === 6 && (
           <StepReview
             draft={draft}
