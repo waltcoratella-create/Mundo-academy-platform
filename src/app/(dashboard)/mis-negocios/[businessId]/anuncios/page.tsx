@@ -19,7 +19,7 @@ export default async function AnunciosPage({ params }: { params: { businessId: s
   const business = await getBusinessById(params.businessId, userId);
   if (!business) notFound();
 
-  const data = getAdsData(business.id);
+  const data = await getAdsData(business.id);
   const base = `/mis-negocios/${business.id}`;
 
   return (

@@ -8,6 +8,7 @@ const DELIVERY_LABEL: Record<AdDelivery, string> = {
   active: "Activa",
   paused: "Pausada",
   in_review: "En revisión",
+  archived: "Archivada",
 };
 
 function PlatformIcon({ platform }: { platform: AdPlatform }) {
