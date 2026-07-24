@@ -1,0 +1,407 @@
+/* Campaign-builder styles. The page wrapper carries .analytics-page .ads-page
+   .ads-create, so every Frosted-UI token (grays, radii, shadow-button, the Inter
+   stack) and every Ads component class (.ads-btn-primary, .ads-banner, …) is
+   already in scope — this file only adds wizard-specific layout. Nothing global. */
+
+.ads-create .adsc-shell {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Header: back link, title, progress ─────────────────────────────────────── */
+
+.ads-create .adsc-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--gray-11);
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+.ads-create .adsc-back:hover { color: var(--gray-12); }
+
+.ads-create .adsc-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 26px;
+  color: var(--gray-12);
+}
+
+.ads-create .adsc-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+}
+.ads-create .adsc-progress-label {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--gray-11);
+  white-space: nowrap;
+}
+.ads-create .adsc-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--gray-4);
+  overflow: hidden;
+}
+.ads-create .adsc-bar__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--brand-500);
+  transition: width 200ms ease;
+}
+
+/* Step chips — clickable only for already-visited steps */
+.ads-create .adsc-steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ads-create .adsc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: var(--gray-3);
+  font-family: var(--whop-font-inter), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--gray-11);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.ads-create .adsc-chip:disabled { cursor: default; opacity: 0.55; }
+.ads-create .adsc-chip:not(:disabled):hover { background: var(--gray-4); }
+.ads-create .adsc-chip[data-state="current"] { background: var(--gray-12); color: #ffffff; }
+.ads-create .adsc-chip[data-state="done"] { color: var(--gray-12); }
+
+/* ── Card + fields ──────────────────────────────────────────────────────────── */
+
+.ads-create .adsc-card {
+  background: var(--gray-1);
+  border-radius: 12px;
+  box-shadow: var(--shadow-button);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.ads-create .adsc-step-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--gray-12);
+}
+.ads-create .adsc-step-hint {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--gray-11);
+  margin-top: 2px;
+}
+
+.ads-create .adsc-field { display: flex; flex-direction: column; gap: 6px; }
+.ads-create .adsc-label {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--gray-12);
+}
+.ads-create .adsc-help {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--gray-9);
+}
+.ads-create .adsc-error {
+  font-size: 12px;
+  line-height: 16px;
+  color: #c0392b;
+}
+.ads-create .adsc-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+@media (min-width: 640px) {
+  .ads-create .adsc-grid-2 { grid-template-columns: 1fr 1fr; }
+  .ads-create .adsc-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+}
+
+/* Inputs reuse the global .input-base utility; this only tunes them to the
+   Frosted-UI scale used across Ads/Analytics. */
+.ads-create .input-base {
+  font-family: var(--whop-font-inter), sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+}
+.ads-create .input-base[aria-invalid="true"] { border-color: #e8b4ae; }
+.ads-create textarea.input-base { min-height: 88px; resize: vertical; }
+
+/* ── Selectable option cards (objective / destination / budget type) ─────────── */
+
+.ads-create .adsc-options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+@media (min-width: 640px) {
+  .ads-create .adsc-options-2 { grid-template-columns: 1fr 1fr; }
+}
+.ads-create .adsc-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  text-align: left;
+  border: none;
+  border-radius: 10px;
+  background: var(--gray-1);
+  box-shadow: inset 0 0 0 1px var(--gray-a5);
+  cursor: pointer;
+  transition: box-shadow 120ms ease, background 120ms ease;
+}
+.ads-create .adsc-option:hover { background: var(--gray-2); }
+.ads-create .adsc-option[aria-checked="true"],
+.ads-create .adsc-option[data-selected="true"] {
+  background: var(--brand-50);
+  box-shadow: inset 0 0 0 2px var(--brand-500);
+}
+.ads-create .adsc-option__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--gray-3);
+  color: var(--gray-12);
+  flex-shrink: 0;
+}
+.ads-create .adsc-option[aria-checked="true"] .adsc-option__icon,
+.ads-create .adsc-option[data-selected="true"] .adsc-option__icon {
+  background: var(--brand-500);
+  color: #ffffff;
+}
+.ads-create .adsc-option__name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--gray-12);
+}
+.ads-create .adsc-option__desc {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--gray-11);
+  margin-top: 2px;
+}
+
+/* Radio row (segmented) for destination kind / budget type */
+.ads-create .adsc-segment { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ── Interests as removable tags ────────────────────────────────────────────── */
+
+.ads-create .adsc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.ads-create .adsc-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--gray-3);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--gray-12);
+}
+.ads-create .adsc-tag button {
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--gray-11);
+  cursor: pointer;
+  line-height: 0;
+}
+.ads-create .adsc-tag button:hover { color: var(--gray-12); }
+
+/* ── Creative media dropzone + preview ──────────────────────────────────────── */
+
+.ads-create .adsc-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 148px;
+  padding: 20px;
+  border-radius: 10px;
+  border: 1px dashed var(--gray-a6);
+  background: var(--gray-2);
+  color: var(--gray-11);
+  text-align: center;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.ads-create .adsc-drop:hover { background: var(--gray-3); border-color: var(--gray-a8); }
+.ads-create .adsc-drop__title { font-size: 14px; font-weight: 500; color: var(--gray-12); }
+.ads-create .adsc-drop__hint { font-size: 12px; line-height: 16px; color: var(--gray-9); }
+
+.ads-create .adsc-media {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--gray-3);
+  max-height: 320px;
+}
+.ads-create .adsc-media img,
+.ads-create .adsc-media video { display: block; width: 100%; max-height: 320px; object-fit: contain; }
+
+.ads-create .adsc-spin { animation: adsc-spin 900ms linear infinite; }
+@keyframes adsc-spin { to { transform: rotate(360deg); } }
+
+/* ── Review summary ─────────────────────────────────────────────────────────── */
+
+.ads-create .adsc-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-radius: 10px;
+  background: var(--gray-2);
+  padding: 4px 14px;
+}
+.ads-create .adsc-summary-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--gray-a4);
+}
+.ads-create .adsc-summary-row:last-child { border-bottom: none; }
+.ads-create .adsc-summary-row__label {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--gray-11);
+  flex-shrink: 0;
+}
+.ads-create .adsc-summary-row__value {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--gray-12);
+  font-weight: 500;
+  text-align: right;
+  word-break: break-word;
+}
+.ads-create .adsc-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ads-create .adsc-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--gray-12);
+}
+.ads-create .adsc-edit {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: var(--whop-font-inter), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--brand-500);
+  cursor: pointer;
+}
+.ads-create .adsc-edit:hover { text-decoration: underline; }
+
+/* ── Footer nav ─────────────────────────────────────────────────────────────── */
+
+.ads-create .adsc-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+}
+.ads-create .adsc-nav__right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.ads-create .ads-btn-primary:disabled,
+.ads-create .btn-surface:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Inline error / notice */
+.ads-create .adsc-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.ads-create .adsc-alert[data-tone="error"] {
+  background: #fdf1f0;
+  border: 1px solid #f0c8c3;
+  color: #8c2f24;
+}
+.ads-create .adsc-alert[data-tone="amber"] {
+  background: var(--amber-2);
+  border: 1px solid var(--amber-6);
+  color: var(--amber-12);
+}
+
+/* ── Success panel (draft saved, publishing blocked) ────────────────────────── */
+
+.ads-create .adsc-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 48px 24px;
+}
+.ads-create .adsc-done__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--brand-50);
+  color: var(--brand-500);
+}
+.ads-create .adsc-done__title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--gray-12);
+}
+.ads-create .adsc-done__text {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--gray-11);
+  max-width: 460px;
+}
