@@ -286,25 +286,90 @@ async function handleProductPurchase(
   console.log("[purchase] transaction recorded:", { amount, currency, paymentIntentId });
 }
 
-async function grantProByUserId(clerk: ClerkInstance, userId: string, subscriptionId?: string) {
-  console.log("Clerk user id:", userId);
-  await clerk.users.updateUser(userId, {
-    publicMetadata: {
-      isPro: true,
-      ...(subscriptionId ? { stripeSubscriptionId: subscriptionId } : {}),
-    },
-  });
-  console.log("Updated user to Pro");
+// ─── Platform Pro entitlement ─────────────────────────────────────────────────
+//
+// Pro is an ACCOUNT-level entitlement bought through /api/checkout with
+// STRIPE_PRO_PRICE_ID. Creator product subscriptions (/api/checkout/product) are
+// a different thing entirely and live in Supabase. Every Pro grant/revoke below
+// is therefore gated on the subscription actually carrying the Pro price —
+// without that check, cancelling any product subscription revoked the buyer's
+// Pro, and paying any product invoice granted it.
+
+/** True when this subscription is the platform Pro plan. */
+function subscriptionHasProPrice(sub: Stripe.Subscription): boolean {
+  const proPriceId = process.env.STRIPE_PRO_PRICE_ID;
+  if (!proPriceId) {
+    // Cannot tell Pro from a product subscription — never touch the flag.
+    console.warn("[pro] STRIPE_PRO_PRICE_ID not configured — skipping Pro sync");
+    return false;
+  }
+  return sub.items.data.some((item) => item.price?.id === proPriceId);
 }
 
-async function grantProByEmail(clerk: ClerkInstance, email: string, subscriptionId?: string) {
-  const result = await clerk.users.getUserList({ emailAddress: [email] });
-  const user = result.data[0];
+/** Same check starting from a subscription id (retrieves it from Stripe). */
+async function isProSubscriptionId(subscriptionId: string | undefined): Promise<boolean> {
+  if (!subscriptionId) return false;
+  if (!process.env.STRIPE_PRO_PRICE_ID) {
+    console.warn("[pro] STRIPE_PRO_PRICE_ID not configured — skipping Pro sync");
+    return false;
+  }
+  try {
+    const sub = await getStripe().subscriptions.retrieve(subscriptionId);
+    return subscriptionHasProPrice(sub);
+  } catch {
+    console.warn(`[pro] could not retrieve subscription ${subscriptionId}`);
+    return false;
+  }
+}
+
+interface ProState {
+  subscriptionId?: string;
+  status?: string;
+  currentPeriodEnd?: number | null;
+}
+
+/** Merge Pro fields into publicMetadata without dropping unrelated keys. */
+async function writeProMetadata(
+  clerk: ClerkInstance,
+  userId: string,
+  existing: Record<string, unknown> | undefined,
+  patch: Record<string, unknown>
+) {
+  await clerk.users.updateUser(userId, {
+    publicMetadata: { ...(existing ?? {}), ...patch },
+  });
+}
+
+async function grantProByUserId(clerk: ClerkInstance, userId: string, state: ProState = {}) {
+  const user = await clerk.users.getUser(userId);
+  await writeProMetadata(clerk, userId, user.publicMetadata as Record<string, unknown>, {
+    isPro: true,
+    ...(state.subscriptionId ? { stripeSubscriptionId: state.subscriptionId } : {}),
+    ...(state.status ? { proStatus: state.status } : {}),
+    ...(state.currentPeriodEnd
+      ? { proCurrentPeriodEnd: new Date(state.currentPeriodEnd * 1000).toISOString() }
+      : {}),
+  });
+  console.log("[pro] granted for Clerk user:", userId);
+}
+
+async function grantProByEmail(clerk: ClerkInstance, email: string, state: ProState = {}) {
+  const user = await findClerkUserByEmail(clerk, email);
   if (!user) {
     console.warn(`No Clerk user found for email: ${email}`);
     return;
   }
-  await grantProByUserId(clerk, user.id, subscriptionId);
+  await grantProByUserId(clerk, user.id, state);
+}
+
+async function revokeProByUserId(clerk: ClerkInstance, userId: string, existing?: Record<string, unknown>) {
+  const metadata = existing ?? ((await clerk.users.getUser(userId)).publicMetadata as Record<string, unknown>);
+  await writeProMetadata(clerk, userId, metadata, {
+    isPro: false,
+    stripeSubscriptionId: null,
+    proStatus: "canceled",
+  });
+  console.log("[pro] revoked for Clerk user:", userId);
 }
 
 async function resolveEmailFromCustomerId(customerId: string): Promise<string | null> {
@@ -367,15 +432,21 @@ export async function POST(req: NextRequest) {
           ? session.subscription
           : undefined;
 
+        // Only the platform Pro plan grants Pro.
+        if (!(await isProSubscriptionId(subscriptionId))) {
+          console.log("[pro] checkout.session.completed — not the Pro price, skipping");
+          break;
+        }
+
         const userId =
           session.client_reference_id ??
           (session.metadata?.clerkUserId as string | undefined) ??
           null;
 
         if (userId) {
-          await grantProByUserId(clerk, userId, subscriptionId);
+          await grantProByUserId(clerk, userId, { subscriptionId });
         } else if (session.customer_email) {
-          await grantProByEmail(clerk, session.customer_email, subscriptionId);
+          await grantProByEmail(clerk, session.customer_email, { subscriptionId });
         } else {
           console.warn("checkout.session.completed — could not resolve userId or email");
         }
@@ -463,9 +534,17 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        // Renew Pro only when this invoice belongs to the Pro subscription —
+        // a creator product invoice must never grant platform Pro.
+        if (!(await isProSubscriptionId(subscriptionId))) {
+          console.log(`[pro] ${event.type} — not the Pro subscription, skipping`);
+          break;
+        }
+
         const email = await resolveEmailFromInvoice(invoice);
         if (email) {
-          await grantProByEmail(clerk, email, subscriptionId);
+          const periodEnd = invoice.lines?.data?.[0]?.period?.end ?? null;
+          await grantProByEmail(clerk, email, { subscriptionId, status: "active", currentPeriodEnd: periodEnd });
         } else {
           console.warn(`${event.type} — could not resolve customer email`);
         }
@@ -487,6 +566,26 @@ export async function POST(req: NextRequest) {
           .eq("stripe_subscription_id", sub.id);
         if (error) console.error(`[${event.type}] member update error:`, error.message);
         else console.log(`[${event.type}] member synced for sub:`, sub.id, "→", memberStatusFromStripe(sub.status));
+
+        // Keep the Pro metadata in step with Stripe (status + paid-through date)
+        // so the entitlement expires on its own if a renewal never arrives.
+        if (subscriptionHasProPrice(sub)) {
+          const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+          const email = await resolveEmailFromCustomerId(customerId);
+          if (email) {
+            const active = sub.status === "active" || sub.status === "trialing";
+            if (active) {
+              await grantProByEmail(clerk, email, {
+                subscriptionId: sub.id,
+                status: sub.status,
+                currentPeriodEnd: sub.current_period_end,
+              });
+            } else {
+              const user = await findClerkUserByEmail(clerk, email);
+              if (user) await revokeProByUserId(clerk, user.id, user.publicMetadata as Record<string, unknown>);
+            }
+          }
+        }
         break;
       }
 
@@ -504,16 +603,20 @@ export async function POST(req: NextRequest) {
           else console.log("[subscription.deleted] member cancelled for sub:", sub.id);
         }
 
+        // Only the Pro subscription revokes Pro. Previously ANY deleted
+        // subscription for this customer's email wiped the account's Pro flag,
+        // so cancelling a creator product subscription revoked platform access.
+        if (!subscriptionHasProPrice(sub)) {
+          console.log("[pro] subscription.deleted — not the Pro subscription, Pro untouched");
+          break;
+        }
+
         const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
         const email = await resolveEmailFromCustomerId(customerId);
         if (email) {
           const user = await findClerkUserByEmail(clerk, email);
           if (user) {
-            console.log("Clerk user id:", user.id);
-            await clerk.users.updateUser(user.id, {
-              publicMetadata: { isPro: false, stripeSubscriptionId: null },
-            });
-            console.log("Subscription cancelled — Pro access revoked");
+            await revokeProByUserId(clerk, user.id, user.publicMetadata as Record<string, unknown>);
           } else {
             console.warn(`subscription.deleted — no Clerk user found for email: ${email}`);
           }
