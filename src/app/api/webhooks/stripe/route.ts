@@ -372,6 +372,75 @@ async function revokeProByUserId(clerk: ClerkInstance, userId: string, existing?
   console.log("[pro] revoked for Clerk user:", userId);
 }
 
+/**
+ * The surviving Pro subscription for a customer, if any.
+ *
+ * A customer can hold more than one Pro subscription (re-subscribing without
+ * cancelling first leaves the old one behind). Losing ONE of them must not
+ * revoke Pro while another is still paying, so every revoke path reconciles
+ * against Stripe instead of trusting the single event that fired.
+ */
+async function activeProSubscription(
+  customerId: string,
+  excludeSubscriptionId?: string
+): Promise<Stripe.Subscription | null> {
+  const proPriceId = process.env.STRIPE_PRO_PRICE_ID;
+  if (!proPriceId) return null;
+  try {
+    const subs = await getStripe().subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 100,
+    });
+    return (
+      subs.data.find(
+        (s) =>
+          s.id !== excludeSubscriptionId &&
+          (s.status === "active" || s.status === "trialing") &&
+          s.items.data.some((i) => i.price?.id === proPriceId)
+      ) ?? null
+    );
+  } catch {
+    console.warn(`[pro] could not list subscriptions for customer ${customerId}`);
+    return null;
+  }
+}
+
+/**
+ * Canonical reconciliation: set the account's Pro state from whatever Stripe
+ * currently says, rather than from the single subscription in the event.
+ * `excludeSubscriptionId` is the one being deleted (Stripe may still list it).
+ */
+async function syncProForCustomer(
+  clerk: ClerkInstance,
+  customerId: string,
+  excludeSubscriptionId?: string
+) {
+  const email = await resolveEmailFromCustomerId(customerId);
+  if (!email) {
+    console.warn("[pro] could not resolve customer email — Pro left untouched");
+    return;
+  }
+  const user = await findClerkUserByEmail(clerk, email);
+  if (!user) {
+    console.warn(`[pro] no Clerk user found for email: ${email}`);
+    return;
+  }
+
+  const surviving = await activeProSubscription(customerId, excludeSubscriptionId);
+  if (surviving) {
+    console.log("[pro] another active Pro subscription remains:", surviving.id);
+    await grantProByUserId(clerk, user.id, {
+      subscriptionId: surviving.id,
+      status: surviving.status,
+      currentPeriodEnd: surviving.current_period_end,
+    });
+    return;
+  }
+
+  await revokeProByUserId(clerk, user.id, user.publicMetadata as Record<string, unknown>);
+}
+
 async function resolveEmailFromCustomerId(customerId: string): Promise<string | null> {
   try {
     const customer = await getStripe().customers.retrieve(customerId);
@@ -571,19 +640,20 @@ export async function POST(req: NextRequest) {
         // so the entitlement expires on its own if a renewal never arrives.
         if (subscriptionHasProPrice(sub)) {
           const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
-          const email = await resolveEmailFromCustomerId(customerId);
-          if (email) {
-            const active = sub.status === "active" || sub.status === "trialing";
-            if (active) {
+          const active = sub.status === "active" || sub.status === "trialing";
+          if (active) {
+            const email = await resolveEmailFromCustomerId(customerId);
+            if (email) {
               await grantProByEmail(clerk, email, {
                 subscriptionId: sub.id,
                 status: sub.status,
                 currentPeriodEnd: sub.current_period_end,
               });
-            } else {
-              const user = await findClerkUserByEmail(clerk, email);
-              if (user) await revokeProByUserId(clerk, user.id, user.publicMetadata as Record<string, unknown>);
             }
+          } else {
+            // Went past_due/canceled/unpaid — another Pro subscription may
+            // still be covering this account.
+            await syncProForCustomer(clerk, customerId, sub.id);
           }
         }
         break;
@@ -611,18 +681,10 @@ export async function POST(req: NextRequest) {
           break;
         }
 
+        // Reconcile against Stripe: only drop Pro if no other Pro subscription
+        // for this customer is still active.
         const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
-        const email = await resolveEmailFromCustomerId(customerId);
-        if (email) {
-          const user = await findClerkUserByEmail(clerk, email);
-          if (user) {
-            await revokeProByUserId(clerk, user.id, user.publicMetadata as Record<string, unknown>);
-          } else {
-            console.warn(`subscription.deleted — no Clerk user found for email: ${email}`);
-          }
-        } else {
-          console.warn("subscription.deleted — could not resolve customer email");
-        }
+        await syncProForCustomer(clerk, customerId, sub.id);
         break;
       }
 
