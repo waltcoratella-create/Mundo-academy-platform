@@ -92,7 +92,9 @@ export async function saveDraftCampaign(
         timezone: draft.timezone,
         audience: draft.audience,
         creative: draft.creative,
-        platform: "meta",
+        // Chosen in step 1. The column already exists (default 'meta') and has
+        // no check constraint, so this needs no migration.
+        platform: draft.platform ?? "meta",
       })
       .select("id")
       .single();

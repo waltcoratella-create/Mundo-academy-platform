@@ -234,7 +234,11 @@ export function CampaignWizard({
         </ol>
       </header>
 
-      <section className="adsc-card">
+      {/* Step 1 (Campaign) drops the card chrome: the reference puts the form
+          sections directly in the 768px column, and the card's 20px side
+          padding is what shrank the selection cards below spec width. Steps
+          2–6 keep the card until they get the same treatment. */}
+      <section className={step === 1 ? "adsc-step-plain" : "adsc-card"}>
         {step === 1 && <StepObjective draft={draft} errors={errors} onChange={update} />}
         {step === 2 && (
           <StepProduct

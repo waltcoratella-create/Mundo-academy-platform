@@ -8,6 +8,7 @@
 // for a future integration, but publishing is not wired.
 
 export type CampaignObjective = "sales" | "leads" | "traffic" | "awareness";
+export type AdPlatform = "meta" | "tiktok" | "google" | "x";
 export type BudgetType = "daily" | "lifetime";
 export type DestinationKind = "product" | "payment_link" | "url";
 export type CampaignStatus = "draft" | "in_review" | "active" | "paused" | "archived";
@@ -45,6 +46,8 @@ export interface CampaignCreative {
 
 export interface CampaignDraft {
   name: string;
+  /** Ad platform the campaign targets. Persisted to ad_campaigns.platform. */
+  platform: AdPlatform;
   objective: CampaignObjective | null;
   destinationKind: DestinationKind;
   productId: string | null;
@@ -65,15 +68,38 @@ export interface CampaignDraft {
 
 // ─── Option catalogues ────────────────────────────────────────────────────────
 
+/**
+ * Objective cards. `accent` / `tint` / `iconBg` are the exact values from the
+ * Whop Ads build spec so the selected state matches the reference: the border
+ * and icon take the solid accent, the card takes the light tint.
+ */
 export const OBJECTIVE_OPTIONS: {
   value: CampaignObjective;
   label: string;
   description: string;
+  accent: string;
+  tint: string;
+  iconBg: string;
 }[] = [
-  { value: "sales",     label: "Ventas",         description: "Consigue compras de tus productos." },
-  { value: "leads",     label: "Leads",          description: "Capta contactos interesados." },
-  { value: "traffic",   label: "Tráfico",        description: "Lleva visitas a tu página." },
-  { value: "awareness", label: "Reconocimiento", description: "Llega al máximo de personas." },
+  { value: "sales",     label: "Ventas",         description: "Consigue compras de tus productos.", accent: "#30a46c", tint: "#f4fbf6", iconBg: "#d6f1e3" },
+  { value: "leads",     label: "Leads",          description: "Capta contactos interesados.",       accent: "#107d98", tint: "#f0fbfd", iconBg: "#caf1f6" },
+  { value: "traffic",   label: "Tráfico",        description: "Lleva visitas a tu página.",         accent: "#265ccf", tint: "#f3f7ff", iconBg: "#ddeaff" },
+  { value: "awareness", label: "Reconocimiento", description: "Llega al máximo de personas.",       accent: "#ab6400", tint: "#fffcf0", iconBg: "#fff7c2" },
+];
+
+/**
+ * Platform selector. Only Meta is selectable — the rest render disabled
+ * (cursor-not-allowed, per the spec) because no other ad platform is wired.
+ */
+export const PLATFORM_OPTIONS: {
+  value: AdPlatform;
+  label: string;
+  available: boolean;
+}[] = [
+  { value: "meta",   label: "Meta",   available: true },
+  { value: "tiktok", label: "TikTok", available: false },
+  { value: "google", label: "Google", available: false },
+  { value: "x",      label: "X",      available: false },
 ];
 
 export const GENDER_OPTIONS: { value: Gender; label: string }[] = [
@@ -135,6 +161,7 @@ function todayISO(): string {
 export function emptyDraft(currency = "USD"): CampaignDraft {
   return {
     name: "",
+    platform: "meta",
     objective: null,
     destinationKind: "product",
     productId: null,
