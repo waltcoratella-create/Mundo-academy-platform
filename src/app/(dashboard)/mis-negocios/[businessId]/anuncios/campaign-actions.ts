@@ -10,6 +10,10 @@ export type SaveResult =
   | { ok: true; id: string }
   | { ok: false; error: string };
 
+const OBJECTIVE_MIGRATION_HINT =
+  'El objetivo "Interacción" todavía no está permitido en la base de datos. ' +
+  "Amplía la restricción ad_campaigns_objective_chk para incluir 'engagement'.";
+
 const MIGRATION_HINT =
   "La tabla ad_campaigns no existe todavía. Ejecuta scripts/ads-campaigns-schema.sql en Supabase → SQL Editor.";
 
@@ -101,6 +105,11 @@ export async function saveDraftCampaign(
 
     if (error) {
       if (error.code === "42P01") return { ok: false, error: MIGRATION_HINT };
+      // 23514 = check_violation. The only objective the live constraint rejects
+      // is `engagement`, which needs the constraint widened first.
+      if (error.code === "23514" && draft.objective === "engagement") {
+        return { ok: false, error: OBJECTIVE_MIGRATION_HINT };
+      }
       console.error("[ad_campaigns] insert error:", error.code, error.message);
       return { ok: false, error: "No se pudo guardar la campaña. Inténtalo de nuevo." };
     }

@@ -79,6 +79,7 @@ function money(amount: number, currency: string): string {
 const RESULT_NOUN: Record<CampaignObjective, string> = {
   sales: "compras",
   leads: "leads",
+  engagement: "interacciones",
   traffic: "clics",
   awareness: "impresiones",
 };

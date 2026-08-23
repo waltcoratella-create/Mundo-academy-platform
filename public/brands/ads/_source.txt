@@ -1,0 +1,12 @@
+Official brand marks extracted from Simple Icons (npm "simple-icons", installed
+with --no-save and removed afterwards — no runtime dependency, package.json
+untouched). Monochrome paths on a 24x24 viewBox; colour is applied by the
+consumer via `fill`.
+
+Brand colours (Simple Icons `hex`):
+  meta.svg        Meta        #0467DF
+  tiktok.svg      TikTok      #000000
+  google-ads.svg  Google Ads  #4285F4
+  snapchat.svg    Snapchat    #FFFC00
+  x.svg           X           #000000
+  reddit.svg      Reddit      #FF4500

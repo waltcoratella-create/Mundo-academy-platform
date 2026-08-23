@@ -3,21 +3,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, AlertCircle } from "lucide-react";
+import { X, Check, AlertCircle, ChevronRight } from "lucide-react";
 import { uploadAdCreative } from "@/app/actions/upload-actions";
 import type { CampaignDraft, Errors } from "../campaign-types";
-import { TOTAL_STEPS, emptyDraft, validateStep, validateAll } from "../campaign-types";
+import { TOTAL_STEPS, PHASES, phaseOfStep, emptyDraft, validateStep, validateAll } from "../campaign-types";
 import { saveDraftCampaign } from "../../campaign-actions";
-import { StepObjective } from "./StepObjective";
+import { StepCampaign } from "./StepCampaign";
 import { StepProduct, type PaymentLinkOption, type ProductOption } from "./StepProduct";
 import { StepAudience } from "./StepAudience";
 import { StepBudget } from "./StepBudget";
 import { StepCreative } from "./StepCreative";
 import { StepReview } from "./StepReview";
 
-const STEP_NAMES = [
-  "Objetivo", "Producto", "Audiencia", "Presupuesto", "Creatividad", "Revisión",
-];
+/** First step of each phase, so the header stepper can jump back to it. */
+const PHASE_FIRST_STEP: Record<string, number> = { campaign: 1, build: 2, creatives: 5 };
 
 /** Message shown once the draft is stored — publishing needs Meta + billing. */
 const PUBLISH_BLOCKED_MESSAGE =
@@ -188,58 +187,49 @@ export function CampaignWizard({
   const isReview = step === TOTAL_STEPS;
 
   return (
-    <div className="adsc-shell">
-      <header style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <Link href={adsHref} className="adsc-back" onClick={handleLeave}>
-          <ArrowLeft size={16} strokeWidth={2} />
-          Anuncios
+    <>
+      {/* Flow chrome — 56px header with the Campaign › Build › Creatives
+          stepper, matching the reference. Replaces the old "Paso X de 6". */}
+      <header className="w-header">
+        <Link href={adsHref} className="w-header__close" aria-label="Cerrar" onClick={handleLeave}>
+          <X size={18} strokeWidth={2} />
         </Link>
+        <span className="w-header__title">Crear campaña</span>
 
-        <h1 className="adsc-title">Nueva campaña</h1>
-
-        <div className="adsc-progress-row">
-          <span className="adsc-progress-label">Paso {step} de {TOTAL_STEPS}</span>
-          <div
-            className="adsc-bar"
-            role="progressbar"
-            aria-valuemin={1}
-            aria-valuemax={TOTAL_STEPS}
-            aria-valuenow={step}
-            aria-label={`Paso ${step} de ${TOTAL_STEPS}`}
-          >
-            <div className="adsc-bar__fill" style={{ width: `${(step / TOTAL_STEPS) * 100}%` }} />
-          </div>
-        </div>
-
-        <ol className="adsc-steps">
-          {STEP_NAMES.map((name, i) => {
-            const n = i + 1;
-            const state = n === step ? "current" : n <= maxVisited ? "done" : "todo";
+        <nav className="w-stepper" aria-label="Fases">
+          {PHASES.map((p, i) => {
+            const current = phaseOfStep(step);
+            const currentIndex = PHASES.findIndex((x) => x.key === current);
+            const state = i === currentIndex ? "current" : i < currentIndex ? "done" : "todo";
+            const target = PHASE_FIRST_STEP[p.key];
             return (
-              <li key={name}>
+              <span key={p.key} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                {i > 0 && <ChevronRight className="w-stepsep" size={14} strokeWidth={2} aria-hidden="true" />}
                 <button
                   type="button"
-                  className="adsc-chip"
+                  className="w-stepitem"
                   data-state={state}
-                  aria-current={n === step ? "step" : undefined}
-                  disabled={n > maxVisited}
-                  onClick={() => goTo(n)}
+                  aria-current={state === "current" ? "step" : undefined}
+                  disabled={state !== "done" || target > maxVisited}
+                  onClick={() => goTo(target)}
                 >
-                  {n < step && <Check size={13} strokeWidth={2.6} />}
-                  {n}. {name}
+                  {state === "done" && <Check size={14} strokeWidth={2.6} aria-hidden="true" />}
+                  {p.label}
                 </button>
-              </li>
+              </span>
             );
           })}
-        </ol>
+        </nav>
       </header>
 
+      <div className="w-body">
+      <div className="adsc-shell">
       {/* Step 1 (Campaign) drops the card chrome: the reference puts the form
           sections directly in the 768px column, and the card's 20px side
           padding is what shrank the selection cards below spec width. Steps
           2–6 keep the card until they get the same treatment. */}
       <section className={step === 1 ? "adsc-step-plain" : "adsc-card"}>
-        {step === 1 && <StepObjective draft={draft} errors={errors} onChange={update} />}
+        {step === 1 && <StepCampaign draft={draft} errors={errors} onChange={update} />}
         {step === 2 && (
           <StepProduct
             draft={draft}
@@ -279,44 +269,51 @@ export function CampaignWizard({
         )}
       </section>
 
-      <footer className="adsc-nav">
-        <button
-          type="button"
-          className="btn-surface"
-          onClick={handleBack}
-          disabled={step === 1 || saving}
-        >
-          Atrás
-        </button>
+      </div>
+      </div>
 
-        <div className="adsc-nav__right">
-          {isReview ? (
-            <>
-              <button
-                type="button"
-                className="btn-surface"
-                onClick={() => void handleSubmit(false)}
-                disabled={saving}
-              >
-                {saving ? "Guardando…" : "Guardar borrador"}
+      {/* Fixed footer bar — "Siguiente" on the right, per the reference. */}
+      <footer className="w-footer">
+        <div className="w-footer__inner">
+          <button
+            type="button"
+            className="w-btn w-btn--ghost"
+            onClick={handleBack}
+            disabled={step === 1 || saving}
+            style={{ visibility: step === 1 ? "hidden" : undefined }}
+          >
+            Atrás
+          </button>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {isReview ? (
+              <>
+                <button
+                  type="button"
+                  className="w-btn w-btn--ghost"
+                  onClick={() => void handleSubmit(false)}
+                  disabled={saving}
+                >
+                  {saving ? "Guardando…" : "Guardar borrador"}
+                </button>
+                <button
+                  type="button"
+                  className="w-btn w-btn--primary"
+                  onClick={() => void handleSubmit(true)}
+                  disabled={saving}
+                >
+                  {saving ? "Guardando…" : "Publicar campaña"}
+                </button>
+              </>
+            ) : (
+              <button type="button" className="w-btn w-btn--primary" onClick={handleNext} disabled={saving}>
+                Siguiente
+                <ChevronRight size={16} strokeWidth={2.4} aria-hidden="true" />
               </button>
-              <button
-                type="button"
-                className="ads-btn-primary"
-                onClick={() => void handleSubmit(true)}
-                disabled={saving}
-              >
-                {saving ? "Guardando…" : "Publicar campaña"}
-              </button>
-            </>
-          ) : (
-            <button type="button" className="ads-btn-primary" onClick={handleNext} disabled={saving}>
-              Siguiente
-            </button>
-          )}
+            )}
+          </div>
         </div>
       </footer>
-
-    </div>
+    </>
   );
 }
