@@ -1341,3 +1341,421 @@
   .ads-create .w-audrow { flex-direction: column; align-items: stretch; }
   .ads-create .w-segmented { align-self: flex-start; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Step 3 · Creatives — two-panel editor from the Whop Ads build spec.
+   Unlike Campaign/Build this is NOT a 768px column: the canvas takes the
+   available width.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.ads-create .w-body[data-wide="true"] { padding: 0 0 96px; }
+
+.ads-create .cr-shell {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.ads-create .cr-layout {
+  display: flex;
+  align-items: stretch;
+  min-height: calc(100dvh - 56px - 96px);
+}
+
+/* ── Rail (263px) ──────────────────────────────────────────────────────── */
+
+.ads-create .cr-desktoprail { display: flex; align-items: stretch; flex: none; }
+
+.ads-create .cr-rail {
+  width: 263px;
+  flex: none;
+  padding: 0 8px 12px 12px;   /* spec */
+  border-right: 1px solid var(--w-stroke);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.ads-create .cr-rail__head {
+  height: 44px;               /* spec */
+  padding: 10px 12px;         /* spec */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ads-create .cr-rail__campaign {
+  font-size: 14px;
+  font-weight: 600;           /* spec 14/600 */
+  line-height: 20px;
+  color: var(--w-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ads-create .cr-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--w-text-2);
+  cursor: pointer;
+  transition: background 100ms var(--w-ease);
+}
+.ads-create .cr-iconbtn:hover { background: rgba(0, 0, 0, 0.06); color: var(--w-text); }
+.ads-create .cr-iconbtn--sm { width: 22px; height: 22px; }
+.ads-create .cr-iconbtn--ghost { cursor: default; opacity: 0.45; }
+.ads-create .cr-iconbtn:focus-visible { outline: 2px solid var(--w-accent); outline-offset: 1px; }
+
+.ads-create .cr-group__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;               /* spec */
+  padding: 6px;               /* spec */
+  border-radius: 8px;         /* spec */
+}
+.ads-create .cr-group__row[data-active="true"] {
+  background: rgba(0, 90, 255, 0.08);   /* spec */
+  color: #162e5f;                        /* spec */
+}
+.ads-create .cr-group__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.ads-create .cr-group__chev { transition: transform 120ms var(--w-ease); flex: none; }
+.ads-create .cr-group__chev[data-open="false"] { transform: rotate(-90deg); }
+.ads-create .cr-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #f5a524;        /* the spec's orange status dot */
+  flex: none;
+}
+
+.ads-create .cr-adlist { list-style: none; margin: 2px 0 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 2px; }
+
+.ads-create .cr-ad {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 8px;
+  padding: 2px 4px 2px 6px;
+}
+.ads-create .cr-ad[data-selected="true"] { background: rgba(0, 90, 255, 0.08); }
+.ads-create .cr-ad[data-selected="true"] .cr-ad__btn { color: #162e5f; font-weight: 500; }
+.ads-create .cr-ad__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--w-text-2);
+  cursor: pointer;
+  text-align: left;
+}
+.ads-create .cr-ad__thumb {
+  width: 22px; height: 22px; flex: none;
+  border-radius: 4px; overflow: hidden;
+  background: rgba(0, 0, 0, 0.08);
+}
+.ads-create .cr-ad__thumb img,
+.ads-create .cr-ad__thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ads-create .cr-ad__thumb--empty { border: 1px dashed var(--w-stroke); background: none; }
+
+.ads-create .cr-additem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  font-family: inherit;
+  font-size: 13px;            /* spec: sub-item 13/400 */
+  font-weight: 400;
+  color: var(--w-text-2);
+  cursor: pointer;
+}
+.ads-create .cr-additem:hover { background: rgba(0, 0, 0, 0.05); color: var(--w-text); }
+
+.ads-create .cr-collapse {
+  width: 18px;
+  flex: none;
+  border: none;
+  border-right: 1px solid var(--w-stroke);
+  background: none;
+  color: var(--w-text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ads-create .cr-collapse:hover { background: rgba(0, 0, 0, 0.04); }
+
+/* ── Canvas ────────────────────────────────────────────────────────────── */
+
+.ads-create .cr-canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding: 16px;
+  background-color: #f9f9f9;  /* spec */
+  /* spec: radial dot-grid every 16px */
+  background-image: radial-gradient(rgba(0, 0, 0, 0.12) 1px, transparent 1px);
+  background-size: 16px 16px;
+  overflow-y: auto;
+  transition: box-shadow 120ms var(--w-ease);
+}
+.ads-create .cr-canvas[data-dragging="true"] {
+  box-shadow: inset 0 0 0 2px var(--w-accent);
+  background-color: #f3f7ff;
+}
+
+.ads-create .cr-canvas__pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;          /* spec: p 4px + readable sides */
+  border-radius: 9999px;      /* spec: radius full */
+  background: #ffffff;        /* spec */
+  border: 1px solid rgba(0, 0, 0, 0.12);  /* spec */
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--w-text);
+}
+
+.ads-create .cr-empty {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+}
+.ads-create .cr-empty__msg {
+  margin: 0;
+  font-size: 16px;            /* spec: 16/400 */
+  font-weight: 400;
+  line-height: 24px;
+  color: var(--w-text);
+}
+.ads-create .cr-empty__hint { font-size: 12px; line-height: 16px; color: var(--w-text-2); }
+
+.ads-create .cr-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;               /* spec */
+  padding: 0 14px;
+  border: none;
+  border-radius: 8px;         /* spec */
+  background: var(--w-accent);/* spec */
+  color: #ffffff;
+  font-family: var(--whop-font-inter), var(--font-inter), sans-serif;
+  font-size: 14px;            /* spec: 14/500 */
+  font-weight: 500;
+  line-height: 20px;
+  cursor: pointer;
+  transition: background 120ms var(--w-ease);
+}
+.ads-create .cr-upload:hover { background: #1449bd; }
+.ads-create .cr-upload:disabled { opacity: 0.6; cursor: not-allowed; }
+.ads-create .cr-upload:focus-visible { outline: 2px solid var(--w-accent); outline-offset: 3px; }
+
+.ads-create .cr-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fdf1f0;
+  border: 1px solid #f0c8c3;
+  color: #8c2f24;
+  font-size: 13px;
+  line-height: 18px;
+}
+.ads-create .cr-alert--info {
+  background: #ffffff;
+  border-color: var(--w-stroke);
+  color: var(--w-text);
+}
+
+/* ── Ad editor ─────────────────────────────────────────────────────────── */
+
+.ads-create .cr-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+@media (min-width: 1024px) {
+  .ads-create .cr-editor { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
+}
+
+.ads-create .cr-editor__media {
+  background: #ffffff;
+  border: 1px solid var(--w-stroke);
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ads-create .cr-editor__media img,
+.ads-create .cr-editor__media video {
+  width: 100%;
+  max-height: 460px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #f2f2f2;
+  display: block;
+}
+.ads-create .cr-editor__mediaactions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.ads-create .cr-smallbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--w-stroke);
+  border-radius: 8px;
+  background: #ffffff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--w-text);
+  cursor: pointer;
+}
+.ads-create .cr-smallbtn:hover { background: rgba(0, 0, 0, 0.04); }
+.ads-create .cr-smallbtn--danger { color: #b42318; border-color: #f0c8c3; }
+.ads-create .cr-smallbtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ads-create .cr-editor__fields {
+  background: #ffffff;
+  border: 1px solid var(--w-stroke);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.ads-create .cr-textarea { height: auto; min-height: 92px; padding: 10px 12px; resize: vertical; }
+
+/* ── Preview ───────────────────────────────────────────────────────────── */
+
+.ads-create .cr-preview { display: flex; flex-direction: column; gap: 4px; }
+.ads-create .cr-preview__label { font-size: 14px; font-weight: 500; color: var(--w-text); }
+.ads-create .cr-preview__note { margin: 0 0 6px; font-size: 12px; line-height: 16px; color: var(--w-text-2); }
+.ads-create .cr-preview__card {
+  border: 1px solid var(--w-stroke);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+}
+.ads-create .cr-preview__card img,
+.ads-create .cr-preview__card video {
+  width: 100%; max-height: 180px; object-fit: cover; display: block; background: #f2f2f2;
+}
+.ads-create .cr-preview__body { padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.ads-create .cr-preview__headline { font-size: 14px; font-weight: 600; color: var(--w-text); }
+.ads-create .cr-preview__desc { font-size: 13px; color: var(--w-text-2); }
+
+/* ── Review drawer ─────────────────────────────────────────────────────── */
+
+.ads-create .cr-scrim {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(0, 0, 0, 0.35);
+}
+.ads-create .cr-drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  z-index: 41;
+  width: min(480px, 100vw);
+  background: #ffffff;
+  border-left: 1px solid var(--w-stroke);
+  display: flex;
+  flex-direction: column;
+}
+.ads-create .cr-drawer__head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 0 16px; height: 56px;
+  border-bottom: 1px solid var(--w-stroke); flex: none;
+}
+.ads-create .cr-drawer__title {
+  font-size: 16px; font-weight: 500; line-height: 24px;
+  letter-spacing: -0.18px; color: var(--w-text);
+}
+.ads-create .cr-drawer__body {
+  flex: 1; overflow-y: auto; padding: 16px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.ads-create .cr-drawer__foot {
+  flex: none; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 12px 16px; border-top: 1px solid var(--w-stroke);
+}
+
+/* ── Mobile: rail becomes a sheet, canvas takes the width ──────────────── */
+
+.ads-create .cr-mobilebar { display: none; }
+.ads-create .cr-sheet { display: none; }
+
+@media (max-width: 900px) {
+  .ads-create .cr-layout { flex-direction: column; min-height: 0; }
+  .ads-create .cr-desktoprail { display: none; }
+
+  .ads-create .cr-mobilebar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--w-stroke);
+    background: #ffffff;
+  }
+  .ads-create .cr-mobilebar__btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: none; background: none; padding: 6px 8px; border-radius: 8px;
+    font-family: inherit; font-size: 14px; font-weight: 500; color: var(--w-text);
+    cursor: pointer;
+  }
+  .ads-create .cr-mobilebar__count {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+    background: rgba(0, 0, 0, 0.06); font-size: 12px; color: var(--w-text-2);
+  }
+  .ads-create .cr-sheet {
+    display: block; border-bottom: 1px solid var(--w-stroke); background: #ffffff;
+  }
+  .ads-create .cr-sheet .cr-rail {
+    width: 100%; border-right: none; max-height: 45vh;
+  }
+  .ads-create .cr-canvas { min-height: 60vh; }
+}

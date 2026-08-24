@@ -166,7 +166,10 @@ export async function saveCampaignDraft(params: {
       product_id: draft.destinationKind === "product" ? draft.productId : null,
       name: draft.name.trim(),
       objective: draft.objective,
-      destination_url: draft.creative.destinationUrl.trim() || null,
+      // The campaign-level column takes the first ad's destination; every ad is
+      // seeded from the same Build selection, so they agree unless deliberately
+      // overridden per ad.
+      destination_url: draft.creative.ads[0]?.destinationUrl.trim() || null,
       budget_type: draft.budgetType,
       budget_amount: Number(draft.budgetAmount),
       currency: draft.currency,

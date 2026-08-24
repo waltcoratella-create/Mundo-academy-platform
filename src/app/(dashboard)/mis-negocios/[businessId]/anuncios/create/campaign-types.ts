@@ -28,7 +28,7 @@ export const OBJECTIVES_NEEDING_MIGRATION: CampaignObjective[] = ["engagement"];
 export const BUDGET_TYPES: BudgetType[] = ["daily", "lifetime"];
 export const STATUSES: CampaignStatus[] = ["draft", "in_review", "active", "paused", "archived"];
 
-export const TOTAL_STEPS = 4;
+export const TOTAL_STEPS = 3;
 
 /** The three phases the header stepper shows, mirroring Whop's flow. */
 export type WizardPhase = "campaign" | "build" | "creatives";
@@ -47,6 +47,14 @@ export function phaseOfStep(step: number): WizardPhase {
   if (step <= 1) return "campaign";
   if (step <= 2) return "build";
   return "creatives";
+}
+
+/** Stable id for an ad. Falls back when crypto.randomUUID is unavailable (SSR). */
+export function newAdId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `ad_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 /** Daily-budget presets offered under the amount field. */
@@ -157,7 +165,9 @@ export interface CampaignAudience {
   customAudiencesExcluded: string[];
 }
 
-export interface CampaignCreative {
+/** One ad inside the group. Each uploaded file becomes one of these. */
+export interface CampaignAd {
+  id: string;
   mediaUrl: string | null;
   mediaType: MediaType | null;
   primaryText: string;
@@ -165,6 +175,30 @@ export interface CampaignCreative {
   description: string;
   cta: string;
   destinationUrl: string;
+}
+
+/**
+ * The `creative` jsonb.
+ *
+ * Was a single ad's fields at the top level; now holds a list. Both shapes are
+ * read by `normalizeCreative`, so existing rows open as a one-ad campaign and
+ * no SQL migration is needed — the column is already jsonb.
+ */
+export interface CampaignCreative {
+  ads: CampaignAd[];
+}
+
+export function emptyAd(destinationUrl = ""): CampaignAd {
+  return {
+    id: newAdId(),
+    mediaUrl: null,
+    mediaType: null,
+    primaryText: "",
+    headline: "",
+    description: "",
+    cta: "shop_now",
+    destinationUrl,
+  };
 }
 
 export const BUDGET_CONTROL_OPTIONS = [
@@ -440,10 +474,11 @@ function toDateInput(value: string | null, timeZone: string): string {
   return utcToZonedLocal(value, timeZone);
 }
 
-export function normalizeCreative(raw: unknown): CampaignCreative {
+function normalizeAd(raw: unknown): CampaignAd {
   const c = (raw ?? {}) as Record<string, unknown>;
   const mediaType = c.mediaType === "video" || c.mediaType === "image" ? c.mediaType : null;
   return {
+    id: str(c.id, "") || newAdId(),
     mediaUrl: typeof c.mediaUrl === "string" && c.mediaUrl ? c.mediaUrl : null,
     mediaType,
     primaryText: str(c.primaryText, ""),
@@ -452,6 +487,31 @@ export function normalizeCreative(raw: unknown): CampaignCreative {
     cta: str(c.cta, "shop_now"),
     destinationUrl: str(c.destinationUrl, ""),
   };
+}
+
+/**
+ * Read `ad_campaigns.creative` back into the draft shape.
+ *
+ * Handles both layouts:
+ *  · `{ ads: [...] }`  — current
+ *  · `{ mediaUrl, primaryText, ... }` — legacy single creative, lifted into a
+ *    one-element list so old drafts open as a campaign with one ad.
+ * An empty/absent value yields one blank ad so the editor always has something
+ * to show.
+ */
+export function normalizeCreative(raw: unknown): CampaignCreative {
+  const c = (raw ?? {}) as Record<string, unknown>;
+
+  if (Array.isArray(c.ads)) {
+    const ads = c.ads.map(normalizeAd);
+    return { ads: ads.length ? ads : [emptyAd()] };
+  }
+
+  // Legacy shape: only treat it as an ad if it actually carries content.
+  const hasLegacyContent = ["mediaUrl", "primaryText", "headline", "description", "destinationUrl"]
+    .some((k) => typeof c[k] === "string" && (c[k] as string).length > 0);
+
+  return { ads: [hasLegacyContent ? normalizeAd(c) : emptyAd()] };
 }
 
 /**
@@ -541,15 +601,7 @@ export function emptyDraft(currency = "USD"): CampaignDraft {
     endsAt: "",
     timezone: DEFAULT_TIMEZONE,
     delivery: { ...DEFAULT_DELIVERY },
-    creative: {
-      mediaUrl: null,
-      mediaType: null,
-      primaryText: "",
-      headline: "",
-      description: "",
-      cta: "shop_now",
-      destinationUrl: "",
-    },
+    creative: { ads: [emptyAd()] },
   };
 }
 
@@ -626,12 +678,20 @@ export function validateStep(step: number, d: CampaignDraft): Errors {
     }
   }
 
-  // Step 3 = Creatives.
+  // Step 3 = Creatives. Every ad in the group must be usable; an empty one
+  // added by mistake should be filled or removed rather than saved blank.
   if (step === 3) {
-    if (!d.creative.primaryText.trim()) e.primaryText = "Escribe el texto principal.";
-    if (!d.creative.headline.trim()) e.headline = "Escribe un título.";
-    const dest = d.creative.destinationUrl.trim();
-    if (dest && !isHttpUrl(dest)) e.destinationUrl = "La URL debe empezar por http:// o https://";
+    const ads = d.creative.ads;
+    if (ads.length === 0) {
+      e.ads = "Añade al menos un anuncio.";
+    }
+    ads.forEach((ad, i) => {
+      const label = `Anuncio ${i + 1}`;
+      if (!ad.primaryText.trim()) e[`ad.${ad.id}.primaryText`] = `${label}: escribe el texto principal.`;
+      if (!ad.headline.trim()) e[`ad.${ad.id}.headline`] = `${label}: escribe un título.`;
+      const dest = ad.destinationUrl.trim();
+      if (dest && !isHttpUrl(dest)) e[`ad.${ad.id}.destinationUrl`] = `${label}: la URL debe empezar por http:// o https://`;
+    });
   }
 
   return e;

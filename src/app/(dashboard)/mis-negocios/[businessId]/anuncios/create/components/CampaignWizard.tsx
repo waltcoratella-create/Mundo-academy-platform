@@ -11,8 +11,8 @@ import { saveCampaignDraft } from "../../campaign-actions";
 import { StepCampaign } from "./StepCampaign";
 import type { PaymentLinkOption, ProductOption } from "../campaign-types";
 import { StepBuild } from "./StepBuild";
-import { StepCreative } from "./StepCreative";
-import { StepReview } from "./StepReview";
+import { StepCreatives } from "./StepCreatives";
+import { ReviewDrawer } from "./ReviewDrawer";
 
 /** First step of each phase, so the header stepper can jump back to it. */
 const PHASE_FIRST_STEP: Record<string, number> = { campaign: 1, build: 2, creatives: 3 };
@@ -58,6 +58,7 @@ export function CampaignWizard({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [done, setDone] = useState<null | { published: boolean }>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   /** Last URL we auto-filled, so manual edits are never clobbered. */
   const autoUrlRef = useRef<string>("");
@@ -94,10 +95,16 @@ export function CampaignWizard({
   useEffect(() => {
     if (!suggestedUrl) return;
     setDraft((d) => {
-      const current = d.creative.destinationUrl;
-      if (current && current !== autoUrlRef.current) return d; // user edited it
+      // Fill only the ads still holding the previous auto value (or nothing),
+      // so a URL the user typed on a specific ad is never clobbered.
+      const previous = autoUrlRef.current;
+      const ads = d.creative.ads.map((ad) =>
+        !ad.destinationUrl || ad.destinationUrl === previous
+          ? { ...ad, destinationUrl: suggestedUrl }
+          : ad
+      );
       autoUrlRef.current = suggestedUrl;
-      return { ...d, creative: { ...d.creative, destinationUrl: suggestedUrl } };
+      return { ...d, creative: { ads } };
     });
   }, [suggestedUrl]);
 
@@ -232,13 +239,13 @@ export function CampaignWizard({
         </nav>
       </header>
 
-      <div className="w-body">
-      <div className="adsc-shell">
+      <div className="w-body" data-wide={step === TOTAL_STEPS ? "true" : undefined}>
+      <div className={step === TOTAL_STEPS ? "cr-shell" : "adsc-shell"}>
       {/* Step 1 (Campaign) drops the card chrome: the reference puts the form
           sections directly in the 768px column, and the card's 20px side
           padding is what shrank the selection cards below spec width. Steps
           2–6 keep the card until they get the same treatment. */}
-      <section className={step <= 2 ? "adsc-step-plain" : "adsc-card"}>
+      <section className="adsc-step-plain">
         {step === 1 && <StepCampaign draft={draft} errors={errors} onChange={update} />}
         {step === 2 && (
           <StepBuild
@@ -251,22 +258,7 @@ export function CampaignWizard({
           />
         )}
         {step === 3 && (
-          <StepCreative draft={draft} errors={errors} uploadMedia={uploadMedia} onChange={update} />
-        )}
-        {step === 4 && (
-          <StepReview
-            draft={draft}
-            products={products}
-            paymentLinks={paymentLinks}
-            onEditStep={goTo}
-          />
-        )}
-
-        {isReview && (
-          <div className="adsc-alert" data-tone="amber">
-            <AlertCircle size={16} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
-            <span>{PUBLISH_BLOCKED_MESSAGE}</span>
-          </div>
+          <StepCreatives draft={draft} errors={errors} uploadMedia={uploadMedia} onChange={update} />
         )}
 
         {saveError && (
@@ -307,10 +299,11 @@ export function CampaignWizard({
                 <button
                   type="button"
                   className="w-btn w-btn--primary"
-                  onClick={() => void handleSubmit(true)}
+                  onClick={() => setReviewOpen(true)}
                   disabled={saving}
                 >
-                  {saving ? "Guardando…" : "Publicar campaña"}
+                  Revisar y finalizar
+                  <ChevronRight size={16} strokeWidth={2.4} aria-hidden="true" />
                 </button>
               </>
             ) : (
@@ -322,6 +315,18 @@ export function CampaignWizard({
           </div>
         </div>
       </footer>
+
+      <ReviewDrawer
+        open={reviewOpen}
+        draft={draft}
+        products={products}
+        paymentLinks={paymentLinks}
+        saving={saving}
+        saveError={saveError}
+        onClose={() => setReviewOpen(false)}
+        onEditStep={(n) => { setReviewOpen(false); goTo(n); }}
+        onSaveDraft={() => void handleSubmit(true)}
+      />
     </>
   );
 }
