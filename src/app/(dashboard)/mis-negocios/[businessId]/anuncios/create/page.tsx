@@ -9,9 +9,11 @@ import "./create.css";
 import { CampaignWizard } from "./components/CampaignWizard";
 
 /**
- * Campaign builder. `getBusinessById` already scopes to the authed owner, so a
- * businessId from the URL that the user does not own 404s here — the server
- * action re-checks ownership independently before writing anything.
+ * Campaign builder — create mode. `getBusinessById` already scopes to the authed
+ * owner, so a businessId from the URL that the user does not own 404s here; the
+ * server action re-checks ownership independently before writing anything.
+ *
+ * Editing an existing draft lives at ../[campaignId]/edit.
  */
 export default async function CreateCampaignPage({
   params,

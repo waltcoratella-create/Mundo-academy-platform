@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { Pencil } from "lucide-react";
 import type { AdCampaign, AdDelivery, AdPlatform } from "../ads-data";
 
 const DELIVERY_LABEL: Record<AdDelivery, string> = {
@@ -50,7 +52,7 @@ function EmptyState({ label }: { label: string }) {
  * rows get the amber background (hover → amber-3). The on/off switch is local
  * optimistic state (no backend wired yet).
  */
-export function CampaignTable({ campaigns, query, emptyLabel }: { campaigns: AdCampaign[]; query: string; emptyLabel: string }) {
+export function CampaignTable({ campaigns, query, emptyLabel, campaignHrefBase }: { campaigns: AdCampaign[]; query: string; emptyLabel: string; campaignHrefBase?: string }) {
   const [enabled, setEnabled] = useState<Record<string, boolean>>(
     () => Object.fromEntries(campaigns.map((c) => [c.id, c.enabled])),
   );
@@ -74,6 +76,7 @@ export function CampaignTable({ campaigns, query, emptyLabel }: { campaigns: AdC
             <th>Results</th>
             <th>Cost per result</th>
             <th style={{ textAlign: "right" }}>Encendido/Apagado</th>
+            <th style={{ textAlign: "right" }}>Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -100,6 +103,21 @@ export function CampaignTable({ campaigns, query, emptyLabel }: { campaigns: AdC
                   on={!!enabled[c.id]}
                   onToggle={() => setEnabled((s) => ({ ...s, [c.id]: !s[c.id] }))}
                 />
+              </td>
+              <td style={{ textAlign: "right" }}>
+                {/* Only drafts are editable — nothing is synced to an ad
+                    platform yet, so a live campaign has no safe edit path. */}
+                {c.delivery === "draft" && campaignHrefBase ? (
+                  <Link href={`${campaignHrefBase}/${c.id}/edit`} className="ads-rowaction">
+                    <Pencil size={14} strokeWidth={2} aria-hidden="true" />
+                    Editar
+                  </Link>
+                ) : (
+                  <span className="ads-rowaction" data-disabled="true" title="Solo se pueden editar borradores">
+                    <Pencil size={14} strokeWidth={2} aria-hidden="true" />
+                    Editar
+                  </span>
+                )}
               </td>
             </tr>
           ))}

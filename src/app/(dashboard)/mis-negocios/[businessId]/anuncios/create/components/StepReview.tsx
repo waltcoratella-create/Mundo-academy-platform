@@ -5,7 +5,7 @@ import {
   BUDGET_TYPE_LABEL, CTA_OPTIONS, GENDER_OPTIONS, LANGUAGE_OPTIONS, OBJECTIVE_LABEL,
 } from "../campaign-types";
 import { StepHeading } from "./Field";
-import type { PaymentLinkOption, ProductOption } from "./StepProduct";
+import type { PaymentLinkOption, ProductOption } from "../campaign-types";
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -85,20 +85,33 @@ export function StepReview({
         <Row label="Objetivo" value={draft.objective ? OBJECTIVE_LABEL[draft.objective] : DASH} />
       </Section>
 
-      <Section title="Producto" onEdit={() => onEditStep(2)}>
+      <Section title="Destino" onEdit={() => onEditStep(2)}>
         <Row label="Tipo de destino" value={destinationKindLabel} />
         <Row label="Destino" value={destination} />
       </Section>
 
-      <Section title="Audiencia" onEdit={() => onEditStep(3)}>
-        <Row label="Ubicación" value={a.locations || "Sin especificar"} />
-        <Row label="Edad" value={`${a.ageMin} – ${a.ageMax}`} />
+      <Section title="Audiencia" onEdit={() => onEditStep(2)}>
+        <Row
+          label="Ubicación"
+          value={
+            a.globalReach
+              ? "Alcance global"
+              : a.includedLocations.length
+                ? a.includedLocations.join(", ")
+                : "Sin especificar"
+          }
+        />
+        {a.excludedLocations.length > 0 && (
+          <Row label="Excluidas" value={a.excludedLocations.join(", ")} />
+        )}
+        <Row label="Audiencia Advantage+" value={a.advantageAudience ? "Activada" : "Manual"} />
+        <Row label="Edad" value={a.advantageAudience ? `${a.ageMin}+` : `${a.ageMin} – ${a.ageMax}`} />
         <Row label="Género" value={labelFor(GENDER_OPTIONS, a.gender)} />
         <Row label="Idioma" value={labelFor(LANGUAGE_OPTIONS, a.language)} />
         <Row label="Intereses" value={a.interests.length ? a.interests.join(", ") : "Sin especificar"} />
       </Section>
 
-      <Section title="Presupuesto y calendario" onEdit={() => onEditStep(4)}>
+      <Section title="Presupuesto y calendario" onEdit={() => onEditStep(2)}>
         <Row label="Tipo" value={BUDGET_TYPE_LABEL[draft.budgetType]} />
         <Row
           label="Importe"
@@ -109,7 +122,7 @@ export function StepReview({
         <Row label="Zona horaria" value={draft.timezone} />
       </Section>
 
-      <Section title="Creatividad" onEdit={() => onEditStep(5)}>
+      <Section title="Creatividad" onEdit={() => onEditStep(3)}>
         <Row
           label="Archivo"
           value={c.mediaUrl ? (c.mediaType === "video" ? "Vídeo subido" : "Imagen subida") : "Sin archivo"}

@@ -268,3 +268,22 @@
   .ads-page .ads-top { flex-direction: row; align-items: stretch; }
   .ads-page .ads-side-col { width: 350px; flex-shrink: 0; }
 }
+
+/* Row action (Editar) — quiet link that matches the table's type scale. */
+.ads-page .ads-rowaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--gray-12);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ads-page .ads-rowaction:hover { text-decoration: underline; }
+.ads-page .ads-rowaction[data-disabled="true"] {
+  color: var(--gray-9);
+  cursor: not-allowed;
+  text-decoration: none;
+}

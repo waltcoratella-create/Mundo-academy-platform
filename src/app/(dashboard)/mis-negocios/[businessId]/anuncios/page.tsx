@@ -28,6 +28,7 @@ export default async function AnunciosPage({ params }: { params: { businessId: s
         <AdsClient
           data={data}
           createHref={`${base}/anuncios/create`}
+          campaignHrefBase={`${base}/anuncios`}
           chatHref={`${base}/chats`}
           billingHref={`${base}/configuraciones`}
         />

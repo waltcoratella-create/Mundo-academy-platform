@@ -7,16 +7,15 @@ import { X, Check, AlertCircle, ChevronRight } from "lucide-react";
 import { uploadAdCreative } from "@/app/actions/upload-actions";
 import type { CampaignDraft, Errors } from "../campaign-types";
 import { TOTAL_STEPS, PHASES, phaseOfStep, emptyDraft, validateStep, validateAll } from "../campaign-types";
-import { saveDraftCampaign } from "../../campaign-actions";
+import { saveCampaignDraft } from "../../campaign-actions";
 import { StepCampaign } from "./StepCampaign";
-import { StepProduct, type PaymentLinkOption, type ProductOption } from "./StepProduct";
-import { StepAudience } from "./StepAudience";
-import { StepBudget } from "./StepBudget";
+import type { PaymentLinkOption, ProductOption } from "../campaign-types";
+import { StepBuild } from "./StepBuild";
 import { StepCreative } from "./StepCreative";
 import { StepReview } from "./StepReview";
 
 /** First step of each phase, so the header stepper can jump back to it. */
-const PHASE_FIRST_STEP: Record<string, number> = { campaign: 1, build: 2, creatives: 5 };
+const PHASE_FIRST_STEP: Record<string, number> = { campaign: 1, build: 2, creatives: 3 };
 
 /** Message shown once the draft is stored — publishing needs Meta + billing. */
 const PUBLISH_BLOCKED_MESSAGE =
@@ -24,6 +23,10 @@ const PUBLISH_BLOCKED_MESSAGE =
 
 export interface CampaignWizardProps {
   businessId: string;
+  /** Present → editing that campaign (UPDATE). Absent → creating (INSERT). */
+  campaignId?: string;
+  /** Hydrated draft when editing; a blank one is created otherwise. */
+  initialDraft?: CampaignDraft;
   adsHref: string;
   appOrigin: string;
   products: ProductOption[];
@@ -34,6 +37,8 @@ export interface CampaignWizardProps {
 
 export function CampaignWizard({
   businessId,
+  campaignId,
+  initialDraft,
   adsHref,
   appOrigin,
   products,
@@ -42,9 +47,12 @@ export function CampaignWizard({
   defaultCurrency,
 }: CampaignWizardProps) {
   const router = useRouter();
-  const [draft, setDraft] = useState<CampaignDraft>(() => emptyDraft(defaultCurrency));
+  const isEditing = Boolean(campaignId);
+  const [draft, setDraft] = useState<CampaignDraft>(
+    () => initialDraft ?? emptyDraft(defaultCurrency)
+  );
   const [step, setStep] = useState(1);
-  const [maxVisited, setMaxVisited] = useState(1);
+  const [maxVisited, setMaxVisited] = useState(() => (campaignId ? TOTAL_STEPS : 1));
   const [errors, setErrors] = useState<Errors>({});
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -133,7 +141,7 @@ export function CampaignWizard({
     try {
       // Both buttons store a draft — Meta is not connected, so nothing can go
       // live. `publishIntent` only changes the confirmation copy.
-      const res = await saveDraftCampaign(businessId, draft);
+      const res = await saveCampaignDraft({ businessId, campaignId, draft });
       if (!res.ok) {
         setSaveError(res.error);
         return;
@@ -167,7 +175,9 @@ export function CampaignWizard({
         <div className="adsc-card">
           <div className="adsc-done">
             <span className="adsc-done__icon"><Check size={24} strokeWidth={2.4} /></span>
-            <h2 className="adsc-done__title">Campaña guardada como borrador</h2>
+            <h2 className="adsc-done__title">
+              {isEditing ? "Cambios guardados" : "Campaña guardada como borrador"}
+            </h2>
             <p className="adsc-done__text">
               {done.published
                 ? PUBLISH_BLOCKED_MESSAGE
@@ -194,7 +204,7 @@ export function CampaignWizard({
         <Link href={adsHref} className="w-header__close" aria-label="Cerrar" onClick={handleLeave}>
           <X size={18} strokeWidth={2} />
         </Link>
-        <span className="w-header__title">Crear campaña</span>
+        <span className="w-header__title">{isEditing ? "Editar campaña" : "Crear campaña"}</span>
 
         <nav className="w-stepper" aria-label="Fases">
           {PHASES.map((p, i) => {
@@ -228,10 +238,10 @@ export function CampaignWizard({
           sections directly in the 768px column, and the card's 20px side
           padding is what shrank the selection cards below spec width. Steps
           2–6 keep the card until they get the same treatment. */}
-      <section className={step === 1 ? "adsc-step-plain" : "adsc-card"}>
+      <section className={step <= 2 ? "adsc-step-plain" : "adsc-card"}>
         {step === 1 && <StepCampaign draft={draft} errors={errors} onChange={update} />}
         {step === 2 && (
-          <StepProduct
+          <StepBuild
             draft={draft}
             errors={errors}
             products={products}
@@ -240,12 +250,10 @@ export function CampaignWizard({
             onChange={update}
           />
         )}
-        {step === 3 && <StepAudience draft={draft} errors={errors} onChange={update} />}
-        {step === 4 && <StepBudget draft={draft} errors={errors} onChange={update} />}
-        {step === 5 && (
+        {step === 3 && (
           <StepCreative draft={draft} errors={errors} uploadMedia={uploadMedia} onChange={update} />
         )}
-        {step === 6 && (
+        {step === 4 && (
           <StepReview
             draft={draft}
             products={products}

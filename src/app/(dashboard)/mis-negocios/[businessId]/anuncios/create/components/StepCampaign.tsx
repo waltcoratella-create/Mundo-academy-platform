@@ -5,7 +5,7 @@ import {
   ShoppingCart, UserPlus, Heart, MousePointerClick, Megaphone, ChevronDown,
 } from "lucide-react";
 import type {
-  CampaignAdvanced, CampaignDraft, CampaignObjective, Errors,
+  CampaignDelivery, CampaignDraft, CampaignObjective, Errors,
 } from "../campaign-types";
 import {
   OBJECTIVE_OPTIONS, PLATFORM_OPTIONS, BUDGET_PRESETS,
@@ -123,8 +123,9 @@ export function StepCampaign({
 
   const symbol = CURRENCY_SYMBOL[draft.currency] ?? draft.currency;
 
-  function patchAdvanced(patch: Partial<CampaignAdvanced>) {
-    onChange({ advanced: { ...draft.advanced, ...patch } });
+  /** Advanced options are delivery settings — same jsonb as Build's. */
+  function patchAdvanced(patch: Partial<CampaignDelivery>) {
+    onChange({ delivery: { ...draft.delivery, ...patch } });
   }
 
   return (
@@ -276,21 +277,21 @@ export function StepCampaign({
             <AdvancedRow
               label="Control de presupuesto"
               description="Dónde se administra el gasto de la campaña."
-              value={draft.advanced.budgetControl}
+              value={draft.delivery.budgetControl}
               options={BUDGET_CONTROL_OPTIONS}
               onChange={(budgetControl) => patchAdvanced({ budgetControl })}
             />
             <AdvancedRow
               label="Estrategia de puja"
               description="Cómo se optimiza la entrega de tus anuncios."
-              value={draft.advanced.bidStrategy}
+              value={draft.delivery.bidStrategy}
               options={BID_STRATEGY_OPTIONS}
               onChange={(bidStrategy) => patchAdvanced({ bidStrategy })}
             />
             <AdvancedRow
               label="Categoría de anuncio especial"
               description="Obligatorio para crédito, empleo, vivienda o temas sociales."
-              value={draft.advanced.specialCategory}
+              value={draft.delivery.specialCategory}
               options={SPECIAL_CATEGORY_OPTIONS}
               onChange={(specialCategory) => patchAdvanced({ specialCategory })}
             />

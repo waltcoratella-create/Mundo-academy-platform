@@ -26,7 +26,7 @@ export const OBJECTIVES_NEEDING_MIGRATION: CampaignObjective[] = ["engagement"];
 export const BUDGET_TYPES: BudgetType[] = ["daily", "lifetime"];
 export const STATUSES: CampaignStatus[] = ["draft", "in_review", "active", "paused", "archived"];
 
-export const TOTAL_STEPS = 6;
+export const TOTAL_STEPS = 4;
 
 /** The three phases the header stepper shows, mirroring Whop's flow. */
 export type WizardPhase = "campaign" | "build" | "creatives";
@@ -43,7 +43,7 @@ export const PHASES: { key: WizardPhase; label: string }[] = [
  */
 export function phaseOfStep(step: number): WizardPhase {
   if (step <= 1) return "campaign";
-  if (step <= 4) return "build";
+  if (step <= 2) return "build";
   return "creatives";
 }
 
@@ -54,8 +54,84 @@ export const BUDGET_PRESETS = [200, 1000, 5000];
 export const AGE_MIN = 13;
 export const AGE_MAX = 65;
 
+/** Options the Build step needs; previously declared in StepProduct. */
+export interface ProductOption {
+  id: string;
+  name: string;
+  price: number;
+  currency: string;
+  status: string;
+}
+
+export interface PaymentLinkOption {
+  id: string;
+  title: string;
+  slug: string;
+  productName: string;
+  active: boolean;
+}
+
+export type ConversionLocation = "website" | "message";
+
+/**
+ * Delivery configuration: where/how the campaign is delivered.
+ *
+ * Persisted to `ad_campaigns.delivery` (jsonb). Kept strictly separate from
+ * `audience`, which is targeting only. Nothing here is sent to Meta yet.
+ */
+export interface CampaignDelivery {
+  // Build
+  conversionLocation: ConversionLocation;
+  conversionEvent: string;
+  advantagePlacements: boolean;
+  // Campaign → advanced options
+  budgetControl: string;
+  bidStrategy: string;
+  specialCategory: string;
+}
+
+export const CONVERSION_LOCATIONS: {
+  value: ConversionLocation;
+  label: string;
+  description: string;
+  available: boolean;
+}[] = [
+  { value: "website", label: "Sitio web",             description: "Lleva a la gente a tu página.",        available: true },
+  { value: "message", label: "Destinos de mensajes",  description: "Messenger, Instagram o WhatsApp.",     available: false },
+];
+
+/** Standard web conversion events. No Pixel IDs yet. */
+export const CONVERSION_EVENTS = [
+  { value: "purchase",              label: "Compra" },
+  { value: "lead",                  label: "Cliente potencial" },
+  { value: "complete_registration", label: "Registro completado" },
+  { value: "view_content",          label: "Visualización de contenido" },
+];
+
+export const MIN_AGE_OPTIONS = [18, 21, 25, 30];
+
+/**
+ * Local suggestion list for the geo search. Deliberately separate from the
+ * persistence layer: it only powers the UI picker, and no Meta geo IDs are
+ * fabricated — what gets stored is the plain names the user picked.
+ */
+export const LOCATION_SUGGESTIONS = [
+  "España", "México", "Argentina", "Colombia", "Chile", "Perú", "Uruguay",
+  "Ecuador", "Bolivia", "Paraguay", "Venezuela", "Costa Rica", "Panamá",
+  "Guatemala", "República Dominicana", "Estados Unidos", "Canadá", "Brasil",
+  "Portugal", "Francia", "Italia", "Alemania", "Reino Unido", "Países Bajos",
+  "Madrid", "Barcelona", "Valencia", "Sevilla", "Ciudad de México",
+  "Guadalajara", "Monterrey", "Buenos Aires", "Córdoba", "Rosario",
+  "Bogotá", "Medellín", "Cali", "Santiago", "Lima", "Miami", "Nueva York",
+];
+
 export interface CampaignAudience {
-  locations: string;
+  /** true → Meta delivers worldwide and the location lists are ignored. */
+  globalReach: boolean;
+  includedLocations: string[];
+  excludedLocations: string[];
+  /** Let Meta pick the audience; when off, the manual controls below apply. */
+  advantageAudience: boolean;
   ageMin: number;
   ageMax: number;
   gender: Gender;
@@ -71,20 +147,6 @@ export interface CampaignCreative {
   description: string;
   cta: string;
   destinationUrl: string;
-}
-
-/**
- * Meta delivery settings shown under "Opciones avanzadas".
- *
- * NOT PERSISTED YET: ad_campaigns has no column for campaign-level delivery
- * config (`audience` / `creative` jsonb are semantically the wrong home). They
- * live in the draft so they survive step navigation, and the report lists the
- * one column needed to store them. Nothing here is sent to Meta.
- */
-export interface CampaignAdvanced {
-  budgetControl: string;
-  bidStrategy: string;
-  specialCategory: string;
 }
 
 export const BUDGET_CONTROL_OPTIONS = [
@@ -123,7 +185,7 @@ export interface CampaignDraft {
   /** yyyy-mm-dd, "" = open-ended */
   endsAt: string;
   timezone: string;
-  advanced: CampaignAdvanced;
+  delivery: CampaignDelivery;
   creative: CampaignCreative;
 }
 
@@ -225,6 +287,188 @@ export const BUDGET_TYPE_LABEL: Record<BudgetType, string> = {
   lifetime: "Presupuesto total",
 };
 
+// ─── Defaults + normalisation ─────────────────────────────────────────────────
+
+export const DEFAULT_DELIVERY: CampaignDelivery = {
+  conversionLocation: "website",
+  conversionEvent: "",
+  advantagePlacements: true,
+  budgetControl: "campaign",
+  bidStrategy: "highest_volume",
+  specialCategory: "none",
+};
+
+export const DEFAULT_AUDIENCE: CampaignAudience = {
+  globalReach: false,
+  includedLocations: [],
+  excludedLocations: [],
+  advantageAudience: true,
+  ageMin: 18,
+  ageMax: 65,
+  gender: "all",
+  interests: [],
+  language: "es",
+};
+
+function str(v: unknown, fallback: string): string {
+  return typeof v === "string" && v.length > 0 ? v : fallback;
+}
+function bool(v: unknown, fallback: boolean): boolean {
+  return typeof v === "boolean" ? v : fallback;
+}
+function num(v: unknown, fallback: number): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+function strList(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
+
+/**
+ * Read `ad_campaigns.delivery` back into the draft shape.
+ * Rows saved before the column existed hold `{}` — every field falls back to
+ * its default, so older drafts open without losing anything they did store.
+ */
+export function normalizeDelivery(raw: unknown): CampaignDelivery {
+  const d = (raw ?? {}) as Partial<Record<keyof CampaignDelivery, unknown>>;
+  const loc = d.conversionLocation === "message" ? "message" : "website";
+  return {
+    conversionLocation: loc,
+    conversionEvent: str(d.conversionEvent, DEFAULT_DELIVERY.conversionEvent),
+    advantagePlacements: bool(d.advantagePlacements, DEFAULT_DELIVERY.advantagePlacements),
+    budgetControl: str(d.budgetControl, DEFAULT_DELIVERY.budgetControl),
+    bidStrategy: str(d.bidStrategy, DEFAULT_DELIVERY.bidStrategy),
+    specialCategory: str(d.specialCategory, DEFAULT_DELIVERY.specialCategory),
+  };
+}
+
+/**
+ * Read `ad_campaigns.audience` back into the draft shape. Tolerates the older
+ * layout, where locations were a single free-text string.
+ */
+export function normalizeAudience(raw: unknown): CampaignAudience {
+  const a = (raw ?? {}) as Record<string, unknown>;
+  const legacy = typeof a.locations === "string" && a.locations.trim()
+    ? a.locations.split(",").map((x) => x.trim()).filter(Boolean)
+    : [];
+  const included = strList(a.includedLocations);
+  return {
+    globalReach: bool(a.globalReach, DEFAULT_AUDIENCE.globalReach),
+    includedLocations: included.length ? included : legacy,
+    excludedLocations: strList(a.excludedLocations),
+    advantageAudience: bool(a.advantageAudience, DEFAULT_AUDIENCE.advantageAudience),
+    ageMin: num(a.ageMin, DEFAULT_AUDIENCE.ageMin),
+    ageMax: num(a.ageMax, DEFAULT_AUDIENCE.ageMax),
+    gender: (["all", "female", "male"] as const).includes(a.gender as Gender)
+      ? (a.gender as Gender)
+      : DEFAULT_AUDIENCE.gender,
+    interests: strList(a.interests),
+    language: str(a.language, DEFAULT_AUDIENCE.language),
+  };
+}
+
+/** Shape of an `ad_campaigns` row as far as the builder cares. */
+export interface CampaignRow {
+  id: string;
+  platform: string | null;
+  objective: string | null;
+  name: string | null;
+  product_id: string | null;
+  destination_url: string | null;
+  budget_type: string | null;
+  budget_amount: string | number | null;
+  currency: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  timezone: string | null;
+  audience: unknown;
+  delivery: unknown;
+  creative: unknown;
+  status: string | null;
+}
+
+/** timestamptz → yyyy-mm-dd (the date inputs' format); null → "". */
+function toDateInput(value: string | null): string {
+  if (!value) return "";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+}
+
+export function normalizeCreative(raw: unknown): CampaignCreative {
+  const c = (raw ?? {}) as Record<string, unknown>;
+  const mediaType = c.mediaType === "video" || c.mediaType === "image" ? c.mediaType : null;
+  return {
+    mediaUrl: typeof c.mediaUrl === "string" && c.mediaUrl ? c.mediaUrl : null,
+    mediaType,
+    primaryText: str(c.primaryText, ""),
+    headline: str(c.headline, ""),
+    description: str(c.description, ""),
+    cta: str(c.cta, "shop_now"),
+    destinationUrl: str(c.destinationUrl, ""),
+  };
+}
+
+/**
+ * Rebuild a draft from a stored row.
+ *
+ * `destinationKind` / `paymentLinkId` / `customUrl` are UI state with no
+ * columns, so they are inferred:
+ *   1. product_id set        → "product" (only ever written for that kind)
+ *   2. URL matches /pay/slug → "payment_link"
+ *   3. any other URL         → "url"
+ *   4. nothing stored        → "product" (the create-flow default)
+ * Ambiguity is impossible in practice because the writer only sets product_id
+ * for the product kind; a hand-edited row with both falls to case 1.
+ */
+export function draftFromRow(
+  row: CampaignRow,
+  ctx: { paymentLinks: PaymentLinkOption[]; defaultCurrency?: string }
+): CampaignDraft {
+  const base = emptyDraft(row.currency ?? ctx.defaultCurrency ?? "USD");
+  const destinationUrl = row.destination_url ?? "";
+
+  let destinationKind: DestinationKind = "product";
+  let paymentLinkId: string | null = null;
+  let customUrl = "";
+
+  if (row.product_id) {
+    destinationKind = "product";
+  } else if (destinationUrl) {
+    const link = ctx.paymentLinks.find((l) => destinationUrl.endsWith(`/pay/${l.slug}`));
+    if (link) {
+      destinationKind = "payment_link";
+      paymentLinkId = link.id;
+    } else {
+      destinationKind = "url";
+      customUrl = destinationUrl;
+    }
+  }
+
+  const objective = OBJECTIVES.includes(row.objective as CampaignObjective)
+    ? (row.objective as CampaignObjective)
+    : null;
+
+  return {
+    ...base,
+    name: row.name ?? "",
+    platform: (["meta", "tiktok", "google_ads", "snapchat", "x", "reddit"] as const)
+      .includes(row.platform as AdPlatform) ? (row.platform as AdPlatform) : "meta",
+    objective,
+    destinationKind,
+    productId: row.product_id,
+    paymentLinkId,
+    customUrl,
+    budgetType: row.budget_type === "lifetime" ? "lifetime" : "daily",
+    budgetAmount: row.budget_amount == null ? "" : String(Number(row.budget_amount)),
+    currency: row.currency ?? base.currency,
+    startsAt: toDateInput(row.starts_at),
+    endsAt: toDateInput(row.ends_at),
+    timezone: row.timezone ?? base.timezone,
+    audience: normalizeAudience(row.audience),
+    delivery: normalizeDelivery(row.delivery),
+    creative: normalizeCreative(row.creative),
+  };
+}
+
 // ─── Factory ──────────────────────────────────────────────────────────────────
 
 function todayISO(): string {
@@ -240,25 +484,14 @@ export function emptyDraft(currency = "USD"): CampaignDraft {
     productId: null,
     paymentLinkId: null,
     customUrl: "",
-    audience: {
-      locations: "",
-      ageMin: 18,
-      ageMax: 65,
-      gender: "all",
-      interests: [],
-      language: "es",
-    },
+    audience: { ...DEFAULT_AUDIENCE },
     budgetType: "daily",
     budgetAmount: "",
     currency,
     startsAt: todayISO(),
     endsAt: "",
     timezone: "UTC",
-    advanced: {
-      budgetControl: "campaign",
-      bidStrategy: "highest_volume",
-      specialCategory: "none",
-    },
+    delivery: { ...DEFAULT_DELIVERY },
     creative: {
       mediaUrl: null,
       mediaType: null,
@@ -304,6 +537,9 @@ export function validateStep(step: number, d: CampaignDraft): Errors {
     }
   }
 
+  // Step 2 = Build (ad set): destination, conversion event, geo targeting and
+  // schedule. Absorbs the old Producto / Audiencia / Calendario rules so no
+  // existing requirement is lost.
   if (step === 2) {
     if (d.destinationKind === "product" && !d.productId) {
       e.productId = "Selecciona un producto.";
@@ -315,26 +551,34 @@ export function validateStep(step: number, d: CampaignDraft): Errors {
       if (!d.customUrl.trim()) e.customUrl = "Introduce una URL.";
       else if (!isHttpUrl(d.customUrl.trim())) e.customUrl = "La URL debe empezar por http:// o https://";
     }
-  }
 
-  if (step === 3) {
-    const { ageMin, ageMax } = d.audience;
-    if (!Number.isFinite(ageMin) || ageMin < AGE_MIN) e.ageMin = `La edad mínima es ${AGE_MIN}.`;
-    if (!Number.isFinite(ageMax) || ageMax > AGE_MAX) e.ageMax = `La edad máxima es ${AGE_MAX}.`;
-    if (!e.ageMin && !e.ageMax && ageMin > ageMax) {
-      e.ageMax = "La edad máxima debe ser mayor o igual que la mínima.";
+    if (!d.delivery.conversionEvent) {
+      e.conversionEvent = "Selecciona un evento de conversión.";
     }
-  }
 
-  // Step 4 = schedule only; the amount is validated in step 1.
-  if (step === 4) {
+    // Location is only required when global reach is off.
+    if (!d.audience.globalReach && d.audience.includedLocations.length === 0) {
+      e.includedLocations = "Añade al menos una ubicación o activa el alcance global.";
+    }
+
+    // Manual age range only applies when Advantage+ audience is off.
+    if (!d.audience.advantageAudience) {
+      const { ageMin, ageMax } = d.audience;
+      if (!Number.isFinite(ageMin) || ageMin < AGE_MIN) e.ageMin = `La edad mínima es ${AGE_MIN}.`;
+      if (!Number.isFinite(ageMax) || ageMax > AGE_MAX) e.ageMax = `La edad máxima es ${AGE_MAX}.`;
+      if (!e.ageMin && !e.ageMax && ageMin > ageMax) {
+        e.ageMax = "La edad máxima debe ser mayor o igual que la mínima.";
+      }
+    }
+
     if (!d.startsAt) e.startsAt = "Elige una fecha de inicio.";
     if (d.endsAt && d.startsAt && d.endsAt <= d.startsAt) {
       e.endsAt = "La fecha de fin debe ser posterior a la de inicio.";
     }
   }
 
-  if (step === 5) {
+  // Step 3 = Creatives.
+  if (step === 3) {
     if (!d.creative.primaryText.trim()) e.primaryText = "Escribe el texto principal.";
     if (!d.creative.headline.trim()) e.headline = "Escribe un título.";
     const dest = d.creative.destinationUrl.trim();
@@ -345,7 +589,7 @@ export function validateStep(step: number, d: CampaignDraft): Errors {
 }
 
 export function validateAll(d: CampaignDraft): Errors {
-  return [1, 2, 3, 4, 5].reduce<Errors>(
+  return [1, 2, 3].reduce<Errors>(
     (acc, s) => ({ ...acc, ...validateStep(s, d) }),
     {}
   );

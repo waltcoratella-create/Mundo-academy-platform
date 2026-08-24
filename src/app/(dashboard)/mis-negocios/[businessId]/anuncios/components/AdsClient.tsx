@@ -27,11 +27,13 @@ export function AdsClient({
   createHref,
   chatHref,
   billingHref,
+  campaignHrefBase,
 }: {
   data: AdsData;
   createHref: string;
   chatHref: string;
   billingHref?: string;
+  campaignHrefBase?: string;
 }) {
   const [tab, setTab] = useState<AdsTabKey>("campaigns");
   const [query, setQuery] = useState("");
@@ -55,7 +57,7 @@ export function AdsClient({
 
       <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         <AdsTabs active={tab} onSelect={setTab} query={query} onQuery={setQuery} />
-        <CampaignTable campaigns={rows} query={query} emptyLabel={EMPTY_LABEL[tab]} />
+        <CampaignTable campaigns={rows} query={query} emptyLabel={EMPTY_LABEL[tab]} campaignHrefBase={campaignHrefBase} />
       </div>
 
       <SupportFooter chatHref={chatHref} />
