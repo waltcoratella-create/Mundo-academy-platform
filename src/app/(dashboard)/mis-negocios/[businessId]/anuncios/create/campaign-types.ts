@@ -1,3 +1,5 @@
+import { utcToZonedLocal, nowInZone } from "@/lib/timezone";
+
 // Campaign-builder contracts + validation.
 //
 // Deliberately free of React and Supabase imports so the wizard (client) and the
@@ -88,6 +90,14 @@ export interface CampaignDelivery {
   budgetControl: string;
   bidStrategy: string;
   specialCategory: string;
+  // Build → advanced options
+  /**
+   * Optional ad-set spend floor, distinct from Campaign's daily budget.
+   * null = "no minimum"; 0 would be a real (and meaningless) floor, so the
+   * absence is kept explicit rather than collapsed into a number.
+   */
+  minimumDailySpend: number | null;
+  dynamicCreative: boolean;
 }
 
 export const CONVERSION_LOCATIONS: {
@@ -136,7 +146,15 @@ export interface CampaignAudience {
   ageMax: number;
   gender: Gender;
   interests: string[];
-  language: string;
+  /** Empty = target every language, matching the reference's copy. */
+  languages: string[];
+  /**
+   * Meta Custom Audiences. Distinct from the geographic lists above — these are
+   * saved audiences, not places. Stays empty until Meta is connected; nothing
+   * fabricates entries here.
+   */
+  customAudiencesIncluded: string[];
+  customAudiencesExcluded: string[];
 }
 
 export interface CampaignCreative {
@@ -248,9 +266,19 @@ export const LANGUAGE_OPTIONS = [
   { value: "pt", label: "Portugués" },
   { value: "fr", label: "Francés" },
   { value: "it", label: "Italiano" },
+  { value: "de", label: "Alemán" },
+  { value: "nl", label: "Neerlandés" },
+  { value: "ca", label: "Catalán" },
+  { value: "eu", label: "Euskera" },
+  { value: "gl", label: "Gallego" },
+  { value: "ja", label: "Japonés" },
+  { value: "zh", label: "Chino" },
+  { value: "ar", label: "Árabe" },
 ];
 
 export const CURRENCY_OPTIONS = ["USD", "EUR", "MXN", "ARS", "COP", "CLP", "BRL"];
+
+export const DEFAULT_TIMEZONE = "UTC";
 
 export const TIMEZONE_OPTIONS = [
   "UTC",
@@ -296,6 +324,8 @@ export const DEFAULT_DELIVERY: CampaignDelivery = {
   budgetControl: "campaign",
   bidStrategy: "highest_volume",
   specialCategory: "none",
+  minimumDailySpend: null,
+  dynamicCreative: false,
 };
 
 export const DEFAULT_AUDIENCE: CampaignAudience = {
@@ -307,7 +337,9 @@ export const DEFAULT_AUDIENCE: CampaignAudience = {
   ageMax: 65,
   gender: "all",
   interests: [],
-  language: "es",
+  languages: [],
+  customAudiencesIncluded: [],
+  customAudiencesExcluded: [],
 };
 
 function str(v: unknown, fallback: string): string {
@@ -338,6 +370,11 @@ export function normalizeDelivery(raw: unknown): CampaignDelivery {
     budgetControl: str(d.budgetControl, DEFAULT_DELIVERY.budgetControl),
     bidStrategy: str(d.bidStrategy, DEFAULT_DELIVERY.bidStrategy),
     specialCategory: str(d.specialCategory, DEFAULT_DELIVERY.specialCategory),
+    minimumDailySpend:
+      typeof d.minimumDailySpend === "number" && Number.isFinite(d.minimumDailySpend)
+        ? d.minimumDailySpend
+        : null,
+    dynamicCreative: bool(d.dynamicCreative, DEFAULT_DELIVERY.dynamicCreative),
   };
 }
 
@@ -362,7 +399,15 @@ export function normalizeAudience(raw: unknown): CampaignAudience {
       ? (a.gender as Gender)
       : DEFAULT_AUDIENCE.gender,
     interests: strList(a.interests),
-    language: str(a.language, DEFAULT_AUDIENCE.language),
+    // `language` was a single string before the advanced block existed; older
+    // drafts are lifted into the array without losing the choice.
+    languages: (() => {
+      const list = strList(a.languages);
+      if (list.length) return list;
+      return typeof a.language === "string" && a.language ? [a.language] : [];
+    })(),
+    customAudiencesIncluded: strList(a.customAudiencesIncluded),
+    customAudiencesExcluded: strList(a.customAudiencesExcluded),
   };
 }
 
@@ -386,11 +431,13 @@ export interface CampaignRow {
   status: string | null;
 }
 
-/** timestamptz → yyyy-mm-dd (the date inputs' format); null → "". */
-function toDateInput(value: string | null): string {
-  if (!value) return "";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+/**
+ * timestamptz → `yyyy-MM-ddTHH:mm` **in the campaign's timezone**, so the editor
+ * shows back exactly the wall clock that was typed. A plain toISOString() would
+ * show UTC instead.
+ */
+function toDateInput(value: string | null, timeZone: string): string {
+  return utcToZonedLocal(value, timeZone);
 }
 
 export function normalizeCreative(raw: unknown): CampaignCreative {
@@ -424,6 +471,7 @@ export function draftFromRow(
   ctx: { paymentLinks: PaymentLinkOption[]; defaultCurrency?: string }
 ): CampaignDraft {
   const base = emptyDraft(row.currency ?? ctx.defaultCurrency ?? "USD");
+  const zone = row.timezone ?? base.timezone;
   const destinationUrl = row.destination_url ?? "";
 
   let destinationKind: DestinationKind = "product";
@@ -460,9 +508,9 @@ export function draftFromRow(
     budgetType: row.budget_type === "lifetime" ? "lifetime" : "daily",
     budgetAmount: row.budget_amount == null ? "" : String(Number(row.budget_amount)),
     currency: row.currency ?? base.currency,
-    startsAt: toDateInput(row.starts_at),
-    endsAt: toDateInput(row.ends_at),
-    timezone: row.timezone ?? base.timezone,
+    startsAt: toDateInput(row.starts_at, zone),
+    endsAt: toDateInput(row.ends_at, zone),
+    timezone: zone,
     audience: normalizeAudience(row.audience),
     delivery: normalizeDelivery(row.delivery),
     creative: normalizeCreative(row.creative),
@@ -471,8 +519,9 @@ export function draftFromRow(
 
 // ─── Factory ──────────────────────────────────────────────────────────────────
 
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+/** Now, as `yyyy-MM-ddTHH:mm` in the given zone. */
+function todayISO(timeZone: string): string {
+  return nowInZone(timeZone);
 }
 
 export function emptyDraft(currency = "USD"): CampaignDraft {
@@ -488,9 +537,9 @@ export function emptyDraft(currency = "USD"): CampaignDraft {
     budgetType: "daily",
     budgetAmount: "",
     currency,
-    startsAt: todayISO(),
+    startsAt: todayISO(DEFAULT_TIMEZONE),
     endsAt: "",
-    timezone: "UTC",
+    timezone: DEFAULT_TIMEZONE,
     delivery: { ...DEFAULT_DELIVERY },
     creative: {
       mediaUrl: null,

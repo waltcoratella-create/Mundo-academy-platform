@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { Globe, Monitor, MessageCircle, Package, Link2, X } from "lucide-react";
+import { Globe, Monitor, MessageCircle, Package, Link2, X, ChevronDown, Search } from "lucide-react";
 import type {
   CampaignAudience, CampaignDelivery, CampaignDraft, ConversionLocation,
   DestinationKind, Errors, Gender,
@@ -11,6 +11,10 @@ import {
   CURRENCY_OPTIONS, TIMEZONE_OPTIONS, GENDER_OPTIONS, LANGUAGE_OPTIONS,
   AGE_MIN, AGE_MAX,
 } from "../campaign-types";
+
+const CURRENCY_SYMBOL: Record<string, string> = {
+  USD: "$", EUR: "€", MXN: "$", ARS: "$", COP: "$", CLP: "$", BRL: "R$",
+};
 import type { PaymentLinkOption, ProductOption } from "../campaign-types";
 
 /**
@@ -135,8 +139,17 @@ export function StepBuild({
 }) {
   const eventId = useId();
   const minAgeId = useId();
+  const startId = useId();
+  const tzId = useId();
+  const currencyId = useId();
+  const minSpendId = useId();
+  const advancedId = useId();
   const [geoTab, setGeoTab] = useState<"include" | "exclude">("include");
   const [geoQuery, setGeoQuery] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [audTab, setAudTab] = useState<"include" | "exclude">("include");
+  const [audQuery, setAudQuery] = useState("");
+  const [langQuery, setLangQuery] = useState("");
 
   const a = draft.audience;
   const d = draft.delivery;
@@ -149,6 +162,24 @@ export function StepBuild({
   }
 
   const activeList = geoTab === "include" ? a.includedLocations : a.excludedLocations;
+  const hasEndDate = Boolean(draft.endsAt);
+  const symbol = CURRENCY_SYMBOL[draft.currency] ?? draft.currency;
+
+  /** Ticking "set an end date" needs a sensible starting value. */
+  const suggestedEnd = useMemo(() => {
+    const from = draft.startsAt ? new Date(draft.startsAt) : new Date();
+    if (Number.isNaN(from.getTime())) return "";
+    from.setDate(from.getDate() + 7);
+    return from.toISOString().slice(0, 16);
+  }, [draft.startsAt]);
+
+  const langSuggestions = useMemo(() => {
+    const q = langQuery.trim().toLowerCase();
+    if (!q) return [];
+    return LANGUAGE_OPTIONS.filter(
+      (l) => l.label.toLowerCase().includes(q) && !a.languages.includes(l.value)
+    ).slice(0, 6);
+  }, [langQuery, a.languages]);
 
   const suggestions = useMemo(() => {
     const q = geoQuery.trim().toLowerCase();
@@ -446,18 +477,6 @@ export function StepBuild({
                   ))}
                 </select>
               </div>
-              <div className="w-section" data-field="true">
-                <span className="w-label">Idioma</span>
-                <select
-                  className="w-select w-select--block"
-                  value={a.language}
-                  onChange={(e) => patchAudience({ language: e.target.value })}
-                >
-                  {LANGUAGE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
             </div>
           </div>
         )}
@@ -478,58 +497,257 @@ export function StepBuild({
         )}
       </Section>
 
-      {/* ── 7 · Schedule ── */}
-      <Section label="Calendario" description="Cuándo se entrega la campaña. El importe diario se define en Campaign.">
-        <div className="w-schedgrid">
-          <div className="w-section" data-field="true">
-            <span className="w-label">Moneda</span>
-            <select
-              className="w-select w-select--block"
-              value={draft.currency}
-              onChange={(e) => onChange({ currency: e.target.value })}
-            >
-              {CURRENCY_OPTIONS.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+      {/* ── 7 · Advanced options ── */}
+      <div className="w-section">
+        <button
+          type="button"
+          className="w-advtoggle"
+          aria-expanded={advancedOpen}
+          aria-controls={advancedId}
+          onClick={() => setAdvancedOpen((v) => !v)}
+        >
+          <ChevronDown className="w-advtoggle__chev" size={18} strokeWidth={2} aria-hidden="true" />
+          Opciones avanzadas
+        </button>
+
+        {advancedOpen && (
+          <div className="w-advpanel" id={advancedId}>
+            {/* 7.1 · Horario — reuses startsAt / endsAt / timezone. */}
+            <div className="w-advblock">
+              <div className="w-advblock__head">
+                <span className="w-advblock__title">Horario</span>
+                <span className="w-advblock__desc">Fechas de inicio y finalización</span>
+              </div>
+              <div className="w-schedrow">
+                <div className="w-schedcol">
+                  <label className="w-sublabel" htmlFor={startId}>Iniciar</label>
+                  <input
+                    id={startId}
+                    type="datetime-local"
+                    className="w-input"
+                    value={draft.startsAt}
+                    aria-invalid={errors.startsAt ? true : undefined}
+                    onChange={(e) => onChange({ startsAt: e.target.value })}
+                  />
+                  {errors.startsAt && <span className="w-error" role="alert">{errors.startsAt}</span>}
+                </div>
+                <div className="w-schedcol">
+                  <label className="w-checkrow">
+                    <input
+                      type="checkbox"
+                      className="w-checkbox"
+                      checked={hasEndDate}
+                      onChange={(e) => onChange({ endsAt: e.target.checked ? suggestedEnd : "" })}
+                    />
+                    Establecer una fecha de finalización
+                  </label>
+                  <input
+                    type="datetime-local"
+                    className="w-input"
+                    value={draft.endsAt}
+                    min={draft.startsAt || undefined}
+                    disabled={!hasEndDate}
+                    aria-invalid={errors.endsAt ? true : undefined}
+                    onChange={(e) => onChange({ endsAt: e.target.value })}
+                  />
+                  {errors.endsAt && <span className="w-error" role="alert">{errors.endsAt}</span>}
+                </div>
+              </div>
+              <span className="w-advblock__note">
+                Los horarios utilizan {draft.timezone.replace(/_/g, " ")}.
+              </span>
+              <div className="w-schedrow">
+                <div className="w-schedcol">
+                  <label className="w-sublabel" htmlFor={tzId}>Zona horaria</label>
+                  <select
+                    id={tzId}
+                    className="w-select w-select--block"
+                    value={draft.timezone}
+                    onChange={(e) => onChange({ timezone: e.target.value })}
+                  >
+                    {TIMEZONE_OPTIONS.map((t) => (
+                      <option key={t} value={t}>{t.replace(/_/g, " ")}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="w-schedcol">
+                  <label className="w-sublabel" htmlFor={currencyId}>Moneda</label>
+                  <select
+                    id={currencyId}
+                    className="w-select w-select--block"
+                    value={draft.currency}
+                    onChange={(e) => onChange({ currency: e.target.value })}
+                  >
+                    {CURRENCY_OPTIONS.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* 7.2 · Gasto mínimo diario — ad-set floor, NOT Campaign's budget. */}
+            <div className="w-advblock">
+              <div className="w-advblock__head">
+                <label className="w-advblock__title" htmlFor={minSpendId}>Gasto mínimo diario</label>
+                <span className="w-advblock__desc">
+                  Objetivo de gasto opcional para este grupo de anuncios, no es una garantía.
+                </span>
+              </div>
+              <div className="w-inputwrap">
+                <span className="w-affix" aria-hidden="true">{symbol}</span>
+                <input
+                  id={minSpendId}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  inputMode="decimal"
+                  className="w-input w-input--affixed"
+                  placeholder="0"
+                  value={d.minimumDailySpend ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    patchDelivery({ minimumDailySpend: v === "" ? null : Number(v) });
+                  }}
+                />
+                <span className="w-affix w-affix--suffix" aria-hidden="true">/día</span>
+              </div>
+            </div>
+
+            {/* 7.3 · Meta Custom Audiences — real UI, no fabricated entries. */}
+            <div className="w-advblock">
+              <div className="w-advblock__head w-advblock__head--row">
+                <div className="w-advblock__texts">
+                  <span className="w-advblock__title">Audiencias</span>
+                  <span className="w-advblock__desc">
+                    Dirígete o excluye tus audiencias. Crea similitudes desde la página de
+                    configuración de anuncios.
+                  </span>
+                </div>
+                <span
+                  className="w-linkbtn"
+                  data-disabled="true"
+                  aria-disabled="true"
+                  title="Requiere conectar tu cuenta de Meta"
+                >
+                  Cargar CSV
+                </span>
+              </div>
+              <div className="w-audrow">
+                <div className="w-segmented" role="tablist" aria-label="Incluir o excluir audiencias">
+                  {([["include", "Incluir"], ["exclude", "Excluir"]] as const).map(([k, label]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      role="tab"
+                      aria-selected={audTab === k}
+                      className="w-segtab"
+                      onClick={() => setAudTab(k)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="w-searchwrap">
+                  <Search size={16} strokeWidth={2} aria-hidden="true" />
+                  <input
+                    type="text"
+                    className="w-searchinput"
+                    placeholder={
+                      audTab === "include"
+                        ? "Buscar audiencias para incluir"
+                        : "Buscar audiencias para excluir"
+                    }
+                    value={audQuery}
+                    onChange={(e) => setAudQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+              {audQuery.trim() && (
+                <p className="w-emptyhint">
+                  Conecta tu cuenta de Meta para buscar tus audiencias guardadas.
+                </p>
+              )}
+            </div>
+
+            {/* 7.4 · Creatividad dinámica */}
+            <div className="w-advblock">
+              <div className="w-advblock__head w-advblock__head--row">
+                <div className="w-advblock__texts">
+                  <span className="w-advblock__title">Creatividad dinámica</span>
+                  <span className="w-advblock__desc">
+                    Deja que Meta combine automáticamente tus medios y texto en variaciones de
+                    anuncios a las que es probable que responda tu audiencia.
+                  </span>
+                </div>
+                <Switch
+                  checked={d.dynamicCreative}
+                  onChange={(dynamicCreative) => patchDelivery({ dynamicCreative })}
+                  label="Creatividad dinámica"
+                />
+              </div>
+            </div>
+
+            {/* 7.5 · Idiomas — reuses audience.languages. */}
+            <div className="w-advblock">
+              <div className="w-advblock__head">
+                <span className="w-advblock__title">Idiomas</span>
+                <span className="w-advblock__desc">
+                  Deja en blanco para dirigirte a todos los idiomas
+                </span>
+              </div>
+              <div className="w-searchwrap">
+                <Search size={16} strokeWidth={2} aria-hidden="true" />
+                <input
+                  type="text"
+                  className="w-searchinput"
+                  placeholder="Busca un idioma (por ejemplo, inglés, español)"
+                  aria-label="Busca un idioma"
+                  value={langQuery}
+                  onChange={(e) => setLangQuery(e.target.value)}
+                />
+              </div>
+              {langSuggestions.length > 0 && (
+                <ul className="w-geosuggest">
+                  {langSuggestions.map((l) => (
+                    <li key={l.value}>
+                      <button
+                        type="button"
+                        className="w-geosuggest__item"
+                        onClick={() => {
+                          patchAudience({ languages: [...a.languages, l.value] });
+                          setLangQuery("");
+                        }}
+                      >
+                        {l.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {a.languages.length > 0 && (
+                <div className="w-geochips">
+                  {a.languages.map((code) => (
+                    <span className="w-geochip" key={code}>
+                      {LANGUAGE_OPTIONS.find((o) => o.value === code)?.label ?? code}
+                      <button
+                        type="button"
+                        aria-label={`Quitar ${code}`}
+                        onClick={() =>
+                          patchAudience({ languages: a.languages.filter((x) => x !== code) })
+                        }
+                      >
+                        <X size={13} strokeWidth={2.4} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="w-section" data-field="true">
-            <span className="w-label">Zona horaria</span>
-            <select
-              className="w-select w-select--block"
-              value={draft.timezone}
-              onChange={(e) => onChange({ timezone: e.target.value })}
-            >
-              {TIMEZONE_OPTIONS.map((t) => (
-                <option key={t} value={t}>{t.replace(/_/g, " ")}</option>
-              ))}
-            </select>
-          </div>
-          <div className="w-section" data-field="true">
-            <span className="w-label">Fecha de inicio <span className="w-req" aria-hidden="true">*</span></span>
-            <input
-              type="date"
-              className="w-input"
-              value={draft.startsAt}
-              aria-invalid={errors.startsAt ? true : undefined}
-              onChange={(e) => onChange({ startsAt: e.target.value })}
-            />
-            {errors.startsAt && <span className="w-error" role="alert">{errors.startsAt}</span>}
-          </div>
-          <div className="w-section" data-field="true">
-            <span className="w-label">Fecha de fin</span>
-            <input
-              type="date"
-              className="w-input"
-              value={draft.endsAt}
-              min={draft.startsAt || undefined}
-              aria-invalid={errors.endsAt ? true : undefined}
-              onChange={(e) => onChange({ endsAt: e.target.value })}
-            />
-            {errors.endsAt && <span className="w-error" role="alert">{errors.endsAt}</span>}
-          </div>
-        </div>
-      </Section>
+        )}
+      </div>
+
     </div>
   );
 }

@@ -107,7 +107,14 @@ export function StepReview({
         <Row label="Audiencia Advantage+" value={a.advantageAudience ? "Activada" : "Manual"} />
         <Row label="Edad" value={a.advantageAudience ? `${a.ageMin}+` : `${a.ageMin} – ${a.ageMax}`} />
         <Row label="Género" value={labelFor(GENDER_OPTIONS, a.gender)} />
-        <Row label="Idioma" value={labelFor(LANGUAGE_OPTIONS, a.language)} />
+        <Row
+          label="Idiomas"
+          value={
+            a.languages.length
+              ? a.languages.map((l) => labelFor(LANGUAGE_OPTIONS, l)).join(", ")
+              : "Todos los idiomas"
+          }
+        />
         <Row label="Intereses" value={a.interests.length ? a.interests.join(", ") : "Sin especificar"} />
       </Section>
 

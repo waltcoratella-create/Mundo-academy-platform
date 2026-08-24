@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { zonedLocalToUtc, isValidTimeZone } from "@/lib/timezone";
 import type { CampaignDraft, CampaignRow, PaymentLinkOption } from "./create/campaign-types";
 import { validateAll, draftFromRow } from "./create/campaign-types";
 
@@ -51,12 +52,10 @@ async function resolveOwner(businessId: string): Promise<string | null> {
   return user.id as string;
 }
 
-/** yyyy-mm-dd → ISO timestamp at UTC midnight; "" → null. */
-function toTimestamp(date: string): string | null {
-  if (!date) return null;
-  const parsed = new Date(`${date}T00:00:00.000Z`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
-}
+const INVALID_TIMEZONE =
+  "La zona horaria seleccionada no es válida. Elige otra antes de guardar.";
+
+
 
 /** Columns the builder reads back when resuming a draft. */
 const DRAFT_COLUMNS =
@@ -143,6 +142,22 @@ export async function saveCampaignDraft(params: {
       return { ok: false, error: Object.values(errors)[0] };
     }
 
+    // The wall clock the user typed means that time IN the chosen zone, so the
+    // stored instant depends on that zone's offset on that date (DST included).
+    // A zone we cannot resolve aborts the save rather than silently storing a
+    // wrong instant.
+    if (!isValidTimeZone(draft.timezone)) {
+      return { ok: false, error: INVALID_TIMEZONE };
+    }
+    const startsAt = zonedLocalToUtc(draft.startsAt, draft.timezone);
+    const endsAt = draft.endsAt ? zonedLocalToUtc(draft.endsAt, draft.timezone) : null;
+    if (draft.startsAt && !startsAt) {
+      return { ok: false, error: "La fecha de inicio no es válida." };
+    }
+    if (draft.endsAt && !endsAt) {
+      return { ok: false, error: "La fecha de fin no es válida." };
+    }
+
     const supabase = createAdminClient();
 
     // Shared column payload — identical for insert and update so the two paths
@@ -155,8 +170,8 @@ export async function saveCampaignDraft(params: {
       budget_type: draft.budgetType,
       budget_amount: Number(draft.budgetAmount),
       currency: draft.currency,
-      starts_at: toTimestamp(draft.startsAt),
-      ends_at: toTimestamp(draft.endsAt),
+      starts_at: startsAt,
+      ends_at: endsAt,
       timezone: draft.timezone,
       // Targeting only.
       audience: draft.audience,
