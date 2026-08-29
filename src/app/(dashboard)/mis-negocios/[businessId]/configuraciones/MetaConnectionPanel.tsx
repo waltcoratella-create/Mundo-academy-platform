@@ -203,6 +203,29 @@ export function MetaConnectionPanel({
               </div>
             </>
           )}
+
+          {/* Escape hatches. Rendered outside the loading/loaded branch on
+              purpose: a live connection whose assets are not chosen yet must
+              always be able to re-authorize or disconnect, even when discovery
+              is still loading or failed outright. */}
+          <div className="flex items-center gap-4 pt-3 mt-1 border-t border-gray-100">
+            <a
+              href={startHref}
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-gray-700 hover:text-gray-900 transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Volver a autorizar
+            </a>
+            <button
+              type="button"
+              onClick={handleDisconnect}
+              disabled={pending}
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-red-700 hover:text-red-800 disabled:opacity-60 transition-colors"
+            >
+              <Unlink className="w-3.5 h-3.5" />
+              Desconectar
+            </button>
+          </div>
         </div>
       )}
 
