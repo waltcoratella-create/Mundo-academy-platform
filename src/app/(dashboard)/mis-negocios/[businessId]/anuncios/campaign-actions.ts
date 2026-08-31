@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { zonedLocalToUtc, isValidTimeZone } from "@/lib/timezone";
 import type { CampaignDraft, CampaignRow, PaymentLinkOption } from "./create/campaign-types";
-import { validateAll, draftFromRow } from "./create/campaign-types";
+import { validateAll, draftFromRow, normalizeAudience } from "./create/campaign-types";
+import { getMetaAccountBinding } from "./meta-account";
 
 export type SaveResult =
   | { ok: true; id: string; mode: "created" | "updated" }
@@ -104,11 +105,15 @@ export async function getCampaignDraft(params: {
       return { ok: false, error: NOT_EDITABLE };
     }
 
+    // Resolved here, not passed in: the loader already owns the trust boundary,
+    // so the account that rules currency and zone is read server-side too.
+    const metaAccount = await getMetaAccountBinding(businessId);
+
     return {
       ok: true,
       campaignId: row.id,
       status: row.status ?? "draft",
-      draft: draftFromRow(row, { paymentLinks }),
+      draft: draftFromRow(row, { paymentLinks, metaAccount }),
     };
   } catch {
     return { ok: false, error: NOT_FOUND };
@@ -176,8 +181,11 @@ export async function saveCampaignDraft(params: {
       starts_at: startsAt,
       ends_at: endsAt,
       timezone: draft.timezone,
-      // Targeting only.
-      audience: draft.audience,
+      // Targeting only. Re-normalised server-side so a hand-crafted payload
+      // cannot store a location shape the loader would not understand, and so
+      // legacy name-only entries are written back in the current object form
+      // (still with key: null — a key is never invented).
+      audience: normalizeAudience(draft.audience),
       // Where/how it is delivered: conversion location + event, Advantage+
       // placements and the Campaign advanced options.
       delivery: draft.delivery,

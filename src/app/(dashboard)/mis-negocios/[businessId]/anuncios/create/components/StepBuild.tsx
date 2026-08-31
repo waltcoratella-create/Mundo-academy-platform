@@ -1,16 +1,22 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
-import { Globe, Monitor, MessageCircle, Package, Link2, X, ChevronDown, Search } from "lucide-react";
+import { useEffect, useId, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  Globe, Monitor, MessageCircle, Package, Link2, X, ChevronDown, Search,
+  Loader2, AlertCircle, Lock,
+} from "lucide-react";
 import type {
-  CampaignAudience, CampaignDelivery, CampaignDraft, ConversionLocation,
-  DestinationKind, Errors, Gender,
+  CampaignAudience, CampaignDelivery, CampaignDraft, CampaignGeoLocation,
+  ConversionLocation, DestinationKind, Errors, Gender, MetaAccountBinding,
 } from "../campaign-types";
 import {
-  CONVERSION_LOCATIONS, CONVERSION_EVENTS, MIN_AGE_OPTIONS, LOCATION_SUGGESTIONS,
+  CONVERSION_LOCATIONS, CONVERSION_EVENTS, MIN_AGE_OPTIONS,
   CURRENCY_OPTIONS, TIMEZONE_OPTIONS, GENDER_OPTIONS, LANGUAGE_OPTIONS,
-  AGE_MIN, AGE_MAX,
+  AGE_MIN, AGE_MAX, GEO_DEBOUNCE_MS, GEO_MIN_QUERY,
+  geoLocationContext, geoLocationId,
 } from "../campaign-types";
+import { searchGeoLocations } from "../geo-actions";
 
 const CURRENCY_SYMBOL: Record<string, string> = {
   USD: "$", EUR: "€", MXN: "$", ARS: "$", COP: "$", CLP: "$", BRL: "R$",
@@ -125,6 +131,8 @@ function RecommendationCard({
 export function StepBuild({
   draft,
   errors,
+  businessId,
+  metaAccount,
   products,
   paymentLinks,
   paymentLinksAvailable,
@@ -132,6 +140,9 @@ export function StepBuild({
 }: {
   draft: CampaignDraft;
   errors: Errors;
+  /** Needed by the geo search action, which re-checks ownership server-side. */
+  businessId: string;
+  metaAccount: MetaAccountBinding;
   products: ProductOption[];
   paymentLinks: PaymentLinkOption[];
   paymentLinksAvailable: boolean;
@@ -143,9 +154,13 @@ export function StepBuild({
   const tzId = useId();
   const currencyId = useId();
   const minSpendId = useId();
+  const metaLockId = useId();
   const advancedId = useId();
   const [geoTab, setGeoTab] = useState<"include" | "exclude">("include");
   const [geoQuery, setGeoQuery] = useState("");
+  const [geoResults, setGeoResults] = useState<CampaignGeoLocation[]>([]);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [audTab, setAudTab] = useState<"include" | "exclude">("include");
   const [audQuery, setAudQuery] = useState("");
@@ -165,6 +180,29 @@ export function StepBuild({
   const hasEndDate = Boolean(draft.endsAt);
   const symbol = CURRENCY_SYMBOL[draft.currency] ?? draft.currency;
 
+  // Knowing the account locks currency/zone; only a usable credential enables
+  // the live geo search. An expired authorisation keeps the first and loses the
+  // second.
+  const metaBound = metaAccount.bound;
+  const geoAvailable = metaAccount.apiAvailable;
+  const metaNeedsReconnect = metaBound && !geoAvailable;
+  const settingsHref = `/mis-negocios/${businessId}/configuraciones`;
+
+  // The ad account's zone/currency may not be in the curated lists; showing a
+  // select whose value is absent would render blank, so they are prepended.
+  const timezoneOptions = useMemo(
+    () => (TIMEZONE_OPTIONS.includes(draft.timezone)
+      ? TIMEZONE_OPTIONS
+      : [draft.timezone, ...TIMEZONE_OPTIONS]),
+    [draft.timezone]
+  );
+  const currencyOptions = useMemo(
+    () => (CURRENCY_OPTIONS.includes(draft.currency)
+      ? CURRENCY_OPTIONS
+      : [draft.currency, ...CURRENCY_OPTIONS]),
+    [draft.currency]
+  );
+
   /** Ticking "set an end date" needs a sensible starting value. */
   const suggestedEnd = useMemo(() => {
     const from = draft.startsAt ? new Date(draft.startsAt) : new Date();
@@ -181,22 +219,72 @@ export function StepBuild({
     ).slice(0, 6);
   }, [langQuery, a.languages]);
 
-  const suggestions = useMemo(() => {
-    const q = geoQuery.trim().toLowerCase();
-    if (!q) return [];
-    return LOCATION_SUGGESTIONS.filter(
-      (l) => l.toLowerCase().includes(q) && !activeList.includes(l)
-    ).slice(0, 6);
-  }, [geoQuery, activeList]);
+  /**
+   * Debounced Meta lookup.
+   *
+   * Every keystroke would otherwise be a Marketing API call and the app's access
+   * tier is rate limited, so a request only leaves after the user pauses and
+   * only from the second character on. There is no local fallback list: without
+   * Meta there are no real keys, and a name without a key is not publishable.
+   */
+  useEffect(() => {
+    const q = geoQuery.trim();
+    if (!geoAvailable || q.length < GEO_MIN_QUERY) {
+      setGeoResults([]);
+      setGeoError(null);
+      setGeoLoading(false);
+      return;
+    }
 
-  function addLocation(name: string) {
-    const key = geoTab === "include" ? "includedLocations" : "excludedLocations";
-    patchAudience({ [key]: [...activeList, name] } as Partial<CampaignAudience>);
+    let cancelled = false;
+    setGeoLoading(true);
+
+    const timer = setTimeout(() => {
+      searchGeoLocations(businessId, q)
+        .then((res) => {
+          if (cancelled) return;
+          if (res.ok) {
+            setGeoResults(res.results);
+            setGeoError(null);
+          } else {
+            setGeoResults([]);
+            setGeoError(res.error);
+          }
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setGeoResults([]);
+          setGeoError("No se pudieron buscar ubicaciones en Meta. Inténtalo de nuevo.");
+        })
+        .finally(() => {
+          if (!cancelled) setGeoLoading(false);
+        });
+    }, GEO_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [geoQuery, geoAvailable, businessId]);
+
+  /** Hide what is already on the active tab, without re-querying Meta. */
+  const geoSuggestions = useMemo(() => {
+    const taken = new Set(activeList.map(geoLocationId));
+    return geoResults.filter((r) => !taken.has(geoLocationId(r)));
+  }, [geoResults, activeList]);
+
+  function addLocation(loc: CampaignGeoLocation) {
+    const field = geoTab === "include" ? "includedLocations" : "excludedLocations";
+    if (activeList.some((l) => geoLocationId(l) === geoLocationId(loc))) return;
+    patchAudience({ [field]: [...activeList, loc] } as Partial<CampaignAudience>);
     setGeoQuery("");
+    setGeoResults([]);
   }
-  function removeLocation(name: string) {
-    const key = geoTab === "include" ? "includedLocations" : "excludedLocations";
-    patchAudience({ [key]: activeList.filter((l) => l !== name) } as Partial<CampaignAudience>);
+  function removeLocation(id: string) {
+    const field = geoTab === "include" ? "includedLocations" : "excludedLocations";
+    patchAudience({
+      [field]: activeList.filter((l) => geoLocationId(l) !== id),
+    } as Partial<CampaignAudience>);
   }
   function clearAll() {
     patchAudience({ includedLocations: [], excludedLocations: [] });
@@ -375,33 +463,117 @@ export function StepBuild({
               type="text"
               className="w-input"
               value={geoQuery}
-              placeholder="Busca países, regiones o ciudades"
+              placeholder={
+                geoAvailable
+                  ? "Busca países, regiones o ciudades"
+                  : "Conecta Meta para buscar ubicaciones"
+              }
               aria-label="Busca países, regiones o ciudades"
+              disabled={!geoAvailable}
               onChange={(e) => setGeoQuery(e.target.value)}
             />
 
-            {suggestions.length > 0 && (
+            {!geoAvailable && (
+              <p className="w-geohint w-geohint--warn">
+                <AlertCircle size={13} strokeWidth={2} aria-hidden="true" />
+                <span>
+                  {metaNeedsReconnect ? (
+                    <>
+                      La autorización con Meta caducó, así que no se pueden buscar
+                      ubicaciones.{" "}
+                      <Link href={settingsHref} className="w-geolink">
+                        Vuelve a conectar en Configuraciones
+                      </Link>
+                      . Las ubicaciones ya guardadas se conservan.
+                    </>
+                  ) : (
+                    <>
+                      Las ubicaciones se buscan en Meta.{" "}
+                      <Link href={settingsHref} className="w-geolink">
+                        Conecta tu cuenta en Configuraciones
+                      </Link>{" "}
+                      para segmentar por ubicación.
+                    </>
+                  )}
+                </span>
+              </p>
+            )}
+
+            {geoLoading && (
+              <p className="w-geohint" role="status">
+                <Loader2 size={13} strokeWidth={2} className="w-spin" aria-hidden="true" />
+                <span>Buscando en Meta…</span>
+              </p>
+            )}
+
+            {geoError && (
+              <p className="w-geohint w-geohint--warn" role="alert">
+                <AlertCircle size={13} strokeWidth={2} aria-hidden="true" />
+                <span>{geoError}</span>
+              </p>
+            )}
+
+            {geoAvailable && !geoLoading && !geoError
+              && geoQuery.trim().length >= GEO_MIN_QUERY
+              && geoSuggestions.length === 0 && (
+              <p className="w-geohint">
+                <span>Meta no devolvió ubicaciones para «{geoQuery.trim()}».</span>
+              </p>
+            )}
+
+            {geoSuggestions.length > 0 && (
               <ul className="w-geosuggest">
-                {suggestions.map((sug) => (
-                  <li key={sug}>
-                    <button type="button" className="w-geosuggest__item" onClick={() => addLocation(sug)}>
-                      {sug}
-                    </button>
-                  </li>
-                ))}
+                {geoSuggestions.map((sug) => {
+                  const context = geoLocationContext(sug);
+                  return (
+                    <li key={geoLocationId(sug)}>
+                      <button
+                        type="button"
+                        className="w-geosuggest__item"
+                        onClick={() => addLocation(sug)}
+                      >
+                        <span className="w-geosuggest__name">{sug.name}</span>
+                        {context && <span className="w-geosuggest__meta">{context}</span>}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
 
             {activeList.length > 0 && (
               <div className="w-geochips">
-                {activeList.map((loc) => (
-                  <span className="w-geochip" key={loc}>
-                    {loc}
-                    <button type="button" aria-label={`Quitar ${loc}`} onClick={() => removeLocation(loc)}>
-                      <X size={13} strokeWidth={2.4} />
-                    </button>
-                  </span>
-                ))}
+                {activeList.map((loc) => {
+                  const id = geoLocationId(loc);
+                  const context = geoLocationContext(loc);
+                  return (
+                    <span
+                      className="w-geochip"
+                      key={id}
+                      data-unresolved={loc.key ? undefined : "true"}
+                    >
+                      <span className="w-geochip__text">
+                        {loc.name}
+                        {context && <span className="w-geochip__meta">{context}</span>}
+                        {!loc.key && (
+                          <span
+                            className="w-geochip__badge"
+                            title="Guardada antes de la búsqueda de Meta: no tiene identificador. Vuelve a seleccionarla para poder publicarla."
+                          >
+                            Pendiente de confirmar
+                          </span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Quitar ${loc.name}`}
+                        onClick={() => removeLocation(id)}
+                      >
+                        <X size={13} strokeWidth={2.4} />
+                      </button>
+                    </span>
+                  );
+                })}
               </div>
             )}
 
@@ -563,9 +735,11 @@ export function StepBuild({
                     id={tzId}
                     className="w-select w-select--block"
                     value={draft.timezone}
+                    disabled={metaBound}
+                    aria-describedby={metaBound ? metaLockId : undefined}
                     onChange={(e) => onChange({ timezone: e.target.value })}
                   >
-                    {TIMEZONE_OPTIONS.map((t) => (
+                    {timezoneOptions.map((t) => (
                       <option key={t} value={t}>{t.replace(/_/g, " ")}</option>
                     ))}
                   </select>
@@ -576,14 +750,33 @@ export function StepBuild({
                     id={currencyId}
                     className="w-select w-select--block"
                     value={draft.currency}
+                    disabled={metaBound}
+                    aria-describedby={metaBound ? metaLockId : undefined}
                     onChange={(e) => onChange({ currency: e.target.value })}
                   >
-                    {CURRENCY_OPTIONS.map((c) => (
+                    {currencyOptions.map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </div>
               </div>
+
+              {/* Meta reads the budget in the ad account's own currency and
+                  schedules in its own zone, so when an account is connected it
+                  is the source of truth and both controls are locked. */}
+              {metaBound && (
+                <p className="w-geohint" id={metaLockId}>
+                  <Lock size={13} strokeWidth={2} aria-hidden="true" />
+                  <span>
+                    Moneda y zona horaria vienen de tu cuenta publicitaria de Meta
+                    {metaAccount.adAccountName ? ` (${metaAccount.adAccountName})` : ""}.{" "}
+                    <Link href={settingsHref} className="w-geolink">
+                      Cámbialas en Configuraciones
+                    </Link>
+                    .
+                  </span>
+                </p>
+              )}
             </div>
 
             {/* 7.2 · Gasto mínimo diario — ad-set floor, NOT Campaign's budget. */}

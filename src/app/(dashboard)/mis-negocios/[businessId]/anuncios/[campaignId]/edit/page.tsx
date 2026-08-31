@@ -9,6 +9,7 @@ import "../../ads.css";
 import "../../create/create.css";
 import { CampaignWizard } from "../../create/components/CampaignWizard";
 import { getCampaignDraft } from "../../campaign-actions";
+import { getMetaAccountBinding } from "../../meta-account";
 
 /**
  * Campaign builder — edit mode.
@@ -30,9 +31,10 @@ export default async function EditCampaignPage({
   const business = await getBusinessById(params.businessId, userId);
   if (!business) notFound();
 
-  const [products, paymentLinksResult] = await Promise.all([
+  const [products, paymentLinksResult, metaAccount] = await Promise.all([
     getBusinessProducts(business.id),
     getBusinessPaymentLinks(business.id),
+    getMetaAccountBinding(business.id),
   ]);
 
   const paymentLinks = paymentLinksResult.links.map((l) => ({
@@ -84,6 +86,7 @@ export default async function EditCampaignPage({
           adsHref={adsHref}
           appOrigin={process.env.NEXT_PUBLIC_APP_URL || ""}
           defaultCurrency={loaded.draft.currency}
+          metaAccount={metaAccount}
           products={products.map((p) => ({
             id: p.id,
             name: p.name,

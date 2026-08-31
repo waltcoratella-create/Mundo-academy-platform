@@ -5,8 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { X, Check, AlertCircle, ChevronRight } from "lucide-react";
 import { uploadAdCreative } from "@/app/actions/upload-actions";
-import type { CampaignDraft, Errors } from "../campaign-types";
-import { TOTAL_STEPS, PHASES, phaseOfStep, emptyDraft, validateStep, validateAll } from "../campaign-types";
+import type { CampaignDraft, Errors, MetaAccountBinding } from "../campaign-types";
+import {
+  TOTAL_STEPS, PHASES, phaseOfStep, emptyDraft, validateStep, validateAll,
+  DEFAULT_TIMEZONE, effectiveCurrency, effectiveTimezone,
+} from "../campaign-types";
 import { saveCampaignDraft } from "../../campaign-actions";
 import { StepCampaign } from "./StepCampaign";
 import type { PaymentLinkOption, ProductOption } from "../campaign-types";
@@ -32,7 +35,10 @@ export interface CampaignWizardProps {
   products: ProductOption[];
   paymentLinks: PaymentLinkOption[];
   paymentLinksAvailable: boolean;
+  /** Fallback currency; the connected ad account overrides it when present. */
   defaultCurrency: string;
+  /** Connected Meta ad account, or NO_META_ACCOUNT when there is none. */
+  metaAccount: MetaAccountBinding;
 }
 
 export function CampaignWizard({
@@ -45,11 +51,19 @@ export function CampaignWizard({
   paymentLinks,
   paymentLinksAvailable,
   defaultCurrency,
+  metaAccount,
 }: CampaignWizardProps) {
   const router = useRouter();
   const isEditing = Boolean(campaignId);
+  // A new draft starts on the account's currency and zone when Meta is
+  // connected; an existing one already arrives aligned from draftFromRow.
   const [draft, setDraft] = useState<CampaignDraft>(
-    () => initialDraft ?? emptyDraft(defaultCurrency)
+    () =>
+      initialDraft ??
+      emptyDraft(
+        effectiveCurrency(metaAccount, defaultCurrency),
+        effectiveTimezone(metaAccount, DEFAULT_TIMEZONE)
+      )
   );
   const [step, setStep] = useState(1);
   const [maxVisited, setMaxVisited] = useState(() => (campaignId ? TOTAL_STEPS : 1));
@@ -251,6 +265,8 @@ export function CampaignWizard({
           <StepBuild
             draft={draft}
             errors={errors}
+            businessId={businessId}
+            metaAccount={metaAccount}
             products={products}
             paymentLinks={paymentLinks}
             paymentLinksAvailable={paymentLinksAvailable}

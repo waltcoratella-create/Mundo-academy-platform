@@ -1759,3 +1759,74 @@
   }
   .ads-create .cr-canvas { min-height: 60vh; }
 }
+
+/* ── Geo search against Meta ────────────────────────────────────────────────
+   Added with the real Targeting Search. Only what the new states need: an
+   inline hint line, richer suggestion rows and chips that can carry the
+   "pendiente de confirmar" flag for locations stored without a Meta key. */
+
+.ads-create .w-geohint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--w-muted, rgba(0, 0, 0, 0.55));
+}
+.ads-create .w-geohint svg { flex-shrink: 0; margin-top: 1px; }
+.ads-create .w-geohint--warn { color: #9a5b00; }
+
+.ads-create .w-geolink {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.ads-create .w-spin { animation: w-spin 0.9s linear infinite; }
+@keyframes w-spin { to { transform: rotate(360deg); } }
+
+/* Suggestion rows carry a second line, because Meta returns several places
+   with the same name (Madrid city vs Madrid region vs Madrid, Colombia). */
+.ads-create .w-geosuggest__item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ads-create .w-geosuggest__name { font-weight: 500; }
+.ads-create .w-geosuggest__meta {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--w-muted, rgba(0, 0, 0, 0.55));
+}
+
+/* The chip grows instead of clipping once it carries context or the badge. */
+.ads-create .w-geochip {
+  height: auto;
+  min-height: 28px;
+  align-items: center;
+}
+.ads-create .w-geochip__text {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ads-create .w-geochip__meta {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.75;
+}
+.ads-create .w-geochip[data-unresolved="true"] {
+  background: rgba(240, 160, 0, 0.12);
+  color: #8a5300;
+}
+.ads-create .w-geochip__badge {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(240, 160, 0, 0.22);
+  cursor: help;
+}

@@ -2,7 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import { X, AlertCircle } from "lucide-react";
-import type { CampaignDraft, PaymentLinkOption, ProductOption } from "../campaign-types";
+import type {
+  CampaignDraft, CampaignGeoLocation, PaymentLinkOption, ProductOption,
+} from "../campaign-types";
 import {
   BUDGET_TYPE_LABEL, CTA_OPTIONS, GENDER_OPTIONS, LANGUAGE_OPTIONS, OBJECTIVE_LABEL,
   CONVERSION_EVENTS,
@@ -17,6 +19,14 @@ import {
  */
 
 const DASH = "—";
+
+/**
+ * Locations saved before the Meta search have no key and cannot be published.
+ * The review flags them instead of showing a name that looks ready.
+ */
+function geoLabel(loc: CampaignGeoLocation): string {
+  return loc.key ? loc.name : `${loc.name} (pendiente de confirmar)`;
+}
 
 function labelFor(options: { value: string; label: string }[], value: string): string {
   return options.find((o) => o.value === value)?.label ?? value;
@@ -126,9 +136,17 @@ export function ReviewDrawer({
           <Section title="Audiencia" onEdit={() => onEditStep(2)}>
             <Row
               label="Ubicación"
-              value={a.globalReach ? "Alcance global" : a.includedLocations.length ? a.includedLocations.join(", ") : "Sin especificar"}
+              value={
+                a.globalReach
+                  ? "Alcance global"
+                  : a.includedLocations.length
+                    ? a.includedLocations.map(geoLabel).join(", ")
+                    : "Sin especificar"
+              }
             />
-            {a.excludedLocations.length > 0 && <Row label="Excluidas" value={a.excludedLocations.join(", ")} />}
+            {a.excludedLocations.length > 0 && (
+              <Row label="Excluidas" value={a.excludedLocations.map(geoLabel).join(", ")} />
+            )}
             <Row label="Audiencia Advantage+" value={a.advantageAudience ? "Activada" : "Manual"} />
             <Row label="Edad" value={a.advantageAudience ? `${a.ageMin}+` : `${a.ageMin} – ${a.ageMax}`} />
             {!a.advantageAudience && <Row label="Género" value={labelFor(GENDER_OPTIONS, a.gender)} />}

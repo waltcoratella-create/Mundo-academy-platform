@@ -1,4 +1,4 @@
-import { utcToZonedLocal, nowInZone } from "@/lib/timezone";
+import { utcToZonedLocal, nowInZone, isValidTimeZone } from "@/lib/timezone";
 
 // Campaign-builder contracts + validation.
 //
@@ -84,6 +84,53 @@ export interface PaymentLinkOption {
 export type ConversionLocation = "website" | "message";
 
 /**
+ * What the builder knows about the Meta ad account this business uses.
+ *
+ * Carries no token and no secret — only the few display fields the wizard
+ * needs, so it is safe to hand to a Client Component.
+ *
+ * Two independent facts, deliberately not collapsed into one flag:
+ *
+ *  · `bound` — we know WHICH ad account this business advertises from, so its
+ *    currency and timezone are the source of truth and both controls lock.
+ *    Meta reads a budget in the account's own currency, so a builder saying USD
+ *    against a EUR account would silently mean euros. This stays true when the
+ *    authorisation expires: the account did not change, only the token did.
+ *
+ *  · `apiAvailable` — the stored credential can be used for live Graph calls
+ *    right now. Only this one gates the geo search.
+ */
+export interface MetaAccountBinding {
+  bound: boolean;
+  apiAvailable: boolean;
+  adAccountId: string | null;
+  adAccountName: string | null;
+  currency: string | null;
+  timezone: string | null;
+}
+
+export const NO_META_ACCOUNT: MetaAccountBinding = {
+  bound: false,
+  apiAvailable: false,
+  adAccountId: null,
+  adAccountName: null,
+  currency: null,
+  timezone: null,
+};
+
+/**
+ * The account's values win when present, otherwise the existing fallbacks
+ * stand. Never invents a currency or a zone.
+ */
+export function effectiveCurrency(meta: MetaAccountBinding, fallback: string): string {
+  return meta.bound && meta.currency ? meta.currency : fallback;
+}
+
+export function effectiveTimezone(meta: MetaAccountBinding, fallback: string): string {
+  return meta.bound && meta.timezone ? meta.timezone : fallback;
+}
+
+/**
  * Delivery configuration: where/how the campaign is delivered.
  *
  * Persisted to `ad_campaigns.delivery` (jsonb). Kept strictly separate from
@@ -129,25 +176,74 @@ export const CONVERSION_EVENTS = [
 export const MIN_AGE_OPTIONS = [18, 21, 25, 30];
 
 /**
- * Local suggestion list for the geo search. Deliberately separate from the
- * persistence layer: it only powers the UI picker, and no Meta geo IDs are
- * fabricated — what gets stored is the plain names the user picked.
+ * One targeted place, as Meta understands it.
+ *
+ * `key` is Meta's targeting id and is the only field the Marketing API accepts;
+ * names are display-only. Entries saved before the geo search existed carry
+ * `key: null` — they are shown, kept and re-saved, but they are NOT publishable
+ * and must be re-picked through the search. Nothing here ever invents a key.
  */
-export const LOCATION_SUGGESTIONS = [
-  "España", "México", "Argentina", "Colombia", "Chile", "Perú", "Uruguay",
-  "Ecuador", "Bolivia", "Paraguay", "Venezuela", "Costa Rica", "Panamá",
-  "Guatemala", "República Dominicana", "Estados Unidos", "Canadá", "Brasil",
-  "Portugal", "Francia", "Italia", "Alemania", "Reino Unido", "Países Bajos",
-  "Madrid", "Barcelona", "Valencia", "Sevilla", "Ciudad de México",
-  "Guadalajara", "Monterrey", "Buenos Aires", "Córdoba", "Rosario",
-  "Bogotá", "Medellín", "Cali", "Santiago", "Lima", "Miami", "Nueva York",
+export interface CampaignGeoLocation {
+  key: string | null;
+  name: string;
+  /** country | region | city | zip | geo_market | electoral_district | … */
+  type: string | null;
+  countryCode: string | null;
+  countryName: string | null;
+  region: string | null;
+}
+
+/** Meta's location types, used to scope the search request. */
+export const GEO_LOCATION_TYPES = [
+  "country", "region", "city", "zip", "geo_market", "electoral_district",
 ];
+
+export const GEO_MIN_QUERY = 2;
+export const GEO_SEARCH_LIMIT = 10;
+export const GEO_DEBOUNCE_MS = 350;
+
+const GEO_TYPE_LABEL: Record<string, string> = {
+  country: "País",
+  region: "Región",
+  city: "Ciudad",
+  zip: "Código postal",
+  geo_market: "Mercado",
+  electoral_district: "Distrito electoral",
+  neighborhood: "Barrio",
+  subneighborhood: "Subbarrio",
+};
+
+/**
+ * Secondary line for a chip or a search row.
+ *
+ * Meta returns several "Madrid" (city in Spain, region in Spain, city in
+ * Colombia), so the type and the containing region/country are what make the
+ * options distinguishable. Returns "" when there is nothing extra to add.
+ */
+export function geoLocationContext(loc: CampaignGeoLocation): string {
+  const parts: string[] = [];
+  if (loc.type) parts.push(GEO_TYPE_LABEL[loc.type] ?? loc.type);
+  if (loc.region && loc.region !== loc.name) parts.push(loc.region);
+  if (loc.countryName && loc.countryName !== loc.name) parts.push(loc.countryName);
+  else if (!loc.countryName && loc.countryCode) parts.push(loc.countryCode);
+  return parts.join(" · ");
+}
+
+/** A stable identity for React keys and de-duplication. */
+export function geoLocationId(loc: CampaignGeoLocation): string {
+  return loc.key ?? `name:${loc.name}`;
+}
+
+/** Locations that carry no Meta key cannot be published. */
+export function unresolvedLocations(a: CampaignAudience): CampaignGeoLocation[] {
+  return [...a.includedLocations, ...a.excludedLocations].filter((l) => !l.key);
+}
 
 export interface CampaignAudience {
   /** true → Meta delivers worldwide and the location lists are ignored. */
   globalReach: boolean;
-  includedLocations: string[];
-  excludedLocations: string[];
+  includedLocations: CampaignGeoLocation[];
+  excludedLocations: CampaignGeoLocation[];
   /** Let Meta pick the audience; when off, the manual controls below apply. */
   advantageAudience: boolean;
   ageMin: number;
@@ -389,6 +485,49 @@ function strList(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
+function nullableStr(v: unknown): string | null {
+  return typeof v === "string" && v.length > 0 ? v : null;
+}
+
+/** A bare name, kept without a key so nothing is fabricated. */
+function geoFromName(name: string): CampaignGeoLocation {
+  return { key: null, name, type: null, countryCode: null, countryName: null, region: null };
+}
+
+/**
+ * Read a stored location list, accepting every shape this column has ever had:
+ *   1. `string[]`                — names picked from the old local list
+ *   2. `CampaignGeoLocation[]`   — current, Meta-ready
+ * (the even older single `locations` string is handled by the caller).
+ *
+ * Objects missing a usable `name` are dropped; a missing `key` is preserved as
+ * null rather than guessed.
+ */
+function geoList(v: unknown): CampaignGeoLocation[] {
+  if (!Array.isArray(v)) return [];
+  const out: CampaignGeoLocation[] = [];
+  for (const item of v) {
+    if (typeof item === "string") {
+      if (item.trim()) out.push(geoFromName(item.trim()));
+      continue;
+    }
+    if (item && typeof item === "object") {
+      const o = item as Record<string, unknown>;
+      const name = typeof o.name === "string" ? o.name.trim() : "";
+      if (!name) continue;
+      out.push({
+        key: nullableStr(o.key),
+        name,
+        type: nullableStr(o.type),
+        countryCode: nullableStr(o.countryCode),
+        countryName: nullableStr(o.countryName),
+        region: nullableStr(o.region),
+      });
+    }
+  }
+  return out;
+}
+
 /**
  * Read `ad_campaigns.delivery` back into the draft shape.
  * Rows saved before the column existed hold `{}` — every field falls back to
@@ -413,19 +552,23 @@ export function normalizeDelivery(raw: unknown): CampaignDelivery {
 }
 
 /**
- * Read `ad_campaigns.audience` back into the draft shape. Tolerates the older
- * layout, where locations were a single free-text string.
+ * Read `ad_campaigns.audience` back into the draft shape.
+ *
+ * Tolerates every location layout this column has held: a single free-text
+ * `locations` string, an array of plain names, and the current array of
+ * `CampaignGeoLocation`. The first two arrive without a Meta key and keep
+ * `key: null`, which the Build step surfaces as "Pendiente de confirmar".
  */
 export function normalizeAudience(raw: unknown): CampaignAudience {
   const a = (raw ?? {}) as Record<string, unknown>;
   const legacy = typeof a.locations === "string" && a.locations.trim()
-    ? a.locations.split(",").map((x) => x.trim()).filter(Boolean)
+    ? a.locations.split(",").map((x) => x.trim()).filter(Boolean).map(geoFromName)
     : [];
-  const included = strList(a.includedLocations);
+  const included = geoList(a.includedLocations);
   return {
     globalReach: bool(a.globalReach, DEFAULT_AUDIENCE.globalReach),
     includedLocations: included.length ? included : legacy,
-    excludedLocations: strList(a.excludedLocations),
+    excludedLocations: geoList(a.excludedLocations),
     advantageAudience: bool(a.advantageAudience, DEFAULT_AUDIENCE.advantageAudience),
     ageMin: num(a.ageMin, DEFAULT_AUDIENCE.ageMin),
     ageMax: num(a.ageMax, DEFAULT_AUDIENCE.ageMax),
@@ -528,10 +671,20 @@ export function normalizeCreative(raw: unknown): CampaignCreative {
  */
 export function draftFromRow(
   row: CampaignRow,
-  ctx: { paymentLinks: PaymentLinkOption[]; defaultCurrency?: string }
+  ctx: {
+    paymentLinks: PaymentLinkOption[];
+    defaultCurrency?: string;
+    /** Connected account; its currency and zone override the stored ones. */
+    metaAccount?: MetaAccountBinding;
+  }
 ): CampaignDraft {
-  const base = emptyDraft(row.currency ?? ctx.defaultCurrency ?? "USD");
-  const zone = row.timezone ?? base.timezone;
+  const meta = ctx.metaAccount ?? NO_META_ACCOUNT;
+  const currency = effectiveCurrency(meta, row.currency ?? ctx.defaultCurrency ?? "USD");
+  // Re-reading the stored instant in the account's zone does not move it: the
+  // same moment is simply shown as the wall clock that zone would display, and
+  // saving converts it back with the same zone.
+  const zone = effectiveTimezone(meta, row.timezone ?? DEFAULT_TIMEZONE);
+  const base = emptyDraft(currency, zone);
   const destinationUrl = row.destination_url ?? "";
 
   let destinationKind: DestinationKind = "product";
@@ -567,7 +720,7 @@ export function draftFromRow(
     customUrl,
     budgetType: row.budget_type === "lifetime" ? "lifetime" : "daily",
     budgetAmount: row.budget_amount == null ? "" : String(Number(row.budget_amount)),
-    currency: row.currency ?? base.currency,
+    currency,
     startsAt: toDateInput(row.starts_at, zone),
     endsAt: toDateInput(row.ends_at, zone),
     timezone: zone,
@@ -584,7 +737,8 @@ function todayISO(timeZone: string): string {
   return nowInZone(timeZone);
 }
 
-export function emptyDraft(currency = "USD"): CampaignDraft {
+export function emptyDraft(currency = "USD", timezone = DEFAULT_TIMEZONE): CampaignDraft {
+  const zone = isValidTimeZone(timezone) ? timezone : DEFAULT_TIMEZONE;
   return {
     name: "",
     platform: "meta",
@@ -597,9 +751,9 @@ export function emptyDraft(currency = "USD"): CampaignDraft {
     budgetType: "daily",
     budgetAmount: "",
     currency,
-    startsAt: todayISO(DEFAULT_TIMEZONE),
+    startsAt: todayISO(zone),
     endsAt: "",
-    timezone: DEFAULT_TIMEZONE,
+    timezone: zone,
     delivery: { ...DEFAULT_DELIVERY },
     creative: { ads: [emptyAd()] },
   };

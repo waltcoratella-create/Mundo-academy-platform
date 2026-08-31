@@ -7,6 +7,7 @@ import "../../analitica/analytics.css";
 import "../ads.css";
 import "./create.css";
 import { CampaignWizard } from "./components/CampaignWizard";
+import { getMetaAccountBinding } from "../meta-account";
 
 /**
  * Campaign builder — create mode. `getBusinessById` already scopes to the authed
@@ -26,15 +27,17 @@ export default async function CreateCampaignPage({
   const business = await getBusinessById(params.businessId, userId);
   if (!business) notFound();
 
-  const [products, paymentLinksResult] = await Promise.all([
+  const [products, paymentLinksResult, metaAccount] = await Promise.all([
     getBusinessProducts(business.id),
     getBusinessPaymentLinks(business.id),
+    getMetaAccountBinding(business.id),
   ]);
 
   const base = `/mis-negocios/${business.id}`;
   const appOrigin = process.env.NEXT_PUBLIC_APP_URL || "";
 
-  // Default the budget currency to whatever the products already use.
+  // Fallback only: when Meta is connected the wizard uses the ad account's
+  // currency instead, because that is the currency Meta will read the budget in.
   const defaultCurrency = products.find((p) => p.currency)?.currency ?? "USD";
 
   return (
@@ -45,6 +48,7 @@ export default async function CreateCampaignPage({
           adsHref={`${base}/anuncios`}
           appOrigin={appOrigin}
           defaultCurrency={defaultCurrency}
+          metaAccount={metaAccount}
           products={products.map((p) => ({
             id: p.id,
             name: p.name,
