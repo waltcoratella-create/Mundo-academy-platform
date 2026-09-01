@@ -1830,3 +1830,13 @@
   background: rgba(240, 160, 0, 0.22);
   cursor: help;
 }
+
+/* Retry inside a hint line — a button that reads as the adjacent links do. */
+.ads-create .w-geolink--btn {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.ads-create .w-geolink--btn:disabled { opacity: 0.5; cursor: default; }

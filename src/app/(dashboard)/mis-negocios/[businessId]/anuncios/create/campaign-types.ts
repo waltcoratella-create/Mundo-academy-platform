@@ -239,6 +239,108 @@ export function unresolvedLocations(a: CampaignAudience): CampaignGeoLocation[] 
   return [...a.includedLocations, ...a.excludedLocations].filter((l) => !l.key);
 }
 
+/**
+ * One detailed-targeting interest, as Meta understands it.
+ *
+ * `id` is what `targeting.flexible_spec` accepts; the name is display-only.
+ * `path` is Meta's taxonomy ("Intereses › Fitness › Yoga") and is what makes
+ * two same-named interests distinguishable, the way region/country does for
+ * places. `id: null` marks a value saved before this search existed.
+ */
+export interface CampaignInterest {
+  id: string | null;
+  name: string;
+  path: string[];
+  topic: string | null;
+  audienceSizeLower: number | null;
+  audienceSizeUpper: number | null;
+}
+
+/**
+ * One Custom Audience already saved in the connected ad account.
+ *
+ * Never created here — only listed and referenced by id. `deliveryStatus` is
+ * kept so an audience Meta considers unusable is visible as such instead of
+ * silently failing at publish time.
+ */
+export interface CampaignCustomAudience {
+  id: string | null;
+  name: string;
+  subtype: string | null;
+  approximateCount: number | null;
+  deliveryStatus: string | null;
+}
+
+export const INTEREST_MIN_QUERY = 2;
+export const INTEREST_SEARCH_LIMIT = 15;
+
+const INTEREST_ROOT = "Interests";
+
+/** Secondary line for an interest: its taxonomy path, minus the root. */
+export function interestContext(i: CampaignInterest): string {
+  const trail = i.path.filter((p) => p && p !== INTEREST_ROOT);
+  if (trail.length) return trail.join(" › ");
+  return i.topic ?? "";
+}
+
+export function interestId(i: CampaignInterest): string {
+  return i.id ?? `name:${i.name}`;
+}
+
+const AUDIENCE_SUBTYPE_LABEL: Record<string, string> = {
+  CUSTOM: "Personalizada",
+  WEBSITE: "Sitio web",
+  APP: "App",
+  OFFLINE_CONVERSION: "Conversión offline",
+  CLAIM: "Claim",
+  ENGAGEMENT: "Interacción",
+  LOOKALIKE: "Similar",
+  VIDEO: "Vídeo",
+  BAG_OF_ACCOUNTS: "Cuentas",
+  STUDY_RULE_AUDIENCE: "Estudio",
+  FOX: "Fox",
+};
+
+/** Secondary line for a custom audience: subtype, size and delivery state. */
+export function customAudienceContext(a: CampaignCustomAudience): string {
+  const parts: string[] = [];
+  if (a.subtype) parts.push(AUDIENCE_SUBTYPE_LABEL[a.subtype] ?? a.subtype);
+  if (typeof a.approximateCount === "number" && a.approximateCount >= 0) {
+    parts.push(`~${a.approximateCount.toLocaleString("es-ES")} personas`);
+  }
+  // Meta reports readiness per audience; anything but "ready" matters here.
+  if (a.deliveryStatus && a.deliveryStatus.toLowerCase() !== "ready") {
+    parts.push(a.deliveryStatus);
+  }
+  return parts.join(" · ");
+}
+
+export function customAudienceId(a: CampaignCustomAudience): string {
+  return a.id ?? `name:${a.name}`;
+}
+
+/** What still blocks publishing, across every targeting family. */
+export interface UnresolvedTargetingItem {
+  kind: "location" | "interest" | "audience";
+  name: string;
+}
+
+/**
+ * Every targeting value still missing its Meta id.
+ *
+ * Deliberately not wired to validation: a draft with unresolved values saves
+ * fine. This is the hook a future publish gate calls to refuse instead.
+ */
+export function unresolvedTargeting(a: CampaignAudience): UnresolvedTargetingItem[] {
+  const out: UnresolvedTargetingItem[] = [];
+  for (const l of unresolvedLocations(a)) out.push({ kind: "location", name: l.name });
+  for (const i of a.interests) if (!i.id) out.push({ kind: "interest", name: i.name });
+  for (const c of [...a.customAudiencesIncluded, ...a.customAudiencesExcluded]) {
+    if (!c.id) out.push({ kind: "audience", name: c.name });
+  }
+  return out;
+}
+
 export interface CampaignAudience {
   /** true → Meta delivers worldwide and the location lists are ignored. */
   globalReach: boolean;
@@ -249,7 +351,12 @@ export interface CampaignAudience {
   ageMin: number;
   ageMax: number;
   gender: Gender;
-  interests: string[];
+  /**
+   * Detailed targeting. Only meaningful while `advantageAudience` is off —
+   * Meta ignores manual detailed targeting under Advantage+ — but the list is
+   * kept either way so turning Advantage+ off restores what was chosen.
+   */
+  interests: CampaignInterest[];
   /** Empty = target every language, matching the reference's copy. */
   languages: string[];
   /**
@@ -257,8 +364,8 @@ export interface CampaignAudience {
    * saved audiences, not places. Stays empty until Meta is connected; nothing
    * fabricates entries here.
    */
-  customAudiencesIncluded: string[];
-  customAudiencesExcluded: string[];
+  customAudiencesIncluded: CampaignCustomAudience[];
+  customAudiencesExcluded: CampaignCustomAudience[];
 }
 
 /** One ad inside the group. Each uploaded file becomes one of these. */
@@ -494,6 +601,74 @@ function geoFromName(name: string): CampaignGeoLocation {
   return { key: null, name, type: null, countryCode: null, countryName: null, region: null };
 }
 
+/** A bare interest name, kept without an id so nothing is fabricated. */
+function interestFromName(name: string): CampaignInterest {
+  return { id: null, name, path: [], topic: null, audienceSizeLower: null, audienceSizeUpper: null };
+}
+
+/** A bare audience name, same rule. */
+function audienceFromName(name: string): CampaignCustomAudience {
+  return { id: null, name, subtype: null, approximateCount: null, deliveryStatus: null };
+}
+
+function nullableNum(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+/**
+ * Read a stored interest list. Accepts plain names (the shape before the Meta
+ * search existed) and the current objects; a missing id stays null.
+ */
+function interestList(v: unknown): CampaignInterest[] {
+  if (!Array.isArray(v)) return [];
+  const out: CampaignInterest[] = [];
+  for (const item of v) {
+    if (typeof item === "string") {
+      if (item.trim()) out.push(interestFromName(item.trim()));
+      continue;
+    }
+    if (item && typeof item === "object") {
+      const o = item as Record<string, unknown>;
+      const name = typeof o.name === "string" ? o.name.trim() : "";
+      if (!name) continue;
+      out.push({
+        id: nullableStr(o.id),
+        name,
+        path: strList(o.path),
+        topic: nullableStr(o.topic),
+        audienceSizeLower: nullableNum(o.audienceSizeLower),
+        audienceSizeUpper: nullableNum(o.audienceSizeUpper),
+      });
+    }
+  }
+  return out;
+}
+
+/** Same, for Custom Audiences. */
+function customAudienceList(v: unknown): CampaignCustomAudience[] {
+  if (!Array.isArray(v)) return [];
+  const out: CampaignCustomAudience[] = [];
+  for (const item of v) {
+    if (typeof item === "string") {
+      if (item.trim()) out.push(audienceFromName(item.trim()));
+      continue;
+    }
+    if (item && typeof item === "object") {
+      const o = item as Record<string, unknown>;
+      const name = typeof o.name === "string" ? o.name.trim() : "";
+      if (!name) continue;
+      out.push({
+        id: nullableStr(o.id),
+        name,
+        subtype: nullableStr(o.subtype),
+        approximateCount: nullableNum(o.approximateCount),
+        deliveryStatus: nullableStr(o.deliveryStatus),
+      });
+    }
+  }
+  return out;
+}
+
 /**
  * Read a stored location list, accepting every shape this column has ever had:
  *   1. `string[]`                — names picked from the old local list
@@ -575,7 +750,7 @@ export function normalizeAudience(raw: unknown): CampaignAudience {
     gender: (["all", "female", "male"] as const).includes(a.gender as Gender)
       ? (a.gender as Gender)
       : DEFAULT_AUDIENCE.gender,
-    interests: strList(a.interests),
+    interests: interestList(a.interests),
     // `language` was a single string before the advanced block existed; older
     // drafts are lifted into the array without losing the choice.
     languages: (() => {
@@ -583,8 +758,8 @@ export function normalizeAudience(raw: unknown): CampaignAudience {
       if (list.length) return list;
       return typeof a.language === "string" && a.language ? [a.language] : [];
     })(),
-    customAudiencesIncluded: strList(a.customAudiencesIncluded),
-    customAudiencesExcluded: strList(a.customAudiencesExcluded),
+    customAudiencesIncluded: customAudienceList(a.customAudiencesIncluded),
+    customAudiencesExcluded: customAudienceList(a.customAudiencesExcluded),
   };
 }
 

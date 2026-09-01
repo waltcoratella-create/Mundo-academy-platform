@@ -7,16 +7,19 @@ import {
   Loader2, AlertCircle, Lock,
 } from "lucide-react";
 import type {
-  CampaignAudience, CampaignDelivery, CampaignDraft, CampaignGeoLocation,
-  ConversionLocation, DestinationKind, Errors, Gender, MetaAccountBinding,
+  CampaignAudience, CampaignCustomAudience, CampaignDelivery, CampaignDraft,
+  CampaignGeoLocation, CampaignInterest, ConversionLocation, DestinationKind,
+  Errors, Gender, MetaAccountBinding,
 } from "../campaign-types";
 import {
   CONVERSION_LOCATIONS, CONVERSION_EVENTS, MIN_AGE_OPTIONS,
   CURRENCY_OPTIONS, TIMEZONE_OPTIONS, GENDER_OPTIONS, LANGUAGE_OPTIONS,
-  AGE_MIN, AGE_MAX, GEO_DEBOUNCE_MS, GEO_MIN_QUERY,
+  AGE_MIN, AGE_MAX, GEO_DEBOUNCE_MS, GEO_MIN_QUERY, INTEREST_MIN_QUERY,
   geoLocationContext, geoLocationId,
+  interestContext, interestId, customAudienceContext, customAudienceId,
 } from "../campaign-types";
 import { searchGeoLocations } from "../geo-actions";
+import { searchInterests, loadCustomAudiences } from "../audience-actions";
 
 const CURRENCY_SYMBOL: Record<string, string> = {
   USD: "$", EUR: "€", MXN: "$", ARS: "$", COP: "$", CLP: "$", BRL: "R$",
@@ -164,6 +167,14 @@ export function StepBuild({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [audTab, setAudTab] = useState<"include" | "exclude">("include");
   const [audQuery, setAudQuery] = useState("");
+  const [intQuery, setIntQuery] = useState("");
+  const [intResults, setIntResults] = useState<CampaignInterest[]>([]);
+  const [intLoading, setIntLoading] = useState(false);
+  const [intError, setIntError] = useState<string | null>(null);
+  const [audAll, setAudAll] = useState<CampaignCustomAudience[] | null>(null);
+  const [audLoading, setAudLoading] = useState(false);
+  const [audError, setAudError] = useState<string | null>(null);
+  const [audNeedsTos, setAudNeedsTos] = useState(false);
   const [langQuery, setLangQuery] = useState("");
 
   const a = draft.audience;
@@ -184,8 +195,10 @@ export function StepBuild({
   // the live geo search. An expired authorisation keeps the first and loses the
   // second.
   const metaBound = metaAccount.bound;
-  const geoAvailable = metaAccount.apiAvailable;
-  const metaNeedsReconnect = metaBound && !geoAvailable;
+  // Shared by geo, interests and custom audiences: all three need a usable
+  // credential, none of them needs anything geo-specific.
+  const metaApiAvailable = metaAccount.apiAvailable;
+  const metaNeedsReconnect = metaBound && !metaApiAvailable;
   const settingsHref = `/mis-negocios/${businessId}/configuraciones`;
 
   // The ad account's zone/currency may not be in the curated lists; showing a
@@ -229,7 +242,7 @@ export function StepBuild({
    */
   useEffect(() => {
     const q = geoQuery.trim();
-    if (!geoAvailable || q.length < GEO_MIN_QUERY) {
+    if (!metaApiAvailable || q.length < GEO_MIN_QUERY) {
       setGeoResults([]);
       setGeoError(null);
       setGeoLoading(false);
@@ -265,7 +278,7 @@ export function StepBuild({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [geoQuery, geoAvailable, businessId]);
+  }, [geoQuery, metaApiAvailable, businessId]);
 
   /** Hide what is already on the active tab, without re-querying Meta. */
   const geoSuggestions = useMemo(() => {
@@ -288,6 +301,134 @@ export function StepBuild({
   }
   function clearAll() {
     patchAudience({ includedLocations: [], excludedLocations: [] });
+  }
+
+  // ── Interests ──────────────────────────────────────────────────────────────
+
+  /**
+   * Same shape as the geo lookup: debounced, gated on a usable credential and
+   * on a minimum query, with no local list behind it.
+   */
+  useEffect(() => {
+    const q = intQuery.trim();
+    if (!metaApiAvailable || q.length < INTEREST_MIN_QUERY) {
+      setIntResults([]);
+      setIntError(null);
+      setIntLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIntLoading(true);
+
+    const timer = setTimeout(() => {
+      searchInterests(businessId, q)
+        .then((res) => {
+          if (cancelled) return;
+          if (res.ok) { setIntResults(res.results); setIntError(null); }
+          else { setIntResults([]); setIntError(res.error); }
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setIntResults([]);
+          setIntError("No se pudieron buscar intereses en Meta. Inténtalo de nuevo.");
+        })
+        .finally(() => { if (!cancelled) setIntLoading(false); });
+    }, GEO_DEBOUNCE_MS);
+
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [intQuery, metaApiAvailable, businessId]);
+
+  const interestSuggestions = useMemo(() => {
+    const taken = new Set(a.interests.map(interestId));
+    return intResults.filter((r) => !taken.has(interestId(r)));
+  }, [intResults, a.interests]);
+
+  function addInterest(item: CampaignInterest) {
+    if (a.interests.some((i) => interestId(i) === interestId(item))) return;
+    patchAudience({ interests: [...a.interests, item] });
+    setIntQuery("");
+    setIntResults([]);
+  }
+  function removeInterest(id: string) {
+    patchAudience({ interests: a.interests.filter((i) => interestId(i) !== id) });
+  }
+
+  // ── Custom Audiences ───────────────────────────────────────────────────────
+
+  /**
+   * One listing per Build step, then filtered in the browser. An account holds
+   * tens of audiences, so turning each keystroke into a Graph call would spend
+   * a rate-limited tier for nothing — and the filter keeps working if Meta
+   * becomes unreachable afterwards.
+   */
+  useEffect(() => {
+    if (!metaApiAvailable || audAll !== null) return;
+
+    let cancelled = false;
+    setAudLoading(true);
+
+    loadCustomAudiences(businessId)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.ok) {
+          setAudAll(res.audiences);
+          setAudError(null);
+          setAudNeedsTos(false);
+        } else {
+          setAudAll([]);
+          setAudError(res.error);
+          setAudNeedsTos(Boolean(res.needsTos));
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAudAll([]);
+        setAudError("No se pudieron cargar las audiencias de Meta.");
+      })
+      .finally(() => { if (!cancelled) setAudLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [metaApiAvailable, audAll, businessId]);
+
+  const activeAudiences =
+    audTab === "include" ? a.customAudiencesIncluded : a.customAudiencesExcluded;
+
+  /** Client-side filter over the single listing. */
+  const audienceSuggestions = useMemo(() => {
+    if (!audAll) return [];
+    const q = audQuery.trim().toLowerCase();
+    const taken = new Set(activeAudiences.map(customAudienceId));
+    return audAll
+      .filter((x) => !taken.has(customAudienceId(x)))
+      .filter((x) => !q || x.name.toLowerCase().includes(q))
+      .slice(0, 12);
+  }, [audAll, audQuery, activeAudiences]);
+
+  function addAudience(item: CampaignCustomAudience) {
+    const field = audTab === "include" ? "customAudiencesIncluded" : "customAudiencesExcluded";
+    if (activeAudiences.some((x) => customAudienceId(x) === customAudienceId(item))) return;
+    patchAudience({ [field]: [...activeAudiences, item] } as Partial<CampaignAudience>);
+    setAudQuery("");
+  }
+  function removeAudience(id: string) {
+    const field = audTab === "include" ? "customAudiencesIncluded" : "customAudiencesExcluded";
+    patchAudience({
+      [field]: activeAudiences.filter((x) => customAudienceId(x) !== id),
+    } as Partial<CampaignAudience>);
+  }
+
+  /**
+   * Re-run the listing after a failure.
+   *
+   * Clearing `audAll` is what re-arms the effect above, so the retry goes
+   * through the same server action rather than reloading the page. Audiences
+   * already picked live in the draft, not in this list, so they are untouched.
+   */
+  function retryAudiences() {
+    setAudError(null);
+    setAudNeedsTos(false);
+    setAudAll(null);
   }
 
   return (
@@ -464,16 +605,16 @@ export function StepBuild({
               className="w-input"
               value={geoQuery}
               placeholder={
-                geoAvailable
+                metaApiAvailable
                   ? "Busca países, regiones o ciudades"
                   : "Conecta Meta para buscar ubicaciones"
               }
               aria-label="Busca países, regiones o ciudades"
-              disabled={!geoAvailable}
+              disabled={!metaApiAvailable}
               onChange={(e) => setGeoQuery(e.target.value)}
             />
 
-            {!geoAvailable && (
+            {!metaApiAvailable && (
               <p className="w-geohint w-geohint--warn">
                 <AlertCircle size={13} strokeWidth={2} aria-hidden="true" />
                 <span>
@@ -513,7 +654,7 @@ export function StepBuild({
               </p>
             )}
 
-            {geoAvailable && !geoLoading && !geoError
+            {metaApiAvailable && !geoLoading && !geoError
               && geoQuery.trim().length >= GEO_MIN_QUERY
               && geoSuggestions.length === 0 && (
               <p className="w-geohint">
@@ -650,7 +791,135 @@ export function StepBuild({
                 </select>
               </div>
             </div>
+
+            {/* Detailed targeting. Lives here, and only here, because Meta
+                largely ignores manual interests while Advantage+ is on —
+                offering the search there would be offering a dead control. The
+                stored list survives the toggle either way. */}
+            <div className="w-section" data-field="true">
+              <span className="w-label">Intereses</span>
+              <span className="w-desc">
+                Segmentación detallada. Los intereses vienen de Meta.
+              </span>
+
+              <input
+                type="text"
+                className="w-input"
+                value={intQuery}
+                placeholder={
+                  metaApiAvailable
+                    ? "Busca intereses (fitness, marketing, viajes…)"
+                    : "Conecta Meta para buscar intereses"
+                }
+                aria-label="Busca intereses"
+                disabled={!metaApiAvailable}
+                onChange={(e) => setIntQuery(e.target.value)}
+              />
+
+              {!metaApiAvailable && (
+                <p className="w-geohint w-geohint--warn">
+                  <AlertCircle size={13} strokeWidth={2} aria-hidden="true" />
+                  <span>
+                    {metaNeedsReconnect
+                      ? "La autorización con Meta caducó. Los intereses guardados se conservan."
+                      : "Los intereses se buscan en Meta."}{" "}
+                    <Link href={settingsHref} className="w-geolink">
+                      Ir a Configuraciones
+                    </Link>
+                  </span>
+                </p>
+              )}
+
+              {intLoading && (
+                <p className="w-geohint" role="status">
+                  <Loader2 size={13} strokeWidth={2} className="w-spin" aria-hidden="true" />
+                  <span>Buscando en Meta…</span>
+                </p>
+              )}
+
+              {intError && (
+                <p className="w-geohint w-geohint--warn" role="alert">
+                  <AlertCircle size={13} strokeWidth={2} aria-hidden="true" />
+                  <span>{intError}</span>
+                </p>
+              )}
+
+              {metaApiAvailable && !intLoading && !intError
+                && intQuery.trim().length >= INTEREST_MIN_QUERY
+                && interestSuggestions.length === 0 && (
+                <p className="w-geohint">
+                  <span>Meta no devolvió intereses para «{intQuery.trim()}».</span>
+                </p>
+              )}
+
+              {interestSuggestions.length > 0 && (
+                <ul className="w-geosuggest">
+                  {interestSuggestions.map((item) => {
+                    const context = interestContext(item);
+                    return (
+                      <li key={interestId(item)}>
+                        <button
+                          type="button"
+                          className="w-geosuggest__item"
+                          onClick={() => addInterest(item)}
+                        >
+                          <span className="w-geosuggest__name">{item.name}</span>
+                          {context && <span className="w-geosuggest__meta">{context}</span>}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {a.interests.length > 0 && (
+                <div className="w-geochips">
+                  {a.interests.map((item) => {
+                    const id = interestId(item);
+                    const context = interestContext(item);
+                    return (
+                      <span
+                        className="w-geochip"
+                        key={id}
+                        data-unresolved={item.id ? undefined : "true"}
+                      >
+                        <span className="w-geochip__text">
+                          {item.name}
+                          {context && <span className="w-geochip__meta">{context}</span>}
+                          {!item.id && (
+                            <span
+                              className="w-geochip__badge"
+                              title="Guardado antes de la búsqueda de Meta: no tiene identificador. Vuelve a seleccionarlo para poder publicarlo."
+                            >
+                              Pendiente de confirmar
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`Quitar ${item.name}`}
+                          onClick={() => removeInterest(id)}
+                        >
+                          <X size={13} strokeWidth={2.4} />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
+        )}
+
+        {/* Advantage+ hides the manual controls but never discards them. */}
+        {a.advantageAudience && a.interests.length > 0 && (
+          <p className="w-geohint">
+            <span>
+              {a.interests.length === 1
+                ? "1 interés guardado se aplicará si desactivas Advantage+."
+                : `${a.interests.length} intereses guardados se aplicarán si desactivas Advantage+.`}
+            </span>
+          </p>
         )}
       </Section>
 
@@ -821,7 +1090,7 @@ export function StepBuild({
                   className="w-linkbtn"
                   data-disabled="true"
                   aria-disabled="true"
-                  title="Requiere conectar tu cuenta de Meta"
+                  title="Subir audiencias por CSV todavía no está implementado"
                 >
                   Cargar CSV
                 </span>
@@ -847,19 +1116,147 @@ export function StepBuild({
                     type="text"
                     className="w-searchinput"
                     placeholder={
-                      audTab === "include"
-                        ? "Buscar audiencias para incluir"
-                        : "Buscar audiencias para excluir"
+                      !metaApiAvailable
+                        ? "Conecta Meta para ver tus audiencias"
+                        : audTab === "include"
+                          ? "Buscar audiencias para incluir"
+                          : "Buscar audiencias para excluir"
                     }
                     value={audQuery}
+                    disabled={!metaApiAvailable}
                     onChange={(e) => setAudQuery(e.target.value)}
                   />
                 </div>
               </div>
-              {audQuery.trim() && (
-                <p className="w-emptyhint">
-                  Conecta tu cuenta de Meta para buscar tus audiencias guardadas.
+
+              {!metaApiAvailable && (
+                <p className="w-geohint w-geohint--warn">
+                  <AlertCircle size={13} strokeWidth={2} aria-hidden="true" />
+                  <span>
+                    {metaNeedsReconnect
+                      ? "La autorización con Meta caducó. Las audiencias ya elegidas se conservan."
+                      : "Tus audiencias guardadas se leen de tu cuenta publicitaria de Meta."}{" "}
+                    <Link href={settingsHref} className="w-geolink">
+                      Ir a Configuraciones
+                    </Link>
+                  </span>
                 </p>
+              )}
+
+              {audLoading && (
+                <p className="w-geohint" role="status">
+                  <Loader2 size={13} strokeWidth={2} className="w-spin" aria-hidden="true" />
+                  <span>Cargando tus audiencias de Meta…</span>
+                </p>
+              )}
+
+              {/* The Custom Audience terms are accepted per person and business,
+                  and Meta refuses the edge until then. The message is Meta's own
+                  and the link is the one that actually resolves it. */}
+              {audError && (
+                <p className="w-geohint w-geohint--warn" role="alert">
+                  <AlertCircle size={13} strokeWidth={2} aria-hidden="true" />
+                  <span>
+                    {audError}
+                    {audNeedsTos && metaAccount.adAccountId && (
+                      <>
+                        {" "}
+                        <a
+                          className="w-geolink"
+                          href={`https://business.facebook.com/ads/manage/customaudiences/tos/?act=${metaAccount.adAccountId.replace(/^act_/, "")}`}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                        >
+                          Aceptar las condiciones de Custom Audiences
+                        </a>
+                        .
+                      </>
+                    )}{" "}
+                    <button
+                      type="button"
+                      className="w-geolink w-geolink--btn"
+                      onClick={retryAudiences}
+                      disabled={audLoading}
+                    >
+                      Reintentar
+                    </button>
+                  </span>
+                </p>
+              )}
+
+              {/* An account with no saved audiences is a real, ordinary state —
+                  said plainly rather than dressed up as a failure. */}
+              {metaApiAvailable && !audLoading && !audError && audAll?.length === 0 && (
+                <p className="w-geohint">
+                  <span>Esta cuenta publicitaria todavía no tiene audiencias guardadas en Meta.</span>
+                </p>
+              )}
+
+              {metaApiAvailable && !audLoading && !audError
+                && (audAll?.length ?? 0) > 0 && audienceSuggestions.length === 0 && (
+                <p className="w-geohint">
+                  <span>
+                    {audQuery.trim()
+                      ? `Ninguna audiencia coincide con «${audQuery.trim()}».`
+                      : "Todas tus audiencias ya están en esta lista."}
+                  </span>
+                </p>
+              )}
+
+              {audienceSuggestions.length > 0 && (
+                <ul className="w-geosuggest">
+                  {audienceSuggestions.map((item) => {
+                    const context = customAudienceContext(item);
+                    return (
+                      <li key={customAudienceId(item)}>
+                        <button
+                          type="button"
+                          className="w-geosuggest__item"
+                          onClick={() => addAudience(item)}
+                        >
+                          <span className="w-geosuggest__name">{item.name}</span>
+                          {context && <span className="w-geosuggest__meta">{context}</span>}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {activeAudiences.length > 0 && (
+                <div className="w-geochips">
+                  {activeAudiences.map((item) => {
+                    const id = customAudienceId(item);
+                    const context = customAudienceContext(item);
+                    return (
+                      <span
+                        className="w-geochip"
+                        key={id}
+                        data-unresolved={item.id ? undefined : "true"}
+                      >
+                        <span className="w-geochip__text">
+                          {item.name}
+                          {context && <span className="w-geochip__meta">{context}</span>}
+                          {!item.id && (
+                            <span
+                              className="w-geochip__badge"
+                              title="Guardada antes de leer las audiencias de Meta: no tiene identificador. Vuelve a seleccionarla para poder publicarla."
+                            >
+                              Pendiente de confirmar
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`Quitar ${item.name}`}
+                          onClick={() => removeAudience(id)}
+                        >
+                          <X size={13} strokeWidth={2.4} />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
               )}
             </div>
 

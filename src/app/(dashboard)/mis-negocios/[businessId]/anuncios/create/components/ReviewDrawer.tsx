@@ -28,6 +28,11 @@ function geoLabel(loc: CampaignGeoLocation): string {
   return loc.key ? loc.name : `${loc.name} (pendiente de confirmar)`;
 }
 
+/** Same rule for the other two targeting families. */
+function idLabel(item: { id: string | null; name: string }): string {
+  return item.id ? item.name : `${item.name} (pendiente de confirmar)`;
+}
+
 function labelFor(options: { value: string; label: string }[], value: string): string {
   return options.find((o) => o.value === value)?.label ?? value;
 }
@@ -148,6 +153,24 @@ export function ReviewDrawer({
               <Row label="Excluidas" value={a.excludedLocations.map(geoLabel).join(", ")} />
             )}
             <Row label="Audiencia Advantage+" value={a.advantageAudience ? "Activada" : "Manual"} />
+            {/* Meta ignores manual interests under Advantage+, so the review
+                says so instead of implying they will be applied. */}
+            {a.interests.length > 0 && (
+              <Row
+                label="Intereses"
+                value={
+                  a.advantageAudience
+                    ? `${a.interests.map(idLabel).join(", ")} · sin efecto con Advantage+`
+                    : a.interests.map(idLabel).join(", ")
+                }
+              />
+            )}
+            {a.customAudiencesIncluded.length > 0 && (
+              <Row label="Audiencias incluidas" value={a.customAudiencesIncluded.map(idLabel).join(", ")} />
+            )}
+            {a.customAudiencesExcluded.length > 0 && (
+              <Row label="Audiencias excluidas" value={a.customAudiencesExcluded.map(idLabel).join(", ")} />
+            )}
             <Row label="Edad" value={a.advantageAudience ? `${a.ageMin}+` : `${a.ageMin} – ${a.ageMax}`} />
             {!a.advantageAudience && <Row label="Género" value={labelFor(GENDER_OPTIONS, a.gender)} />}
             <Row label="Idiomas" value={a.languages.length ? a.languages.map((l) => labelFor(LANGUAGE_OPTIONS, l)).join(", ") : "Todos los idiomas"} />
