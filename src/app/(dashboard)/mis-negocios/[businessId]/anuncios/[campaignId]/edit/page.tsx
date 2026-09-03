@@ -10,6 +10,8 @@ import "../../create/create.css";
 import { CampaignWizard } from "../../create/components/CampaignWizard";
 import { getCampaignDraft } from "../../campaign-actions";
 import { getMetaAccountBinding } from "../../meta-account";
+import { SmokePublishBridge } from "../../create/components/SmokePublishBridge";
+import { isPublishEnabled } from "@/lib/meta/publish";
 
 /**
  * Campaign builder — edit mode.
@@ -79,6 +81,12 @@ export default async function EditCampaignPage({
   return (
     <div className="analytics-page ads-page ads-create">
       <div style={{ padding: "24px" }}>
+        {/* Invisible. Exists only while the smoke-test flag is on. */}
+        <SmokePublishBridge
+          businessId={business.id}
+          campaignId={loaded.campaignId}
+          enabled={isPublishEnabled()}
+        />
         <CampaignWizard
           businessId={business.id}
           campaignId={loaded.campaignId}

@@ -1,32 +1,40 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { getBusinessById } from "@/lib/supabase/queries";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getBusinessById, getBusinessPaymentLinks } from "@/lib/supabase/queries";
 import { publishCampaignToMeta, isPublishEnabled, type PublishFailureCode } from "@/lib/meta/publish";
-import type { CampaignDraft } from "./campaign-types";
+import { getCampaignDraft } from "../campaign-actions";
 import type { ReadinessResult } from "./readiness-types";
 
 /**
  * Smoke-test entry point for the publish pipeline.
  *
- * Deliberately not wired to any button yet. It exists so the first real run can
- * be triggered deliberately, once, with the flag on — and so that until then the
- * only reachable answer is a refusal.
+ * Deliberately not wired to any button. The only way in is the invisible
+ * SmokePublishBridge, which itself renders nothing and only exists while
+ * META_PUBLISH_SMOKE_TEST_ENABLED is true — and that is mere convenience, not
+ * the gate: the flag, the caller's ownership of the business and the campaign's
+ * membership in it are all re-established right here regardless of what the
+ * client sent.
  *
- * Three things are re-established here regardless of what the client sent:
- * the flag, the caller's ownership of the business, and the campaign's
- * membership in that business. Everything after that is the pipeline's job.
+ * The draft is loaded from the database, not accepted from the browser: a
+ * smoke test must publish exactly what is persisted, and getCampaignDraft
+ * already re-resolves ownership and refuses anything that is not a draft.
  */
 
 export type PublishActionResult =
-  | { ok: true; metaCampaignId: string | null; metaAdSetId: string | null; resumed: boolean }
+  | {
+      ok: true;
+      metaCampaignId: string | null;
+      metaAdSetId: string | null;
+      publishStatus: string;
+      publishStep: string;
+      resumed: boolean;
+    }
   | { ok: false; code: PublishFailureCode | "FORBIDDEN"; error: string; reasons?: string[]; readiness?: ReadinessResult };
 
 export async function publishCampaignSmokeTest(
   businessId: string,
-  campaignId: string,
-  draft: CampaignDraft
+  campaignId: string
 ): Promise<PublishActionResult> {
   if (!isPublishEnabled()) {
     return {
@@ -42,24 +50,30 @@ export async function publishCampaignSmokeTest(
   const business = await getBusinessById(businessId, userId);
   if (!business) return { ok: false, code: "FORBIDDEN", error: "No tienes permiso sobre este negocio." };
 
-  // The campaign id arrives from the client, so its ownership is its own check:
-  // a valid business does not make an arbitrary campaign id publishable.
-  const supabase = createAdminClient();
-  const { data: row, error } = await supabase
-    .from("ad_campaigns")
-    .select("id")
-    .eq("id", campaignId)
-    .eq("business_id", business.id)
-    .maybeSingle();
+  // Payment links let a stored /pay/<slug> destination resolve back to its
+  // link, exactly as the editor loads it.
+  const paymentLinksResult = await getBusinessPaymentLinks(business.id);
+  const paymentLinks = paymentLinksResult.links.map((l) => ({
+    id: l.id,
+    title: l.title,
+    slug: l.slug,
+    productName: l.product_name,
+    active: l.active,
+  }));
 
-  if (error || !row) {
-    return { ok: false, code: "FORBIDDEN", error: "No se encontró la campaña en este negocio." };
+  const loaded = await getCampaignDraft({
+    businessId: business.id,
+    campaignId,
+    paymentLinks,
+  });
+  if (!loaded.ok) {
+    return { ok: false, code: "FORBIDDEN", error: loaded.error };
   }
 
   const outcome = await publishCampaignToMeta({
     businessId: business.id,
-    adCampaignId: campaignId,
-    draft,
+    adCampaignId: loaded.campaignId,
+    draft: loaded.draft,
   });
 
   if (!outcome.ok) {
@@ -76,6 +90,8 @@ export async function publishCampaignSmokeTest(
     ok: true,
     metaCampaignId: outcome.link.metaCampaignId,
     metaAdSetId: outcome.link.metaAdSetId,
+    publishStatus: outcome.link.publishStatus,
+    publishStep: outcome.link.publishStep,
     resumed: outcome.resumed,
   };
 }
