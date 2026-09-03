@@ -363,6 +363,7 @@ export function CampaignWizard({
 
       <ReviewDrawer
         open={reviewOpen}
+        businessId={businessId}
         draft={draft}
         products={products}
         paymentLinks={paymentLinks}

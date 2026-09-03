@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { X, AlertCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { X, AlertCircle, CheckCircle2, Loader2, TriangleAlert } from "lucide-react";
 import type {
   CampaignDraft, CampaignGeoLocation, PaymentLinkOption, ProductOption,
 } from "../campaign-types";
@@ -9,6 +9,9 @@ import {
   BUDGET_TYPE_LABEL, CTA_OPTIONS, GENDER_OPTIONS, LANGUAGE_OPTIONS, OBJECTIVE_LABEL,
   CONVERSION_EVENTS,
 } from "../campaign-types";
+import type { ReadinessIssue, ReadinessResult } from "../readiness-types";
+import { READINESS_SECTION_LABEL, groupBySection } from "../readiness-types";
+import { checkPublishReadiness } from "../readiness-actions";
 
 /**
  * Review — the old fourth step, now a side drawer opened from Creatives.
@@ -31,6 +34,122 @@ function geoLabel(loc: CampaignGeoLocation): string {
 /** Same rule for the other two targeting families. */
 function idLabel(item: { id: string | null; name: string }): string {
   return item.id ? item.name : `${item.name} (pendiente de confirmar)`;
+}
+
+/**
+ * Publish readiness summary.
+ *
+ * Rendered from coded issues, never from free text: the copy below can change
+ * without breaking anything that keys on `issue.code`.
+ */
+function IssueList({ items, tone }: { items: ReadinessIssue[]; tone: "error" | "warning" }) {
+  return (
+    <>
+      {groupBySection(items).map((group) => (
+        <div className="cr-ready__group" key={`${tone}-${group.section}`}>
+          <span className="cr-ready__grouptitle">
+            {READINESS_SECTION_LABEL[group.section]}
+          </span>
+          <ul className="cr-ready__list">
+            {group.items.map((issue) => (
+              <li className="cr-ready__item" key={`${issue.code}-${issue.field ?? ""}`} data-tone={tone}>
+                <span className="cr-ready__msg">{issue.message}</span>
+                {issue.remediation && (
+                  <span className="cr-ready__fix">{issue.remediation}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function ReadinessBlock({
+  loading,
+  error,
+  result,
+}: {
+  loading: boolean;
+  error: string | null;
+  result: ReadinessResult | null;
+}) {
+  if (loading) {
+    return (
+      <div className="cr-ready" data-state="loading" role="status">
+        <Loader2 size={16} strokeWidth={2} className="cr-ready__spin" aria-hidden="true" />
+        <span className="cr-ready__title">Comprobando si la campaña está lista para publicar…</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="cr-ready" data-state="warning" role="alert">
+        <AlertCircle size={16} strokeWidth={2} aria-hidden="true" />
+        <span className="cr-ready__title">{error}</span>
+      </div>
+    );
+  }
+
+  if (!result) return null;
+
+  const missing = result.errors.length;
+
+  /**
+   * "Ready" and "verified" are not the same claim.
+   *
+   * A failed Meta check is a warning, not proof of invalidity, so it does not
+   * flip `ready` to false — but it does mean we never confirmed the Meta side.
+   * Showing a green "Listo para publicar" there would assert something we did
+   * not check, so that case gets its own, weaker headline.
+   */
+  const fullyVerified = result.ready && result.checkedMeta;
+  const readyButUnverified = result.ready && !result.checkedMeta;
+
+  return (
+    <div
+      className="cr-ready"
+      data-state={fullyVerified ? "ready" : readyButUnverified ? "warning" : "blocked"}
+    >
+      <div className="cr-ready__head">
+        {fullyVerified
+          ? <CheckCircle2 size={16} strokeWidth={2} aria-hidden="true" />
+          : readyButUnverified
+            ? <TriangleAlert size={16} strokeWidth={2} aria-hidden="true" />
+            : <AlertCircle size={16} strokeWidth={2} aria-hidden="true" />}
+        <span className="cr-ready__title">
+          {fullyVerified
+            ? "Listo para publicar"
+            : readyButUnverified
+              ? "Sin bloqueos detectados, pero no pudimos completar la comprobación con Meta."
+              : missing === 1
+                ? "Falta 1 elemento para publicar"
+                : `Faltan ${missing} elementos para publicar`}
+        </span>
+      </div>
+
+      {missing > 0 && <IssueList items={result.errors} tone="error" />}
+
+      {result.warnings.length > 0 && (
+        <div className="cr-ready__warnings">
+          <span className="cr-ready__grouptitle">
+            <TriangleAlert size={13} strokeWidth={2} aria-hidden="true" />
+            Avisos
+          </span>
+          <IssueList items={result.warnings} tone="warning" />
+        </div>
+      )}
+
+      {/* Only when the headline has not already said it. */}
+      {!result.checkedMeta && !result.ready && (
+        <span className="cr-ready__note">
+          Además, no se pudieron ejecutar las comprobaciones contra Meta.
+        </span>
+      )}
+    </div>
+  );
 }
 
 function labelFor(options: { value: string; label: string }[], value: string): string {
@@ -60,6 +179,7 @@ function Section({ title, onEdit, children }: { title: string; onEdit?: () => vo
 
 export function ReviewDrawer({
   open,
+  businessId,
   draft,
   products,
   paymentLinks,
@@ -70,6 +190,8 @@ export function ReviewDrawer({
   onSaveDraft,
 }: {
   open: boolean;
+  /** Needed by the readiness action, which re-checks ownership server-side. */
+  businessId: string;
   draft: CampaignDraft;
   products: ProductOption[];
   paymentLinks: PaymentLinkOption[];
@@ -80,6 +202,9 @@ export function ReviewDrawer({
   onSaveDraft: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const [readiness, setReadiness] = useState<ReadinessResult | null>(null);
+  const [readinessLoading, setReadinessLoading] = useState(false);
+  const [readinessError, setReadinessError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -88,6 +213,41 @@ export function ReviewDrawer({
     panelRef.current?.focus();
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  /**
+   * One check per opening.
+   *
+   * `open` is the only dependency on purpose: revalidating on every keystroke
+   * would spend a rate-limited access tier for nothing. Closing, editing and
+   * reopening runs it again, which is when the answer can actually differ.
+   */
+  useEffect(() => {
+    if (!open) {
+      setReadiness(null);
+      setReadinessError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setReadinessLoading(true);
+    setReadinessError(null);
+
+    checkPublishReadiness(businessId, draft)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.ok) setReadiness(res.result);
+        else setReadinessError(res.error);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setReadinessError("No se pudo comprobar si la campaña está lista para publicar.");
+        }
+      })
+      .finally(() => { if (!cancelled) setReadinessLoading(false); });
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, businessId]);
 
   if (!open) return null;
 
@@ -125,6 +285,12 @@ export function ReviewDrawer({
         </header>
 
         <div className="cr-drawer__body">
+          <ReadinessBlock
+            loading={readinessLoading}
+            error={readinessError}
+            result={readiness}
+          />
+
           <Section title="Campaña" onEdit={() => onEditStep(1)}>
             <Row label="Nombre" value={draft.name || DASH} />
             <Row label="Objetivo" value={draft.objective ? OBJECTIVE_LABEL[draft.objective] : DASH} />

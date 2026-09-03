@@ -1848,3 +1848,85 @@
   line-height: 18px;
   color: var(--w-muted, rgba(0, 0, 0, 0.55));
 }
+
+/* ── Publish readiness block, at the top of the review drawer ───────────────
+   Three states: checking, ready, blocked. Errors and warnings are visually
+   distinct because only the first kind stops a publish. */
+
+.ads-create .cr-ready {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--w-stroke);
+  background: rgba(0, 0, 0, 0.02);
+  margin-bottom: 16px;
+}
+.ads-create .cr-ready[data-state="ready"] {
+  border-color: rgba(48, 164, 108, 0.35);
+  background: rgba(48, 164, 108, 0.07);
+  color: #1a7f4f;
+}
+.ads-create .cr-ready[data-state="blocked"] {
+  border-color: rgba(220, 90, 70, 0.32);
+  background: rgba(220, 90, 70, 0.06);
+  color: #a3351f;
+}
+.ads-create .cr-ready[data-state="warning"] { color: #9a5b00; }
+.ads-create .cr-ready[data-state="loading"] {
+  flex-direction: row;
+  align-items: center;
+  color: var(--w-muted, rgba(0, 0, 0, 0.55));
+}
+
+.ads-create .cr-ready__head { display: flex; align-items: center; gap: 8px; }
+.ads-create .cr-ready__title { font-size: 14px; font-weight: 600; line-height: 20px; }
+.ads-create .cr-ready__spin { animation: w-spin 0.9s linear infinite; flex-shrink: 0; }
+
+.ads-create .cr-ready__group { display: flex; flex-direction: column; gap: 4px; }
+.ads-create .cr-ready__grouptitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.ads-create .cr-ready__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ads-create .cr-ready__item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 10px;
+  border-left: 2px solid currentColor;
+  font-size: 13px;
+  line-height: 18px;
+}
+.ads-create .cr-ready__item[data-tone="warning"] { color: #9a5b00; }
+.ads-create .cr-ready__fix { font-size: 12px; line-height: 16px; opacity: 0.8; }
+
+.ads-create .cr-ready__warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  color: #9a5b00;
+}
+
+.ads-create .cr-ready__note {
+  font-size: 12px;
+  line-height: 16px;
+  opacity: 0.75;
+}
