@@ -229,8 +229,18 @@ export async function publishCampaignToMeta(params: {
     const final = await getCampaignLink(adCampaignId);
     return { ok: true, link: final ?? link, resumed };
   } catch (e) {
+    // Everything Meta gives us for support goes into the stored error —
+    // code, subcode and trace id — and nothing else does: the raw response
+    // never leaves the graph client, so no token can ride along.
     const message = e instanceof MetaGraphError
-      ? `${e.message}${e.traceId ? ` (trace ${e.traceId})` : ""}`
+      ? [
+          e.message,
+          e.code !== null ? `code ${e.code}` : null,
+          e.subcode !== null ? `subcode ${e.subcode}` : null,
+          e.traceId ? `trace ${e.traceId}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
       : "Fallo inesperado durante la publicación.";
     await markFailed(adCampaignId, lockToken, step, message, created());
     return { ok: false, code: "META_ERROR", message };

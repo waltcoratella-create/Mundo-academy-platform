@@ -75,6 +75,13 @@ export interface CampaignPayload {
   status: "PAUSED";
   special_ad_categories: string[];
   buying_type: "AUCTION";
+  /**
+   * Mandatory when the budget lives on the ad set instead of the campaign —
+   * Meta refuses the create without it (proven by the first smoke run,
+   * fbtrace ArXfrGupWnbyAC9r6waNzSE). False: with a single ad set there is
+   * nothing to share, and true would let Meta move budget between groups.
+   */
+  is_adset_budget_sharing_enabled: false;
 }
 
 export interface AdSetPayload {
@@ -260,6 +267,7 @@ export function mapDraftToMetaV1(draft: CampaignDraft, ctx: PublishContext): Map
       status: "PAUSED",
       special_ad_categories: [],
       buying_type: "AUCTION",
+      is_adset_budget_sharing_enabled: false,
     },
     adSet: {
       name: metaAdSetName(ctx.adCampaignId),
