@@ -27,6 +27,19 @@ import type { ReadinessResult } from "@/app/(dashboard)/mis-negocios/[businessId
 
 const FLAG = "META_PUBLISH_SMOKE_TEST_ENABLED";
 
+/**
+ * DSA declarations for EU-targeted ad sets. Public in the EU ad library.
+ *
+ * Deliberately constants, not derived from page_name or any other display
+ * field: the beneficiary is the organisation being promoted, and the payor is
+ * the legal name of the Business Portfolio that owns the ad account —
+ * "Grupo Mundo Ejecutivo", verified in Business Settings on 2026-09-03.
+ * When these need to vary per business, they move to configuration; they must
+ * never be inferred.
+ */
+const DSA_BENEFICIARY = "Mundo Academy";
+const DSA_PAYOR = "Grupo Mundo Ejecutivo";
+
 export type PublishOutcome =
   | { ok: true; link: CampaignLink; resumed: boolean }
   | { ok: false; code: PublishFailureCode; message: string; reasons?: string[]; readiness?: ReadinessResult };
@@ -119,6 +132,8 @@ export async function publishCampaignToMeta(params: {
     currency: connection.adAccountCurrency ?? draft.currency,
     // The account's own zone, never the draft's copy of it.
     timezone: connection.adAccountTimezone ?? "",
+    dsaBeneficiary: DSA_BENEFICIARY,
+    dsaPayor: DSA_PAYOR,
   });
   if (!mapped.supported) {
     return {

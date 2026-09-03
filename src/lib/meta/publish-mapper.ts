@@ -67,6 +67,14 @@ export interface PublishContext {
   currency: string;
   /** The AD ACCOUNT's timezone, read server-side — not whatever the draft claims. */
   timezone: string;
+  /**
+   * DSA transparency (EU): who is promoted and who pays. Both appear publicly
+   * in the EU ad library, so they are legal declarations, not labels — the
+   * orchestrator supplies them from configuration, never inferred from a page
+   * name, and the mapper refuses to build an ad set without them.
+   */
+  dsaBeneficiary: string;
+  dsaPayor: string;
 }
 
 export interface CampaignPayload {
@@ -94,6 +102,9 @@ export interface AdSetPayload {
   daily_budget: number;
   start_time: string;
   targeting: Record<string, unknown>;
+  /** Required for EU-targeted ad sets (code 100 / subcode 3858081 without it). */
+  dsa_beneficiary: string;
+  dsa_payor: string;
 }
 
 export interface CreativePayload {
@@ -245,6 +256,8 @@ export function mapDraftToMetaV1(draft: CampaignDraft, ctx: PublishContext): Map
   // ── Context ────────────────────────────────────────────────────────────────
   if (!ctx.pageId) reasons.push("No hay página de Facebook seleccionada.");
   if (!ctx.adAccountId) reasons.push("No hay cuenta publicitaria seleccionada.");
+  if (!ctx.dsaBeneficiary.trim()) reasons.push("Falta el beneficiario DSA del anuncio.");
+  if (!ctx.dsaPayor.trim()) reasons.push("Falta el pagador DSA del anuncio.");
 
   let dailyBudget = 0;
   try {
@@ -288,6 +301,8 @@ export function mapDraftToMetaV1(draft: CampaignDraft, ctx: PublishContext): Map
         geo_locations: { countries: [countryCode] },
         targeting_automation: { advantage_audience: 1 },
       },
+      dsa_beneficiary: ctx.dsaBeneficiary.trim(),
+      dsa_payor: ctx.dsaPayor.trim(),
     },
     creative: {
       name: metaCreativeName(ctx.adCampaignId, ad.id),
