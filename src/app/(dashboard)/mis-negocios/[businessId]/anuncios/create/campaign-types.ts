@@ -20,11 +20,15 @@ export type MediaType = "image" | "video";
 export const OBJECTIVES: CampaignObjective[] = ["sales", "leads", "engagement", "traffic", "awareness"];
 
 /**
- * `engagement` is NOT yet allowed by the live check constraint
- * (ad_campaigns_objective_chk). Saving it fails with 23514 until the migration
- * in the report is applied; campaign-actions surfaces that as a clear message.
+ * Objectives the UI offers but the live CHECK constraint still rejects.
+ *
+ * Empty since `scripts/ads-campaigns-objective-engagement.sql` was applied:
+ * `ad_campaigns_objective_chk` now accepts all five objectives the builder
+ * offers, `engagement` included. Add an objective back here only if the UI
+ * offers one the database has not been widened for yet — this array is what
+ * `validateDraftForSave` uses to refuse a value the table would reject.
  */
-export const OBJECTIVES_NEEDING_MIGRATION: CampaignObjective[] = ["engagement"];
+export const OBJECTIVES_NEEDING_MIGRATION: CampaignObjective[] = [];
 export const BUDGET_TYPES: BudgetType[] = ["daily", "lifetime"];
 export const STATUSES: CampaignStatus[] = ["draft", "in_review", "active", "paused", "archived"];
 
@@ -1024,6 +1028,106 @@ export function validateStep(step: number, d: CampaignDraft): Errors {
   }
 
   return e;
+}
+
+/**
+ * Objectives the live CHECK constraint accepts.
+ *
+ * `engagement` is offered by the UI but rejected by the database until
+ * scripts/ads-campaigns-objective-engagement.sql is applied, so saving it is a
+ * structural failure, not a business rule.
+ */
+export const OBJECTIVES_ALLOWED_BY_DB: CampaignObjective[] =
+  OBJECTIVES.filter((o) => !OBJECTIVES_NEEDING_MIGRATION.includes(o));
+
+/** Placeholder for a draft saved before the user named it. */
+export const UNTITLED_CAMPAIGN_NAME = "Borrador sin título";
+
+/**
+ * The name that will actually be persisted.
+ *
+ * `name` is NOT NULL with no default, so an unnamed draft cannot reach the
+ * table. Rather than block the save, the placeholder is filled in — and it is
+ * resolved *here*, by both the wizard and the server action, so the two cannot
+ * disagree about what got stored.
+ */
+export function resolvedCampaignName(name: string): string {
+  const trimmed = name.trim();
+  return trimmed || UNTITLED_CAMPAIGN_NAME;
+}
+
+/**
+ * Can this draft be stored safely?
+ *
+ * Deliberately NOT the same question as "is it finished". A draft is a
+ * work-in-progress: missing creatives, targeting or destination are expected
+ * and must not block saving. What this refuses is only what the `ad_campaigns`
+ * table itself refuses — a NOT NULL column with nothing to put in it, a CHECK
+ * that would fail, or a value we cannot convert without corrupting it.
+ *
+ * Everything else lives in `validateAll` (draft completeness) and, later, in
+ * the Meta publish readiness check.
+ */
+export function validateDraftForSave(d: CampaignDraft): Errors {
+  const e: Errors = {};
+
+  // objective: NOT NULL, and constrained to a fixed set.
+  if (!d.objective) {
+    e.objective = "Elige un objetivo para poder guardar el borrador.";
+  } else if (!OBJECTIVES_ALLOWED_BY_DB.includes(d.objective)) {
+    e.objective =
+      'El objetivo "Interacción" todavía no está permitido en la base de datos. ' +
+      "Aplica scripts/ads-campaigns-objective-engagement.sql para habilitarlo.";
+  }
+
+  // name: NOT NULL, but an empty one is filled in rather than refused, so it
+  // never appears here.
+
+  // budget_amount: nullable, but CHECK (> 0) when present. An empty field is a
+  // legitimate unfinished draft and is stored as null — never as 0.
+  const rawBudget = d.budgetAmount.trim();
+  if (rawBudget) {
+    const amount = Number(rawBudget);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      e.budgetAmount = "El importe debe ser mayor que 0, o déjalo vacío.";
+    }
+  }
+
+  // An unresolvable zone would silently store the wrong instant.
+  if (!isValidTimeZone(d.timezone)) {
+    e.timezone = "La zona horaria no es válida.";
+  }
+
+  // CHECK (ends_at is null or starts_at is null or ends_at > starts_at).
+  if (d.startsAt && d.endsAt && d.endsAt <= d.startsAt) {
+    e.endsAt = "La fecha de fin debe ser posterior a la de inicio.";
+  }
+
+  // Optional URLs: empty is fine, malformed is not — it would be persisted.
+  const customUrl = d.customUrl.trim();
+  if (customUrl && !isHttpUrl(customUrl)) {
+    e.customUrl = "La URL debe empezar por http:// o https://";
+  }
+  for (const ad of d.creative.ads) {
+    const dest = ad.destinationUrl.trim();
+    if (dest && !isHttpUrl(dest)) {
+      e[`ad.${ad.id}.destinationUrl`] = "La URL debe empezar por http:// o https://";
+    }
+  }
+
+  return e;
+}
+
+/**
+ * How far the draft is from being publishable, counted locally.
+ *
+ * This is `validateAll` and nothing more: the draft's own rules. It knows
+ * nothing about the Meta connection, nor whether interest ids or audiences are
+ * still valid — the publish readiness check adds those. Named to keep that
+ * distinction visible at the call site.
+ */
+export function countLocalDraftGaps(d: CampaignDraft): number {
+  return Object.keys(validateAll(d)).length;
 }
 
 export function validateAll(d: CampaignDraft): Errors {

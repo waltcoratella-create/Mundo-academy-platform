@@ -7,7 +7,8 @@ import { X, Check, AlertCircle, ChevronRight } from "lucide-react";
 import { uploadAdCreative } from "@/app/actions/upload-actions";
 import type { CampaignDraft, Errors, MetaAccountBinding } from "../campaign-types";
 import {
-  TOTAL_STEPS, PHASES, phaseOfStep, emptyDraft, validateStep, validateAll,
+  TOTAL_STEPS, PHASES, phaseOfStep, emptyDraft, validateStep,
+  validateDraftForSave, countLocalDraftGaps, resolvedCampaignName,
   DEFAULT_TIMEZONE, effectiveCurrency, effectiveTimezone,
 } from "../campaign-types";
 import { saveCampaignDraft } from "../../campaign-actions";
@@ -71,7 +72,7 @@ export function CampaignWizard({
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [done, setDone] = useState<null | { published: boolean }>(null);
+  const [done, setDone] = useState<null | { published: boolean; localGaps: number }>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
 
   /** Last URL we auto-filled, so manual edits are never clobbered. */
@@ -150,12 +151,19 @@ export function CampaignWizard({
   }
 
   async function handleSubmit(publishIntent: boolean) {
-    const e = validateAll(draft);
+    // Saving only asks whether the row can be stored. An unfinished draft —
+    // no creatives, no destination, unresolved targeting — is expected and
+    // must go through; what is still missing is reported afterwards instead.
+    const e = validateDraftForSave(draft);
     if (Object.keys(e).length > 0) {
       setErrors(e);
-      setSaveError("Revisa los pasos marcados: falta información obligatoria.");
+      setSaveError(Object.values(e)[0]);
       return;
     }
+
+    // Counted before the request so the confirmation can say what is left.
+    // Local only: this knows nothing about Meta — see countLocalDraftGaps.
+    const localGaps = countLocalDraftGaps(draft);
 
     setSaving(true);
     setSaveError(null);
@@ -168,7 +176,7 @@ export function CampaignWizard({
         return;
       }
       setDirty(false);
-      setDone({ published: publishIntent });
+      setDone({ published: publishIntent, localGaps });
       // Refresh so the new draft is in the dashboard table on return.
       router.refresh();
     } catch {
@@ -204,6 +212,21 @@ export function CampaignWizard({
                 ? PUBLISH_BLOCKED_MESSAGE
                 : "Puedes seguir editándola cuando quieras desde el panel de Anuncios."}
             </p>
+            {/* A local count of the draft's own gaps. It deliberately says
+                nothing about the Meta connection, interest validity or
+                audiences — the publish readiness check will. */}
+            {done.localGaps > 0 && (
+              <p className="adsc-done__gaps">
+                {done.localGaps === 1
+                  ? "Falta 1 elemento para poder publicarla."
+                  : `Faltan ${done.localGaps} elementos para poder publicarla.`}
+              </p>
+            )}
+            {draft.name.trim() === "" && (
+              <p className="adsc-done__gaps">
+                Se guardó como «{resolvedCampaignName(draft.name)}». Puedes renombrarla al editarla.
+              </p>
+            )}
             <Link href={adsHref} className="ads-btn-primary" style={{ marginTop: 4 }}>
               Volver a Anuncios
             </Link>

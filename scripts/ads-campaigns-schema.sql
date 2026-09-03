@@ -41,7 +41,7 @@ begin
   if not exists (select 1 from pg_constraint
     where conrelid = 'public.ad_campaigns'::regclass and conname = 'ad_campaigns_objective_chk') then
     alter table public.ad_campaigns add constraint ad_campaigns_objective_chk
-      check (objective in ('sales','leads','traffic','awareness'));
+      check (objective in ('sales','leads','engagement','traffic','awareness'));
   end if;
 
   if not exists (select 1 from pg_constraint

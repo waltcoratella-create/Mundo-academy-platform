@@ -1840,3 +1840,11 @@
   cursor: pointer;
 }
 .ads-create .w-geolink--btn:disabled { opacity: 0.5; cursor: default; }
+
+/* Post-save note: what the draft still lacks, counted locally. */
+.ads-create .adsc-done__gaps {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--w-muted, rgba(0, 0, 0, 0.55));
+}

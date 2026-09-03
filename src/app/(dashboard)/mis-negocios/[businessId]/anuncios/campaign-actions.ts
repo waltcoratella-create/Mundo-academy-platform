@@ -5,7 +5,9 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { zonedLocalToUtc, isValidTimeZone } from "@/lib/timezone";
 import type { CampaignDraft, CampaignRow, PaymentLinkOption } from "./create/campaign-types";
-import { validateAll, draftFromRow, normalizeAudience } from "./create/campaign-types";
+import {
+  validateDraftForSave, draftFromRow, normalizeAudience, resolvedCampaignName,
+} from "./create/campaign-types";
 import { getMetaAccountBinding } from "./meta-account";
 
 export type SaveResult =
@@ -142,7 +144,12 @@ export async function saveCampaignDraft(params: {
     if (!userId) return { ok: false, error: "No tienes permiso sobre este negocio." };
 
     // Re-validate server-side; the client checks are UX only.
-    const errors = validateAll(draft);
+    //
+    // Only what the table itself refuses. A draft is allowed to be unfinished —
+    // no creatives, no destination, unresolved targeting — because "can this be
+    // stored" and "is this ready to publish" are different questions, and the
+    // second one is not asked here.
+    const errors = validateDraftForSave(draft);
     if (Object.keys(errors).length > 0) {
       return { ok: false, error: Object.values(errors)[0] };
     }
@@ -169,14 +176,18 @@ export async function saveCampaignDraft(params: {
     // can never drift apart.
     const payload = {
       product_id: draft.destinationKind === "product" ? draft.productId : null,
-      name: draft.name.trim(),
+      // NOT NULL with no default: an unnamed draft gets the placeholder instead
+      // of being refused. Resolved by the same helper the wizard uses.
+      name: resolvedCampaignName(draft.name),
       objective: draft.objective,
       // The campaign-level column takes the first ad's destination; every ad is
       // seeded from the same Build selection, so they agree unless deliberately
       // overridden per ad.
       destination_url: draft.creative.ads[0]?.destinationUrl.trim() || null,
       budget_type: draft.budgetType,
-      budget_amount: Number(draft.budgetAmount),
+      // `Number("")` is 0, which violates CHECK (budget_amount > 0). An empty
+      // field means "not decided yet", so it is stored as null.
+      budget_amount: draft.budgetAmount.trim() ? Number(draft.budgetAmount) : null,
       currency: draft.currency,
       starts_at: startsAt,
       ends_at: endsAt,
