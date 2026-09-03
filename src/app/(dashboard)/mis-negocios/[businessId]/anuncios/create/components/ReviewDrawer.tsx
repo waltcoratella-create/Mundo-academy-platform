@@ -152,6 +152,51 @@ function ReadinessBlock({
   );
 }
 
+/**
+ * What still stands between this draft and a published campaign.
+ *
+ * This used to be one fixed sentence telling everyone to connect their Meta
+ * account — which read as false the moment an account WAS connected, and
+ * contradicted a green "Listo para publicar" right above it. The state now
+ * comes from the readiness result, so the note can only say things the check
+ * actually established.
+ *
+ * It never restates an individual issue: those are already listed above with
+ * their own remediation. It answers the one question the list does not, which
+ * is what happens when you press the button.
+ */
+function PublishNote({
+  loading,
+  error,
+  result,
+}: {
+  loading: boolean;
+  error: string | null;
+  result: ReadinessResult | null;
+}) {
+  // While we do not know, we say nothing: ReadinessBlock is already showing
+  // the spinner or the failure.
+  if (loading || error || !result) return null;
+
+  const disconnected = [...result.errors, ...result.warnings].some(
+    (issue) =>
+      issue.code === "META_NOT_CONNECTED" || issue.code === "META_CONNECTION_EXPIRED"
+  );
+
+  const message = disconnected
+    ? "Conecta tu cuenta publicitaria de Meta para publicar. Por ahora la campaña se guarda como borrador."
+    : result.ready
+      ? "La publicación automática todavía no está disponible. Por ahora la campaña se guarda como borrador."
+      : "Resuelve los puntos anteriores para poder publicar. Por ahora la campaña se guarda como borrador.";
+
+  return (
+    <div className="adsc-alert" data-tone="amber">
+      <AlertCircle size={16} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+      <span>{message}</span>
+    </div>
+  );
+}
+
 function labelFor(options: { value: string; label: string }[], value: string): string {
   return options.find((o) => o.value === value)?.label ?? value;
 }
@@ -366,15 +411,11 @@ export function ReviewDrawer({
             ))}
           </Section>
 
-          {/* Publishing is not wired: nothing is sent to Meta yet, so the flow
-              deliberately stops at "saved draft" instead of pretending. */}
-          <div className="adsc-alert" data-tone="amber">
-            <AlertCircle size={16} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
-            <span>
-              Conecta tu cuenta publicitaria de Meta para publicar. Por ahora la campaña se
-              guarda como borrador.
-            </span>
-          </div>
+          <PublishNote
+            loading={readinessLoading}
+            error={readinessError}
+            result={readiness}
+          />
 
           {saveError && (
             <div className="adsc-alert" data-tone="error" role="alert">

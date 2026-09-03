@@ -110,3 +110,31 @@ export function utcToZonedLocal(utc: string | null, timeZone: string): string {
 export function nowInZone(timeZone: string): string {
   return utcToZonedLocal(new Date().toISOString(), timeZone);
 }
+
+/**
+ * `"2026-09-10T09:00"` + `"Europe/Madrid"` → `"2026-09-10T09:00:00+02:00"`.
+ *
+ * The shape Meta wants for `start_time`: a wall clock plus the offset that
+ * actually applied at that instant. A bare `"2026-09-10"` is read as 00:00
+ * local. The offset is never hardcoded — it comes from `zoneOffsetMs` at the
+ * resolved instant, so the same date in July and in January yields +02:00 and
+ * +01:00 respectively without anything here knowing what DST is.
+ *
+ * Returns null when the input or the zone is unusable, so a caller can refuse
+ * rather than send Meta an ambiguous time.
+ */
+export function zonedLocalToOffsetIso(local: string, timeZone: string): string | null {
+  const utc = zonedLocalToUtc(local, timeZone);
+  if (!utc) return null;
+
+  const instant = Date.parse(utc);
+  const offsetMs = zoneOffsetMs(instant, timeZone);
+  const wallClock = new Date(instant + offsetMs).toISOString().slice(0, 19);
+
+  const sign = offsetMs < 0 ? "-" : "+";
+  const abs = Math.abs(offsetMs);
+  const hh = String(Math.floor(abs / 3_600_000)).padStart(2, "0");
+  const mm = String(Math.floor((abs % 3_600_000) / 60_000)).padStart(2, "0");
+
+  return `${wallClock}${sign}${hh}:${mm}`;
+}
