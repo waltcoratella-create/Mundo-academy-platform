@@ -311,7 +311,8 @@ export function CampaignWizard({
       </div>
       </div>
 
-      {/* Fixed footer bar — "Siguiente" on the right, per the reference. */}
+      {/* Fixed footer bar — "Guardar borrador" plus the step's own primary
+          action on the right, per the reference. */}
       <footer className="w-footer">
         <div className="w-footer__inner">
           <button
@@ -325,26 +326,31 @@ export function CampaignWizard({
           </button>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {/* Save Draft sits outside the step branch on purpose: a draft can
+                be stored from Campaign, Build or Creatives alike. It runs the
+                same handler in all three, gated only by validateDraftForSave,
+                so reaching the last step is no longer a precondition for
+                keeping unfinished work. "Siguiente" keeps its own stricter
+                validateStep guidance untouched. */}
+            <button
+              type="button"
+              className="w-btn w-btn--ghost"
+              onClick={() => void handleSubmit(false)}
+              disabled={saving}
+            >
+              {saving ? "Guardando…" : "Guardar borrador"}
+            </button>
+
             {isReview ? (
-              <>
-                <button
-                  type="button"
-                  className="w-btn w-btn--ghost"
-                  onClick={() => void handleSubmit(false)}
-                  disabled={saving}
-                >
-                  {saving ? "Guardando…" : "Guardar borrador"}
-                </button>
-                <button
-                  type="button"
-                  className="w-btn w-btn--primary"
-                  onClick={() => setReviewOpen(true)}
-                  disabled={saving}
-                >
-                  Revisar y finalizar
-                  <ChevronRight size={16} strokeWidth={2.4} aria-hidden="true" />
-                </button>
-              </>
+              <button
+                type="button"
+                className="w-btn w-btn--primary"
+                onClick={() => setReviewOpen(true)}
+                disabled={saving}
+              >
+                Revisar y finalizar
+                <ChevronRight size={16} strokeWidth={2.4} aria-hidden="true" />
+              </button>
             ) : (
               <button type="button" className="w-btn w-btn--primary" onClick={handleNext} disabled={saving}>
                 Siguiente
