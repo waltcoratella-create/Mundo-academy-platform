@@ -1721,10 +1721,15 @@
   flex: 1; overflow-y: auto; padding: 16px;
   display: flex; flex-direction: column; gap: 20px;
 }
+/* Two rows by design: the two secondary actions share the first, and the one
+   action that creates something in Meta takes the full width below. Three
+   buttons in one row did not fit the drawer and broke every label in two. */
 .ads-create .cr-drawer__foot {
-  flex: none; display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 12px 16px; border-top: 1px solid var(--w-stroke);
+  flex: none; display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px; padding: 12px 16px; border-top: 1px solid var(--w-stroke);
 }
+.ads-create .cr-drawer__foot .w-btn { white-space: nowrap; min-width: 0; }
+.ads-create .cr-drawer__foot .w-btn--primary { grid-column: 1 / -1; }
 
 /* ── Mobile: rail becomes a sheet, canvas takes the width ──────────────── */
 

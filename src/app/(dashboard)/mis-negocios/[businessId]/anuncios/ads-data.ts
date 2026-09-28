@@ -55,8 +55,6 @@ export interface AdsData {
   };
   stats: AdsStats;
   profitability: AdsProfitability;
-  /** false → show the amber "configura la facturación" banner */
-  billingConfigured: boolean;
   campaigns: AdCampaign[];
 }
 
@@ -172,7 +170,6 @@ export async function getAdsData(businessId: string): Promise<AdsData> {
     spend: { total: money(0, "USD"), dateLabel, series },
     stats: { costPer1kImpressions: money(0, "USD"), costPerClick: money(0, "USD") },
     profitability: { spend: money(0, "USD"), costPerResult: null },
-    billingConfigured: false,
     campaigns,
   };
 }

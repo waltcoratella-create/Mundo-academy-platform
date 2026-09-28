@@ -77,40 +77,6 @@
 .ads-page .ads-side-row__label { font-size: 14px; line-height: 20px; color: var(--gray-11); }
 .ads-page .ads-side-row__value { font-size: 16px; line-height: 24px; color: var(--gray-12); font-weight: 500; }
 
-/* Billing banner — amber */
-.ads-page .ads-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  background: var(--amber-2);
-  border: 1px solid var(--amber-6);
-  border-radius: 8px;
-  padding: 16px;
-}
-.ads-page .ads-banner__body { display: flex; align-items: flex-start; gap: 12px; }
-.ads-page .ads-banner__title { font-size: 14px; font-weight: 600; line-height: 20px; color: var(--amber-12); }
-.ads-page .ads-banner__text { font-size: 13px; font-weight: 400; line-height: 18px; color: var(--amber-11); margin-top: 2px; }
-.ads-page .ads-banner__btn {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  height: 32px;
-  padding: 0 14px;
-  border-radius: 8px;
-  border: none;
-  background: var(--amber-9);
-  color: var(--amber-12);
-  font-family: var(--whop-font-inter), sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 120ms ease;
-}
-.ads-page .ads-banner__btn:hover { background: var(--amber-10); }
-
 /* Tabs */
 .ads-page .ads-tabs { display: flex; align-items: center; gap: 24px; }
 .ads-page .ads-tab {

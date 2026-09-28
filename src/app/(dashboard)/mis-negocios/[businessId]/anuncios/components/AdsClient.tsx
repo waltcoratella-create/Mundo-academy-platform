@@ -6,7 +6,6 @@ import { AdsHeader } from "./AdsHeader";
 import { SpendChart } from "./SpendChart";
 import { StatsCard } from "./StatsCard";
 import { ProfitabilityCard } from "./ProfitabilityCard";
-import { BillingBanner } from "./BillingBanner";
 import { AdsTabs, type AdsTabKey } from "./AdsTabs";
 import { CampaignTable } from "./CampaignTable";
 import { SupportFooter } from "./SupportFooter";
@@ -26,13 +25,11 @@ export function AdsClient({
   data,
   createHref,
   chatHref,
-  billingHref,
   campaignHrefBase,
 }: {
   data: AdsData;
   createHref: string;
   chatHref: string;
-  billingHref?: string;
   campaignHrefBase?: string;
 }) {
   const [tab, setTab] = useState<AdsTabKey>("campaigns");
@@ -53,7 +50,6 @@ export function AdsClient({
         </div>
       </div>
 
-      {!data.billingConfigured && <BillingBanner onConfigure={billingHref} />}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         <AdsTabs active={tab} onSelect={setTab} query={query} onQuery={setQuery} />
