@@ -90,7 +90,9 @@ function defaultGraph() {
 const posts = () =>
   m.graph.mock.calls.filter(([o]) => o.method === "POST").map(([o]) => o.path.split("/").pop());
 
-const run = () => publishCampaignToMeta({ businessId: "biz", adCampaignId: CAMPAIGN, draft: draft() });
+const VERSION = "2026-09-28T10:00:00.123456+00:00";
+const run = () =>
+  publishCampaignToMeta({ businessId: "biz", adCampaignId: CAMPAIGN, draft: draft(), expectedVersion: VERSION });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -170,16 +172,38 @@ describe("gates — zero creation POSTs when any of them fails", () => {
     expect(m.acquire).not.toHaveBeenCalled();
   });
 
-  it("already published → ALREADY_PUBLISHED, no POST", async () => {
-    m.acquire.mockResolvedValue({ ok: false, reason: "already_published", link: null });
-    expect(await run()).toMatchObject({ ok: false, code: "ALREADY_PUBLISHED" });
-    expect(posts()).toEqual([]);
+});
+
+describe("the atomic lock decides — and a refusal means zero calls to Meta", () => {
+  it("correct version → the lock is requested with that exact version, then the run proceeds", async () => {
+    const r = await run();
+    expect(m.acquire).toHaveBeenCalledWith(CAMPAIGN, VERSION);
+    expect(r.ok).toBe(true);
   });
 
-  it("a concurrent run holds the lock → BUSY, no POST", async () => {
-    m.acquire.mockResolvedValue({ ok: false, reason: "busy", link: null });
+  it("draft changed before the lock → DRAFT_CHANGED, zero Meta calls of any kind", async () => {
+    m.acquire.mockResolvedValue({ ok: false, reason: "draft_changed" });
+    expect(await run()).toMatchObject({ ok: false, code: "DRAFT_CHANGED" });
+    expect(m.graph).not.toHaveBeenCalled();
+    expect(m.markFailed).not.toHaveBeenCalled();
+  });
+
+  it("BUSY → zero Meta calls", async () => {
+    m.acquire.mockResolvedValue({ ok: false, reason: "busy" });
     expect(await run()).toMatchObject({ ok: false, code: "BUSY" });
-    expect(posts()).toEqual([]);
+    expect(m.graph).not.toHaveBeenCalled();
+  });
+
+  it("ALREADY_PUBLISHED → zero Meta calls", async () => {
+    m.acquire.mockResolvedValue({ ok: false, reason: "already_published" });
+    expect(await run()).toMatchObject({ ok: false, code: "ALREADY_PUBLISHED" });
+    expect(m.graph).not.toHaveBeenCalled();
+  });
+
+  it("not publishable → zero Meta calls", async () => {
+    m.acquire.mockResolvedValue({ ok: false, reason: "not_publishable" });
+    expect(await run()).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect(m.graph).not.toHaveBeenCalled();
   });
 });
 

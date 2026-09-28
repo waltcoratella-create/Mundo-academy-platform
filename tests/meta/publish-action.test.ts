@@ -81,15 +81,14 @@ describe("publishCampaign", () => {
     expect(m.pipeline).not.toHaveBeenCalled();
   });
 
-  it("already published → refused without touching the pipeline", async () => {
-    m.campaignRow.mockReturnValue({ id: "camp_1", status: "published", updated_at: V });
-    expect(await publishCampaign("biz_1", "camp_1", V)).toMatchObject({ ok: false, code: "ALREADY_PUBLISHED" });
-    expect(m.pipeline).not.toHaveBeenCalled();
+  it("passes the confirmed version to the pipeline instead of judging it itself", async () => {
+    await publishCampaign("biz_1", "camp_1", "the-confirmed-version");
+    expect(m.pipeline).toHaveBeenCalledWith(expect.objectContaining({ expectedVersion: "the-confirmed-version" }));
   });
 
-  it("draft changed since the confirmed preview → DRAFT_CHANGED, nothing sent", async () => {
-    expect(await publishCampaign("biz_1", "camp_1", "an-older-version")).toMatchObject({ ok: false, code: "DRAFT_CHANGED" });
-    expect(m.pipeline).not.toHaveBeenCalled();
+  it("DRAFT_CHANGED from the lock is passed through", async () => {
+    m.pipeline.mockResolvedValue({ ok: false, code: "DRAFT_CHANGED", message: "cambió" });
+    expect(await publishCampaign("biz_1", "camp_1", "old")).toMatchObject({ ok: false, code: "DRAFT_CHANGED" });
   });
 
   it("the pipeline's refusal is passed through with its reasons", async () => {

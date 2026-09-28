@@ -230,6 +230,19 @@ export async function saveCampaignDraft(params: {
     };
 
     if (campaignId) {
+      // The version this save is based on. The update below only applies if
+      // the row is still at it: when a publish takes the lock it moves
+      // updated_at forward in the same transaction, so a save that was waiting
+      // on that lock re-checks against the new row and writes nothing.
+      const { data: current } = await supabase
+        .from("ad_campaigns")
+        .select("updated_at")
+        .eq("id", campaignId)
+        .eq("business_id", businessId)
+        .maybeSingle();
+      const readVersion = (current as { updated_at: string } | null)?.updated_at;
+      if (!readVersion) return { ok: false, error: NOT_EDITABLE };
+
       // A draft whose objects already exist in Meta (fully or partly) is the
       // record of what was sent: it is not rewritten from the builder.
       if ((await publishStateOf(campaignId, "draft")) !== "draft") {
@@ -241,13 +254,18 @@ export async function saveCampaignDraft(params: {
         .eq("id", campaignId)
         .eq("business_id", businessId)
         .eq("status", "draft")
+        .eq("updated_at", readVersion)
         .select("id")
         .maybeSingle();
 
       if (error) return failed(error);
       if (!data) {
-        // Either it does not exist, belongs elsewhere, or is no longer a draft.
-        return { ok: false, error: NOT_EDITABLE };
+        // It does not exist, belongs elsewhere, is no longer a draft, or moved
+        // on since it was read — a publish started, or another tab saved.
+        return {
+          ok: false,
+          error: "La campaña cambió o se está publicando. Recarga la página para ver su estado.",
+        };
       }
       revalidatePath(`/mis-negocios/${businessId}/anuncios`);
       return { ok: true, id: (data as { id: string }).id, mode: "updated" };

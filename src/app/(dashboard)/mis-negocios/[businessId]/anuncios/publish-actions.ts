@@ -173,7 +173,7 @@ export type PublishActionResult =
   | { ok: true; publishState: "published" }
   | {
       ok: false;
-      code: PublishFailureCode | "FORBIDDEN" | "NOT_FOUND" | "DRAFT_CHANGED";
+      code: PublishFailureCode | "FORBIDDEN";
       error: string;
       reasons?: string[];
     };
@@ -181,8 +181,9 @@ export type PublishActionResult =
 /**
  * Create the campaign in Meta, PAUSED. Resumes an incomplete publish.
  *
- * `expectedVersion` is the stamp from the preview the person confirmed; if the
- * draft changed since, nothing is sent and they are asked to review again.
+ * `expectedVersion` is the stamp from the preview the person confirmed. It is
+ * compared inside the lock transaction; if the draft changed since, nothing is
+ * locked, nothing is sent, and the result is DRAFT_CHANGED.
  */
 export async function publishCampaign(
   businessId: string,
@@ -198,17 +199,11 @@ export async function publishCampaign(
   const business = await ownedBusiness(businessId);
   if (!business) return { ok: false, code: "FORBIDDEN", error: FORBIDDEN };
 
+  // Scopes the campaign to this business. Its status and version are NOT
+  // judged here: the lock RPC decides both inside one transaction, so no
+  // check out here can leave a window between "still the same" and "locked".
   const row = await ownedCampaignRow(business.id, campaignId);
   if (!row) return { ok: false, code: "NOT_FOUND", error: NOT_FOUND };
-  if (row.status === "published") {
-    return { ok: false, code: "ALREADY_PUBLISHED", error: "Esta campaña ya está publicada en Meta." };
-  }
-  if (row.updated_at !== expectedVersion) {
-    return {
-      ok: false, code: "DRAFT_CHANGED",
-      error: "La campaña cambió desde que la revisaste. Vuelve a abrir la revisión antes de publicar.",
-    };
-  }
 
   const loaded = await loadDraft(business.id, campaignId);
   if (!loaded.ok) return { ok: false, code: "NOT_FOUND", error: loaded.error };
@@ -217,6 +212,7 @@ export async function publishCampaign(
     businessId: business.id,
     adCampaignId: campaignId,
     draft: loaded.draft,
+    expectedVersion,
   });
 
   revalidatePath(`/mis-negocios/${business.id}/anuncios`);

@@ -40,6 +40,8 @@ export type PublishFailureCode =
   | "NO_CONNECTION"
   | "META_ERROR"
   | "LOCK_LOST"
+  | "DRAFT_CHANGED"
+  | "NOT_FOUND"
   | "STATE_ERROR";
 
 /**
@@ -134,8 +136,13 @@ export async function publishCampaignToMeta(params: {
   businessId: string;
   adCampaignId: string;
   draft: CampaignDraft;
+  /**
+   * ad_campaigns.updated_at of the draft the person confirmed. Checked only
+   * inside the lock transaction — never separately.
+   */
+  expectedVersion: string;
 }): Promise<PublishOutcome> {
-  const { businessId, adCampaignId, draft } = params;
+  const { businessId, adCampaignId, draft, expectedVersion } = params;
 
   // ── Gate 0: emergency stop — before any read, before any lock ─────────────
   if (isPublishKillSwitchOn()) {
@@ -195,7 +202,7 @@ export async function publishCampaignToMeta(params: {
   // ── Gate 3: exclusive ownership ───────────────────────────────────────────
   let acquired;
   try {
-    acquired = await acquirePublishLock(adCampaignId);
+    acquired = await acquirePublishLock(adCampaignId, expectedVersion);
   } catch (e) {
     return {
       ok: false, code: "STATE_ERROR",
@@ -203,9 +210,19 @@ export async function publishCampaignToMeta(params: {
     };
   }
   if (!acquired.ok) {
-    return acquired.reason === "already_published"
-      ? { ok: false, code: "ALREADY_PUBLISHED", message: "Esta campaña ya se publicó en Meta." }
-      : { ok: false, code: "BUSY", message: "Ya hay una publicación en curso para esta campaña." };
+    switch (acquired.reason) {
+      case "already_published":
+        return { ok: false, code: "ALREADY_PUBLISHED", message: "Esta campaña ya se publicó en Meta." };
+      case "busy":
+        return { ok: false, code: "BUSY", message: "Ya hay una publicación en curso para esta campaña." };
+      case "draft_changed":
+        return {
+          ok: false, code: "DRAFT_CHANGED",
+          message: "La campaña cambió desde que la revisaste. Vuelve a abrir la revisión antes de publicar.",
+        };
+      default:
+        return { ok: false, code: "NOT_FOUND", message: "La campaña ya no está disponible para publicar." };
+    }
   }
 
   const { token: lockToken } = acquired;

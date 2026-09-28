@@ -3,8 +3,9 @@
  *
  * Deliberately free of `server-only` and of any client: this is the part of the
  * pipeline that can be reasoned about — and tested — without a database or a
- * Meta credential. `publish-links.ts` builds its SQL from these same constants,
- * so the rule the tests exercise is the rule the UPDATE enforces.
+ * Meta credential. The lock rule itself is enforced in SQL by
+ * acquire_publish_lock; `canAcquire` states the same rule so it can be tested,
+ * and the stale window is passed to the RPC from STALE_LOCK_MINUTES here.
  */
 
 export type PublishStatus = "idle" | "running" | "partial" | "failed" | "published";
@@ -39,14 +40,6 @@ export function canAcquire(
   const started = Date.parse(attemptStartedAt);
   if (Number.isNaN(started)) return false;
   return started < now.getTime() - STALE_LOCK_MINUTES * 60_000;
-}
-
-/** The PostgREST `or(...)` filter matching `canAcquire`, built from the same list. */
-export function acquireFilter(staleBefore: string): string {
-  return (
-    `publish_status.in.(${ACQUIRABLE_STATUSES.join(",")}),` +
-    `and(publish_status.eq.running,attempt_started_at.lt.${staleBefore})`
-  );
 }
 
 export function staleThreshold(now: Date = new Date()): string {

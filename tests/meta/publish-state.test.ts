@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  canAcquire, acquireFilter, nextStatusOnFailure, resumeStepFrom, staleThreshold,
+  canAcquire, nextStatusOnFailure, resumeStepFrom, staleThreshold,
 } from "@/lib/meta/publish-state";
 
 const now = new Date("2026-09-03T12:00:00Z");
@@ -27,13 +27,8 @@ describe("canAcquire — the predicate the conditional UPDATE encodes", () => {
   });
 });
 
-describe("acquireFilter", () => {
-  it("is built from exactly the acquirable statuses", () => {
-    expect(acquireFilter("T").startsWith("publish_status.in.(idle,partial,failed),")).toBe(true);
-    expect(acquireFilter("T")).not.toContain("published");
-    expect(acquireFilter("T")).toContain("and(publish_status.eq.running,attempt_started_at.lt.T)");
-  });
-  it("uses a 10 minute stale window", () => {
+describe("stale window", () => {
+  it("is 10 minutes — the value passed to acquire_publish_lock", () => {
     expect(staleThreshold(now)).toBe(new Date(now.getTime() - 600_000).toISOString());
   });
 });

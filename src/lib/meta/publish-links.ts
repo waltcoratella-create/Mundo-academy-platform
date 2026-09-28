@@ -13,7 +13,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export type { PublishStatus, PublishStep } from "./publish-state";
 import type { PublishStatus, PublishStep } from "./publish-state";
-import { acquireFilter, nextStatusOnFailure, staleThreshold } from "./publish-state";
+import { nextStatusOnFailure, staleThreshold } from "./publish-state";
 
 export interface CampaignLink {
   adCampaignId: string;
@@ -79,15 +79,6 @@ function fail(error: { code?: string; message?: string }): never {
   throw new PublishLinkError("No se pudo leer o escribir el estado de publicación.");
 }
 
-/** Create the row if this campaign has never been published. Idempotent. */
-async function ensureRow(adCampaignId: string): Promise<void> {
-  const supabase = createAdminClient();
-  const { error } = await supabase
-    .from(TABLE)
-    .upsert({ ad_campaign_id: adCampaignId }, { onConflict: "ad_campaign_id", ignoreDuplicates: true });
-  if (error) fail(error);
-}
-
 export async function getCampaignLink(adCampaignId: string): Promise<CampaignLink | null> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
@@ -111,62 +102,62 @@ export async function getAdLinks(adCampaignId: string): Promise<AdLink[]> {
 
 export type AcquireResult =
   | { ok: true; token: string; link: CampaignLink }
-  | { ok: false; reason: "busy" | "already_published"; link: CampaignLink | null };
+  | {
+      ok: false;
+      reason: "busy" | "already_published" | "draft_changed" | "not_found" | "not_publishable";
+    };
+
+const ACQUIRE_OUTCOMES: Record<string, Exclude<AcquireResult, { ok: true }>["reason"]> = {
+  BUSY: "busy",
+  ALREADY_PUBLISHED: "already_published",
+  DRAFT_CHANGED: "draft_changed",
+  NOT_FOUND: "not_found",
+  NOT_PUBLISHABLE: "not_publishable",
+};
 
 /**
- * Take exclusive ownership of the publish for this campaign.
+ * Take exclusive ownership of the publish — only if the draft is still the
+ * version the person confirmed.
  *
- * The race is closed by a single conditional UPDATE, not by read-then-write:
+ * One call, one transaction: acquire_publish_lock
+ * (scripts/meta-publish-lock-rpc.sql) locks the campaign row, refuses a
+ * published campaign, refuses while another run holds the lock, refuses a
+ * draft whose updated_at moved since the preview, and only then takes the lock
+ * and moves updated_at forward. Nothing is written on any refusal.
  *
- *   update … set publish_status='running', attempt_token=<new>
- *   where ad_campaign_id = <id>
- *     and (publish_status in ('idle','partial','failed')
- *          or (publish_status='running' and attempt_started_at < now()-10min))
- *   returning *
+ * There is no separate version check anywhere else: a check outside this
+ * transaction would reopen exactly the window this closes. Saves are
+ * conditioned on the updated_at they read (campaign-actions.ts), so a save
+ * that was waiting on the row lock writes nothing once this commits.
  *
- * Postgres takes a row lock for the duration of the statement, so two
- * concurrent requests are serialised: the first flips the row and gets it back,
- * the second re-evaluates the WHERE against the already-updated row, matches
- * nothing, and returns zero rows. Zero rows means "someone else owns it" — no
- * second pipeline can start, and no read-modify-write window exists for two
- * callers to both observe 'idle'.
- *
- * The freshly generated token is what proves ownership afterwards: every write
- * from here on is conditioned on it, so a resumed run that lost the lock cannot
- * overwrite the state of the run that took it.
+ * The fresh token is what proves ownership afterwards: every write from here on
+ * is conditioned on it, so a run that lost the lock cannot overwrite the state
+ * of the run that took it.
  */
-export async function acquirePublishLock(adCampaignId: string): Promise<AcquireResult> {
-  await ensureRow(adCampaignId);
-
+export async function acquirePublishLock(
+  adCampaignId: string,
+  expectedVersion: string
+): Promise<AcquireResult> {
   const supabase = createAdminClient();
   const token = randomUUID();
-  const staleBefore = staleThreshold();
 
-  const { data, error } = await supabase
-    .from(TABLE)
-    .update({
-      publish_status: "running",
-      attempt_token: token,
-      attempt_started_at: new Date().toISOString(),
-      publish_error: null,
-    })
-    .eq("ad_campaign_id", adCampaignId)
-    .or(acquireFilter(staleBefore))
-    .select()
-    .maybeSingle();
-
+  const { data, error } = await supabase.rpc("acquire_publish_lock", {
+    p_ad_campaign_id: adCampaignId,
+    p_expected_updated_at: expectedVersion,
+    p_attempt_token: token,
+    p_stale_before: staleThreshold(),
+  });
   if (error) fail(error);
 
-  if (!data) {
-    const current = await getCampaignLink(adCampaignId);
-    return {
-      ok: false,
-      reason: current?.publishStatus === "published" ? "already_published" : "busy",
-      link: current,
-    };
+  if (data !== "ACQUIRED") {
+    const reason = ACQUIRE_OUTCOMES[String(data)];
+    if (!reason) throw new PublishLinkError("Respuesta inesperada al bloquear la publicación.");
+    return { ok: false, reason };
   }
 
-  return { ok: true, token, link: toCampaignLink(data) };
+  const link = await getCampaignLink(adCampaignId);
+  if (!link) throw new PublishLinkError("No se encontró el estado de publicación tras bloquearlo.");
+  return { ok: true, token, link };
 }
 
 /**
