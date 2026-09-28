@@ -37,7 +37,7 @@ export interface Transaction {
   user_email: string | null;
 }
 
-async function resolveSupabaseUserId(clerkUserId: string): Promise<string | null> {
+export async function resolveSupabaseUserId(clerkUserId: string): Promise<string | null> {
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("users")

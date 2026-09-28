@@ -4,6 +4,8 @@ import { getBusinessById, getBusinessSettings } from "@/lib/supabase/queries";
 import { SettingsCenter } from "@/components/dashboard/settings-form";
 import { getMetaConnectionForBusiness } from "@/lib/meta/connections";
 import { MetaConnectionPanel } from "./MetaConnectionPanel";
+import { DsaSettingsPanel } from "./DsaSettingsPanel";
+import { getDsaSettings } from "@/lib/meta/ad-settings";
 
 export default async function ConfiguracionesPage({
   params,
@@ -23,6 +25,9 @@ export default async function ConfiguracionesPage({
 
   // Safe fields only — MetaConnection has no token field by construction.
   const metaConnection = await getMetaConnectionForBusiness(business.id);
+  // A missing table or read error shows the empty form rather than breaking
+  // the whole settings page; saving will surface the real error.
+  const dsaSettings = await getDsaSettings(business.id).catch(() => null);
 
   return (
     <>
@@ -37,6 +42,7 @@ export default async function ConfiguracionesPage({
           flashError={searchParams.meta_error}
           justConnected={searchParams.meta === "connected"}
         />
+        <DsaSettingsPanel businessId={business.id} initial={dsaSettings} />
       </div>
     </>
   );
