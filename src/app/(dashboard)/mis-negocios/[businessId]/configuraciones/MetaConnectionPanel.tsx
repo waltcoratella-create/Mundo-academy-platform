@@ -82,16 +82,13 @@ export function MetaConnectionPanel({
     const pixel = assets?.pixels.find((p) => p.id === pixelId);
 
     startTransition(async () => {
+      // Ids only: names, currency and timezone are re-read from Meta on the
+      // server, so nothing shown in this picker can be forged into the row.
       const res = await saveMetaSelection({
         businessId,
         adAccountId: account.id,
-        adAccountName: account.name,
-        adAccountCurrency: account.currency,
-        adAccountTimezone: account.timezone,
         pageId: page.id,
-        pageName: page.name,
         pixelId: pixel?.id ?? null,
-        pixelName: pixel?.name ?? null,
       });
       if (res.ok) { setPicking(false); setError(null); }
       else setError(res.error);

@@ -1,3 +1,4 @@
+import type { ResolvedSelection } from "./asset-validation";
 /**
  * Meta connection contracts.
  *
@@ -141,16 +142,19 @@ export interface SaveMetaConnectionInput {
 }
 
 /** Input for the asset selection step (phase C). */
-export interface SelectMetaAssetsInput {
+/**
+ * What gets persisted: a selection already resolved against a server-side
+ * discovery. Names, currency and timezone here come from Meta, never from the
+ * browser — see asset-validation.ts.
+ */
+export type SelectMetaAssetsInput = { businessId: string } & ResolvedSelection;
+
+/** All the browser may send when choosing assets: ids, nothing else. */
+export interface SaveMetaSelectionRequest {
   businessId: string;
-  adAccountId?: string | null;
-  adAccountName?: string | null;
-  adAccountCurrency?: string | null;
-  adAccountTimezone?: string | null;
-  pageId?: string | null;
-  pageName?: string | null;
+  adAccountId: string;
+  pageId: string;
   pixelId?: string | null;
-  pixelName?: string | null;
 }
 
 export type MetaConnectionResult =

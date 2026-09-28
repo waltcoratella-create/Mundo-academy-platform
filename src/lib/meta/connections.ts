@@ -194,14 +194,14 @@ export async function selectMetaAssets(
   const { data, error } = await supabase
     .from(TABLE)
     .update({
-      ad_account_id: input.adAccountId ?? null,
-      ad_account_name: input.adAccountName ?? null,
-      ad_account_currency: input.adAccountCurrency ?? null,
-      ad_account_timezone: input.adAccountTimezone ?? null,
-      page_id: input.pageId ?? null,
-      page_name: input.pageName ?? null,
-      pixel_id: input.pixelId ?? null,
-      pixel_name: input.pixelName ?? null,
+      ad_account_id: input.adAccountId,
+      ad_account_name: input.adAccountName,
+      ad_account_currency: input.adAccountCurrency,
+      ad_account_timezone: input.adAccountTimezone,
+      page_id: input.pageId,
+      page_name: input.pageName,
+      pixel_id: input.pixelId,
+      pixel_name: input.pixelName,
     })
     .eq("id", existing.id)
     .select(PUBLIC_COLUMNS)

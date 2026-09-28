@@ -6,8 +6,11 @@ import { getBusinessById } from "@/lib/supabase/queries";
 import {
   getMetaConnectionForBusiness, selectMetaAssets, disconnectMetaConnection,
 } from "@/lib/meta/connections";
-import { discoverMetaAssets } from "@/lib/meta/discovery";
-import type { MetaConnection, MetaAssets } from "@/lib/meta/connection-types";
+import { discoverMetaAssets, discoverForValidation } from "@/lib/meta/discovery";
+import { resolveSelection } from "@/lib/meta/asset-validation";
+import type {
+  MetaConnection, MetaAssets, SaveMetaSelectionRequest,
+} from "@/lib/meta/connection-types";
 
 /**
  * Server actions for the Meta connection panel.
@@ -46,30 +49,29 @@ export type ConnectionActionResult =
 /**
  * Persist the chosen assets.
  *
- * The ad account's currency and timezone are stored alongside the ids: they
- * belong to the account, and the campaign builder must defer to them or a "200"
- * budget gets read in the wrong currency.
+ * The browser names ids and nothing else. Each one is re-checked against a
+ * discovery made here, with this business's own token: an ad account, page or
+ * pixel that discovery did not return is refused, and nothing is written. The
+ * names, currency and timezone stored next to the ids are copied from Meta —
+ * the builder locks currency and zone to them, so they must not be forgeable.
  */
-export async function saveMetaSelection(input: {
-  businessId: string;
-  adAccountId: string;
-  adAccountName: string;
-  adAccountCurrency: string | null;
-  adAccountTimezone: string | null;
-  pageId: string;
-  pageName: string;
-  pixelId?: string | null;
-  pixelName?: string | null;
-  metaBusinessId?: string | null;
-  metaBusinessName?: string | null;
-}): Promise<ConnectionActionResult> {
+export async function saveMetaSelection(
+  input: SaveMetaSelectionRequest
+): Promise<ConnectionActionResult> {
   if (!(await assertOwner(input.businessId))) {
     return { ok: false, error: "No tienes permiso sobre este negocio." };
   }
-  if (!input.adAccountId) return { ok: false, error: "Selecciona una cuenta publicitaria." };
-  if (!input.pageId) return { ok: false, error: "Selecciona una página de Facebook." };
 
-  const result = await selectMetaAssets(input);
+  const discovery = await discoverForValidation(input.businessId, input.adAccountId || null);
+  if (!discovery.ok) return { ok: false, error: discovery.error };
+
+  const resolved = resolveSelection(
+    { adAccountId: input.adAccountId, pageId: input.pageId, pixelId: input.pixelId },
+    discovery.discovered
+  );
+  if (!resolved.ok) return { ok: false, error: resolved.reasons.join(" ") };
+
+  const result = await selectMetaAssets({ businessId: input.businessId, ...resolved.selection });
   if (result.ok) revalidatePath(`/mis-negocios/${input.businessId}/configuraciones`);
   return result;
 }

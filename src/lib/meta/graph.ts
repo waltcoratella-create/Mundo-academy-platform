@@ -169,6 +169,19 @@ export interface GraphPage<T> {
 export async function metaGraphList<T>(
   options: GraphRequestOptions & { maxPages?: number }
 ): Promise<T[]> {
+  return (await metaGraphListPaged<T>(options)).items;
+}
+
+/**
+ * Same walk, but says whether it stopped early.
+ *
+ * Validation needs the difference: "not in the list" only means "not yours"
+ * when the list was complete. When it was cut at maxPages, a missing id is
+ * "could not verify", and the caller must say so instead of accusing.
+ */
+export async function metaGraphListPaged<T>(
+  options: GraphRequestOptions & { maxPages?: number }
+): Promise<{ items: T[]; truncated: boolean }> {
   const { maxPages = 3, ...rest } = options;
   const out: T[] = [];
   let after: string | undefined;
@@ -180,8 +193,8 @@ export async function metaGraphList<T>(
     });
     out.push(...(result.data ?? []));
     after = result.paging?.cursors?.after;
-    if (!after || !result.paging?.next) break;
+    if (!after || !result.paging?.next) return { items: out, truncated: false };
   }
 
-  return out;
+  return { items: out, truncated: true };
 }
