@@ -10,8 +10,10 @@ import "../../create/create.css";
 import { CampaignWizard } from "../../create/components/CampaignWizard";
 import { getCampaignDraft } from "../../campaign-actions";
 import { getMetaAccountBinding } from "../../meta-account";
-import { SmokePublishBridge } from "../../create/components/SmokePublishBridge";
-import { isPublishEnabled } from "@/lib/meta/publish";
+import { isPublishKillSwitchOn } from "@/lib/meta/publish";
+import { loadCampaignPublishView } from "@/lib/meta/publish-view";
+import { PublishedCampaignView } from "../../components/PublishedCampaignView";
+import { PublishIncompleteView } from "../../components/PublishIncompleteView";
 
 /**
  * Campaign builder — edit mode.
@@ -32,6 +34,37 @@ export default async function EditCampaignPage({
 
   const business = await getBusinessById(params.businessId, userId);
   if (!business) notFound();
+
+  const adsHrefEarly = `/mis-negocios/${business.id}/anuncios`;
+  const publishDisabled = isPublishKillSwitchOn();
+
+  // Where the campaign stands with Meta decides which screen exists at all.
+  // Anything that already has objects in Meta is read-only: the builder is
+  // not offered, because nothing edited here would reach Meta.
+  const publishView = await loadCampaignPublishView(business.id, params.campaignId);
+  if (publishView && publishView.publishState === "published") {
+    return (
+      <div className="analytics-page ads-page ads-create">
+        <div style={{ padding: "24px" }}>
+          <PublishedCampaignView businessId={business.id} view={publishView} adsHref={adsHrefEarly} />
+        </div>
+      </div>
+    );
+  }
+  if (publishView && publishView.publishState !== "draft") {
+    return (
+      <div className="analytics-page ads-page ads-create">
+        <div style={{ padding: "24px" }}>
+          <PublishIncompleteView
+            businessId={business.id}
+            view={publishView}
+            adsHref={adsHrefEarly}
+            publishDisabled={publishDisabled}
+          />
+        </div>
+      </div>
+    );
+  }
 
   const [products, paymentLinksResult, metaAccount] = await Promise.all([
     getBusinessProducts(business.id),
@@ -81,12 +114,6 @@ export default async function EditCampaignPage({
   return (
     <div className="analytics-page ads-page ads-create">
       <div style={{ padding: "24px" }}>
-        {/* Invisible. Exists only while the smoke-test flag is on. */}
-        <SmokePublishBridge
-          businessId={business.id}
-          campaignId={loaded.campaignId}
-          enabled={isPublishEnabled()}
-        />
         <CampaignWizard
           businessId={business.id}
           campaignId={loaded.campaignId}
@@ -95,6 +122,7 @@ export default async function EditCampaignPage({
           appOrigin={process.env.NEXT_PUBLIC_APP_URL || ""}
           defaultCurrency={loaded.draft.currency}
           metaAccount={metaAccount}
+          publishDisabled={publishDisabled}
           products={products.map((p) => ({
             id: p.id,
             name: p.name,

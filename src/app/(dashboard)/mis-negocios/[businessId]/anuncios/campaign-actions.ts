@@ -9,14 +9,19 @@ import {
   validateDraftForSave, draftFromRow, normalizeAudience, resolvedCampaignName,
 } from "./create/campaign-types";
 import { getMetaAccountBinding } from "./meta-account";
+import { getCampaignLink, getAdLinks } from "@/lib/meta/publish-links";
+import { derivePublishState, type CampaignPublishState } from "@/lib/meta/publish-state";
 
 export type SaveResult =
   | { ok: true; id: string; mode: "created" | "updated" }
   | { ok: false; error: string };
 
-/** Only drafts are editable — nothing is synced to an ad platform yet. */
+/**
+ * Only drafts that have nothing in Meta are editable. Once any object exists
+ * there, the draft is the record of what was sent, and edits are not synced.
+ */
 const NOT_EDITABLE =
-  "Solo se pueden editar campañas en borrador.";
+  "Solo se pueden editar campañas en borrador que todavía no se han enviado a Meta.";
 const NOT_FOUND = "Campaña no encontrada.";
 
 const OBJECTIVE_MIGRATION_HINT =
@@ -67,8 +72,18 @@ const DRAFT_COLUMNS =
   "creative, status";
 
 export type LoadResult =
-  | { ok: true; draft: CampaignDraft; campaignId: string; status: string }
+  | {
+      ok: true; draft: CampaignDraft; campaignId: string; status: string;
+      /** Where this campaign stands with Meta. Anything but "draft" is read-only. */
+      publishState: CampaignPublishState;
+    }
   | { ok: false; error: string };
+
+/** Publish state of one campaign, from both tables. Server-side only. */
+async function publishStateOf(campaignId: string, campaignStatus: string | null): Promise<CampaignPublishState> {
+  const [link, adLinks] = await Promise.all([getCampaignLink(campaignId), getAdLinks(campaignId)]);
+  return derivePublishState({ campaignStatus, link, adLinks });
+}
 
 /**
  * Load a campaign as a draft for editing.
@@ -116,6 +131,7 @@ export async function getCampaignDraft(params: {
       campaignId: row.id,
       status: row.status ?? "draft",
       draft: draftFromRow(row, { paymentLinks, metaAccount }),
+      publishState: await publishStateOf(row.id, row.status),
     };
   } catch {
     return { ok: false, error: NOT_FOUND };
@@ -130,8 +146,8 @@ export async function getCampaignDraft(params: {
  * never rewritten. `business_id` is taken from the verified server-side value,
  * never from the payload, so it cannot be moved between businesses.
  *
- * Publishing is still not implemented: Meta is not connected, so even the
- * "Publicar campaña" button lands here and the row stays `status: 'draft'`.
+ * Publishing is a separate action (anuncios/publish-actions.ts); this only
+ * ever writes drafts.
  */
 export async function saveCampaignDraft(params: {
   businessId: string;
@@ -214,6 +230,11 @@ export async function saveCampaignDraft(params: {
     };
 
     if (campaignId) {
+      // A draft whose objects already exist in Meta (fully or partly) is the
+      // record of what was sent: it is not rewritten from the builder.
+      if ((await publishStateOf(campaignId, "draft")) !== "draft") {
+        return { ok: false, error: NOT_EDITABLE };
+      }
       const { data, error } = await supabase
         .from("ad_campaigns")
         .update(payload)

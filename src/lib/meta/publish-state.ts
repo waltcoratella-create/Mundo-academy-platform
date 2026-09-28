@@ -82,3 +82,40 @@ export function resumeStepFrom(ids: {
   if (!ids.metaAdId) return "ad";
   return "done";
 }
+
+/**
+ * What the product shows for a campaign, derived from both tables.
+ *
+ *  · draft       — editable. Nothing exists in Meta (never published, or a
+ *                  failed attempt that created nothing).
+ *  · publishing  — a run holds the lock right now. Read-only.
+ *  · incomplete  — some objects exist in Meta but not all. Read-only, because
+ *                  those objects were built from the draft as it was; editing
+ *                  it and resuming would produce an ad from two versions.
+ *  · published   — all four exist. Read-only, separate view.
+ *
+ * `published` wins if either table says so: the atomic close writes both, but
+ * a campaign must never become editable again because one of them lags.
+ */
+export type CampaignPublishState = "draft" | "publishing" | "incomplete" | "published";
+
+export function derivePublishState(input: {
+  campaignStatus: string | null;
+  link: {
+    publishStatus: PublishStatus;
+    metaCampaignId: string | null;
+    metaAdSetId: string | null;
+  } | null;
+  adLinks: { metaCreativeId: string | null; metaAdId: string | null }[];
+}): CampaignPublishState {
+  const { campaignStatus, link, adLinks } = input;
+
+  if (campaignStatus === "published" || link?.publishStatus === "published") return "published";
+  if (link?.publishStatus === "running") return "publishing";
+
+  const anyMetaId = Boolean(link?.metaCampaignId || link?.metaAdSetId) ||
+    adLinks.some((a) => a.metaCreativeId || a.metaAdId);
+  if (anyMetaId) return "incomplete";
+
+  return "draft";
+}

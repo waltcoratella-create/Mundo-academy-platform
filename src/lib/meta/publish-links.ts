@@ -236,17 +236,41 @@ export async function saveMetaAdId(
       { onConflict: "ad_campaign_id,local_ad_id" }
     );
   if (error) fail(error);
-  return true;
+  // The id is recorded either way — the ad exists in Meta — but the caller
+  // only proceeds to close the publish if it still owns the lock.
+  return updateOwned(adCampaignId, token, { publish_step: "ad" });
 }
 
-export async function markPublished(adCampaignId: string, token: string): Promise<boolean> {
+/**
+ * Record the DSA declaration this publish is about to send.
+ *
+ * Written BEFORE the ad set POST, so even a lost response leaves an exact
+ * record of what was declared to Meta for this campaign.
+ */
+export async function saveDsaSnapshot(
+  adCampaignId: string,
+  token: string,
+  dsa: { beneficiary: string; payor: string } | null
+): Promise<boolean> {
   return updateOwned(adCampaignId, token, {
-    publish_status: "published",
-    publish_step: "done",
-    published_at: new Date().toISOString(),
-    publish_error: null,
-    attempt_token: null,
+    dsa_beneficiary_used: dsa?.beneficiary ?? null,
+    dsa_payor_used: dsa?.payor ?? null,
   });
+}
+
+/**
+ * Close the publish and flip the campaign to 'published' in ONE transaction
+ * (mark_campaign_published, scripts/meta-publish-lifecycle.sql), so the link
+ * row and ad_campaigns can never disagree. False when the lock was lost.
+ */
+export async function markPublished(adCampaignId: string, token: string): Promise<boolean> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.rpc("mark_campaign_published", {
+    p_ad_campaign_id: adCampaignId,
+    p_attempt_token: token,
+  });
+  if (error) fail(error);
+  return data === true;
 }
 
 /**

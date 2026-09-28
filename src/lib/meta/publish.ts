@@ -3,9 +3,11 @@ import { metaGraphRequest, MetaGraphError, type GraphPage } from "./graph";
 import { getMetaAccessToken, getMetaConnectionForBusiness } from "./connections";
 import { validateMetaPublishReadiness } from "./publish-readiness";
 import { mapDraftToMetaV1, campaignTag, adTag } from "./publish-mapper";
+import { getDsaSettings } from "./ad-settings";
+import type { DsaDeclaration } from "./dsa";
 import {
   acquirePublishLock, getAdLinks, getCampaignLink,
-  saveMetaCampaignId, saveMetaAdSetId, saveMetaCreativeId, saveMetaAdId,
+  saveMetaCampaignId, saveMetaAdSetId, saveMetaCreativeId, saveMetaAdId, saveDsaSnapshot,
   markPublished, markFailed, PublishLinkError,
   type CampaignLink, type PublishStep,
 } from "./publish-links";
@@ -25,38 +27,67 @@ import type { ReadinessResult } from "@/app/(dashboard)/mis-negocios/[businessId
  * irreversible in a way a paused orphan never is.
  */
 
-const FLAG = "META_PUBLISH_SMOKE_TEST_ENABLED";
-
-/**
- * DSA declarations for EU-targeted ad sets. Public in the EU ad library.
- *
- * Deliberately constants, not derived from page_name or any other display
- * field: the beneficiary is the organisation being promoted, and the payor is
- * the legal name of the Business Portfolio that owns the ad account —
- * "Grupo Mundo Ejecutivo", verified in Business Settings on 2026-09-03.
- * When these need to vary per business, they move to configuration; they must
- * never be inferred.
- */
-const DSA_BENEFICIARY = "Mundo Academy";
-const DSA_PAYOR = "Grupo Mundo Ejecutivo";
-
 export type PublishOutcome =
   | { ok: true; link: CampaignLink; resumed: boolean }
   | { ok: false; code: PublishFailureCode; message: string; reasons?: string[]; readiness?: ReadinessResult };
 
 export type PublishFailureCode =
-  | "DISABLED"
+  | "PUBLISH_DISABLED"
   | "NOT_READY"
   | "UNSUPPORTED"
   | "BUSY"
   | "ALREADY_PUBLISHED"
   | "NO_CONNECTION"
   | "META_ERROR"
+  | "LOCK_LOST"
   | "STATE_ERROR";
 
-export function isPublishEnabled(): boolean {
-  return process.env[FLAG] === "true";
+/**
+ * Emergency stop for the whole environment: META_PUBLISH_DISABLED=true.
+ *
+ * An extra layer, not a replacement: ownership, readiness and the lock still
+ * run for every publish when it is off. Absent or any other value = normal.
+ */
+export function isPublishKillSwitchOn(): boolean {
+  return process.env.META_PUBLISH_DISABLED === "true";
 }
+
+/** Meta refuses to create an Ad without a valid payment method (smoke run 4). */
+export const PAYMENT_METHOD_SUBCODE = 1359188;
+
+/**
+ * The stored, user-facing error: Meta's message (or our translation of a known
+ * subcode) plus everything Meta offers for support. The raw response never
+ * leaves the graph client, so no token can ride along.
+ */
+export function describeMetaError(e: MetaGraphError): string {
+  const base = e.subcode === PAYMENT_METHOD_SUBCODE
+    ? "La cuenta publicitaria no tiene un método de pago válido. Añádelo en Facturación y " +
+      "pagos de Meta y vuelve a intentarlo: la publicación continuará donde se quedó."
+    : e.message;
+  return [
+    base,
+    e.code !== null ? `code ${e.code}` : null,
+    e.subcode !== null ? `subcode ${e.subcode}` : null,
+    e.traceId ? `trace ${e.traceId}` : null,
+  ].filter(Boolean).join(" · ");
+}
+
+/**
+ * Last line before every creation POST. The mapper's types already make any
+ * other status impossible; this makes it impossible at runtime too.
+ */
+export function assertPaused(payload: { status?: unknown }): void {
+  if (payload.status !== "PAUSED") {
+    throw new Error("Refusing to create a Meta object that is not PAUSED.");
+  }
+}
+
+/** The lock was taken over while we waited on Meta: stop, write nothing more. */
+class LockLostError extends Error {}
+
+/** We could not tell whether the object already exists: never POST blind. */
+class ReconciliationError extends Error {}
 
 // ── Reconciliation ───────────────────────────────────────────────────────────
 
@@ -67,14 +98,18 @@ export function isPublishEnabled(): boolean {
  * was lost. The deterministic name tag is the only remaining thread back to it.
  * Names are NOT identity — a match is adopted into the link row immediately, and
  * from then on the stored id is what counts.
+ *
+ * A failed lookup THROWS. Reading it as "not found" would POST a second object —
+ * the exact duplicate this function exists to prevent.
  */
 async function findByNameTag(
   token: string,
   edge: string,
   tag: string
 ): Promise<string | null> {
+  let page: GraphPage<{ id?: string; name?: string }>;
   try {
-    const page = await metaGraphRequest<GraphPage<{ id?: string; name?: string }>>({
+    page = await metaGraphRequest<GraphPage<{ id?: string; name?: string }>>({
       path: edge,
       accessToken: token,
       params: {
@@ -83,13 +118,14 @@ async function findByNameTag(
         limit: 25,
       },
     });
-    const hit = (page.data ?? []).find((r) => r.id && r.name?.includes(tag));
-    return hit?.id ?? null;
-  } catch {
-    // A failed lookup must never be read as "it does not exist" — that would
-    // create a duplicate. The caller treats null as unknown and aborts.
-    return null;
+  } catch (e) {
+    throw new ReconciliationError(
+      "No se pudo comprobar en Meta si el objeto ya existe; no se crea otro para evitar duplicados." +
+      (e instanceof MetaGraphError && e.traceId ? ` · trace ${e.traceId}` : "")
+    );
   }
+  const hit = (page.data ?? []).find((r) => r.id && r.name?.includes(tag));
+  return hit?.id ?? null;
 }
 
 // ── Pipeline ─────────────────────────────────────────────────────────────────
@@ -101,10 +137,11 @@ export async function publishCampaignToMeta(params: {
 }): Promise<PublishOutcome> {
   const { businessId, adCampaignId, draft } = params;
 
-  if (!isPublishEnabled()) {
+  // ── Gate 0: emergency stop — before any read, before any lock ─────────────
+  if (isPublishKillSwitchOn()) {
     return {
-      ok: false, code: "DISABLED",
-      message: `La publicación está desactivada. Requiere ${FLAG}=true.`,
+      ok: false, code: "PUBLISH_DISABLED",
+      message: "La publicación en Meta está desactivada temporalmente.",
     };
   }
 
@@ -119,9 +156,18 @@ export async function publishCampaignToMeta(params: {
     };
   }
 
+  // Everything account-shaped comes from THIS business's connection row.
   const connection = await getMetaConnectionForBusiness(businessId);
   if (!connection?.adAccountId || !connection.pageId) {
     return { ok: false, code: "NO_CONNECTION", message: "Falta cuenta publicitaria o página." };
+  }
+
+  let dsa: DsaDeclaration | null;
+  try {
+    const settings = await getDsaSettings(businessId);
+    dsa = settings ? { beneficiary: settings.beneficiary, payor: settings.payor } : null;
+  } catch {
+    return { ok: false, code: "STATE_ERROR", message: "No se pudo leer la declaración de anunciante y pagador." };
   }
 
   // ── Gate 2: does v1 support this draft at all? ────────────────────────────
@@ -132,8 +178,7 @@ export async function publishCampaignToMeta(params: {
     currency: connection.adAccountCurrency ?? draft.currency,
     // The account's own zone, never the draft's copy of it.
     timezone: connection.adAccountTimezone ?? "",
-    dsaBeneficiary: DSA_BENEFICIARY,
-    dsaPayor: DSA_PAYOR,
+    dsa,
   });
   if (!mapped.supported) {
     return {
@@ -168,27 +213,36 @@ export async function publishCampaignToMeta(params: {
   const resumed = Boolean(link.metaCampaignId);
   const account = connection.adAccountId;
 
-  const adLinks = await getAdLinks(adCampaignId);
-  const existingAd = adLinks.find((l) => l.localAdId === mapped.localAdId);
-
   let step: PublishStep = "campaign";
-  const created = () => Boolean(link.metaCampaignId || link.metaAdSetId || existingAd?.metaCreativeId);
+  let anythingCreated = false;
+
+  /** Each persisted id must come back owned; otherwise stop right here. */
+  const owned = async (write: Promise<boolean>) => {
+    if (!(await write)) throw new LockLostError();
+  };
 
   try {
+    const adLinks = await getAdLinks(adCampaignId);
+    const existingAd = adLinks.find((l) => l.localAdId === mapped.localAdId);
+    anythingCreated = Boolean(
+      link.metaCampaignId || link.metaAdSetId || existingAd?.metaCreativeId || existingAd?.metaAdId
+    );
+
     // ── 1 · Campaign ───────────────────────────────────────────────────────
     step = "campaign";
     let campaignId = link.metaCampaignId;
     if (!campaignId) {
-      const tag = campaignTag(adCampaignId);
       // Adopt an orphan from a lost response before creating a second one.
-      campaignId = await findByNameTag(accessToken, `/${account}/campaigns`, tag);
+      campaignId = await findByNameTag(accessToken, `/${account}/campaigns`, campaignTag(adCampaignId));
       if (!campaignId) {
+        assertPaused(mapped.campaign);
         const res = await metaGraphRequest<{ id: string }>({
           path: `/${account}/campaigns`, accessToken, method: "POST", params: asParams(mapped.campaign),
         });
         campaignId = res.id;
       }
-      await saveMetaCampaignId(adCampaignId, lockToken, campaignId);
+      anythingCreated = true;
+      await owned(saveMetaCampaignId(adCampaignId, lockToken, campaignId));
       link = { ...link, metaCampaignId: campaignId };
     }
 
@@ -196,69 +250,82 @@ export async function publishCampaignToMeta(params: {
     step = "adset";
     let adSetId = link.metaAdSetId;
     if (!adSetId) {
-      const tag = campaignTag(adCampaignId);
-      adSetId = await findByNameTag(accessToken, `/${account}/adsets`, tag);
+      adSetId = await findByNameTag(accessToken, `/${account}/adsets`, campaignTag(adCampaignId));
       if (!adSetId) {
+        // The legal declaration is recorded before it is sent.
+        const declared = mapped.adSet.dsa_beneficiary && mapped.adSet.dsa_payor
+          ? { beneficiary: mapped.adSet.dsa_beneficiary, payor: mapped.adSet.dsa_payor }
+          : null;
+        await owned(saveDsaSnapshot(adCampaignId, lockToken, declared));
+        assertPaused(mapped.adSet);
         const res = await metaGraphRequest<{ id: string }>({
           path: `/${account}/adsets`, accessToken, method: "POST",
           params: asParams({ ...mapped.adSet, campaign_id: campaignId }),
         });
         adSetId = res.id;
       }
-      await saveMetaAdSetId(adCampaignId, lockToken, adSetId);
+      anythingCreated = true;
+      await owned(saveMetaAdSetId(adCampaignId, lockToken, adSetId));
       link = { ...link, metaAdSetId: adSetId };
     }
 
     // ── 3 · Creative ───────────────────────────────────────────────────────
     step = "creative";
+    const adTagFull = `${campaignTag(adCampaignId)}${adTag(mapped.localAdId)}`;
     let creativeId = existingAd?.metaCreativeId ?? null;
     if (!creativeId) {
-      const tag = `${campaignTag(adCampaignId)}${adTag(mapped.localAdId)}`;
-      creativeId = await findByNameTag(accessToken, `/${account}/adcreatives`, tag);
+      creativeId = await findByNameTag(accessToken, `/${account}/adcreatives`, adTagFull);
       if (!creativeId) {
         const res = await metaGraphRequest<{ id: string }>({
           path: `/${account}/adcreatives`, accessToken, method: "POST", params: asParams(mapped.creative),
         });
         creativeId = res.id;
       }
-      await saveMetaCreativeId(adCampaignId, lockToken, mapped.localAdId, creativeId);
+      anythingCreated = true;
+      await owned(saveMetaCreativeId(adCampaignId, lockToken, mapped.localAdId, creativeId));
     }
 
     // ── 4 · Ad ─────────────────────────────────────────────────────────────
     step = "ad";
     let adId = existingAd?.metaAdId ?? null;
     if (!adId) {
-      const tag = `${campaignTag(adCampaignId)}${adTag(mapped.localAdId)}`;
-      adId = await findByNameTag(accessToken, `/${account}/ads`, tag);
+      adId = await findByNameTag(accessToken, `/${account}/ads`, adTagFull);
       if (!adId) {
+        assertPaused(mapped.ad);
         const res = await metaGraphRequest<{ id: string }>({
           path: `/${account}/ads`, accessToken, method: "POST",
           params: asParams({ ...mapped.ad, adset_id: adSetId, creative: { creative_id: creativeId } }),
         });
         adId = res.id;
       }
-      await saveMetaAdId(adCampaignId, lockToken, mapped.localAdId, adId);
+      anythingCreated = true;
+      await owned(saveMetaAdId(adCampaignId, lockToken, mapped.localAdId, adId));
     }
 
-    await markPublished(adCampaignId, lockToken);
+    await owned(markPublished(adCampaignId, lockToken));
     const final = await getCampaignLink(adCampaignId);
     return { ok: true, link: final ?? link, resumed };
   } catch (e) {
-    // Everything Meta gives us for support goes into the stored error —
-    // code, subcode and trace id — and nothing else does: the raw response
-    // never leaves the graph client, so no token can ride along.
-    const message = e instanceof MetaGraphError
-      ? [
-          e.message,
-          e.code !== null ? `code ${e.code}` : null,
-          e.subcode !== null ? `subcode ${e.subcode}` : null,
-          e.traceId ? `trace ${e.traceId}` : null,
-        ]
-          .filter(Boolean)
-          .join(" · ")
+    if (e instanceof LockLostError) {
+      // Another run owns the row now; any write from us would clobber it.
+      return {
+        ok: false, code: "LOCK_LOST",
+        message: "Otra ejecución tomó el control de esta publicación. Recarga para ver su estado.",
+      };
+    }
+
+    const message =
+      e instanceof MetaGraphError ? describeMetaError(e)
+      : e instanceof ReconciliationError ? e.message
+      : e instanceof PublishLinkError ? e.message
       : "Fallo inesperado durante la publicación.";
-    await markFailed(adCampaignId, lockToken, step, message, created());
-    return { ok: false, code: "META_ERROR", message };
+
+    try {
+      await markFailed(adCampaignId, lockToken, step, message, anythingCreated);
+    } catch {
+      // The stale-lock window releases it; the ids already saved are kept.
+    }
+    return { ok: false, code: e instanceof MetaGraphError ? "META_ERROR" : "STATE_ERROR", message };
   }
 }
 

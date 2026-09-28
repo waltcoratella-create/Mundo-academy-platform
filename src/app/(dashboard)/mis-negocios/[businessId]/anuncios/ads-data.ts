@@ -10,7 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { CampaignObjective } from "./create/campaign-types";
 
 export type AdPlatform = "meta" | "google" | "tiktok";
-export type AdDelivery = "draft" | "active" | "paused" | "in_review" | "archived";
+export type AdDelivery = "draft" | "published" | "active" | "paused" | "in_review" | "archived";
 
 export interface SpendPoint {
   /** epoch ms for the bucket (UTC) */
@@ -103,7 +103,7 @@ interface CampaignRow {
   platform: string | null;
 }
 
-const DELIVERY_VALUES: AdDelivery[] = ["draft", "active", "paused", "in_review", "archived"];
+const DELIVERY_VALUES: AdDelivery[] = ["draft", "published", "active", "paused", "in_review", "archived"];
 
 async function getCampaigns(businessId: string): Promise<AdCampaign[]> {
   try {

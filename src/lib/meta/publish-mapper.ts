@@ -1,6 +1,7 @@
 import type { CampaignDraft } from "@/app/(dashboard)/mis-negocios/[businessId]/anuncios/create/campaign-types";
 import { toMinorUnits } from "./money";
 import { zonedLocalToOffsetIso, isValidTimeZone } from "@/lib/timezone";
+import { dsaRequiredFor, type DsaDeclaration } from "./dsa";
 
 /**
  * Draft → Meta payloads, version 1.
@@ -68,13 +69,11 @@ export interface PublishContext {
   /** The AD ACCOUNT's timezone, read server-side — not whatever the draft claims. */
   timezone: string;
   /**
-   * DSA transparency (EU): who is promoted and who pays. Both appear publicly
-   * in the EU ad library, so they are legal declarations, not labels — the
-   * orchestrator supplies them from configuration, never inferred from a page
-   * name, and the mapper refuses to build an ad set without them.
+   * The business's confirmed DSA declaration, or null when it has none.
+   * Required — and only then sent — when the targeted country demands it
+   * (see dsa.ts). Never inferred from a page or business name.
    */
-  dsaBeneficiary: string;
-  dsaPayor: string;
+  dsa: DsaDeclaration | null;
 }
 
 export interface CampaignPayload {
@@ -102,9 +101,13 @@ export interface AdSetPayload {
   daily_budget: number;
   start_time: string;
   targeting: Record<string, unknown>;
-  /** Required for EU-targeted ad sets (code 100 / subcode 3858081 without it). */
-  dsa_beneficiary: string;
-  dsa_payor: string;
+  /**
+   * Present exactly when the targeted country requires a DSA declaration
+   * (code 100 / subcode 3858081 without it). Absent otherwise: we do not send
+   * legal declarations for countries where they are not confirmed as required.
+   */
+  dsa_beneficiary?: string;
+  dsa_payor?: string;
 }
 
 export interface CreativePayload {
@@ -256,8 +259,11 @@ export function mapDraftToMetaV1(draft: CampaignDraft, ctx: PublishContext): Map
   // ── Context ────────────────────────────────────────────────────────────────
   if (!ctx.pageId) reasons.push("No hay página de Facebook seleccionada.");
   if (!ctx.adAccountId) reasons.push("No hay cuenta publicitaria seleccionada.");
-  if (!ctx.dsaBeneficiary.trim()) reasons.push("Falta el beneficiario DSA del anuncio.");
-  if (!ctx.dsaPayor.trim()) reasons.push("Falta el pagador DSA del anuncio.");
+  const dsaCountry = countries.length === 1 ? (countries[0].countryCode as string) : null;
+  const dsaNeeded = dsaRequiredFor(dsaCountry);
+  if (dsaNeeded && !ctx.dsa) {
+    reasons.push("Falta la declaración de anunciante y pagador exigida para anuncios en la UE.");
+  }
 
   let dailyBudget = 0;
   try {
@@ -301,8 +307,9 @@ export function mapDraftToMetaV1(draft: CampaignDraft, ctx: PublishContext): Map
         geo_locations: { countries: [countryCode] },
         targeting_automation: { advantage_audience: 1 },
       },
-      dsa_beneficiary: ctx.dsaBeneficiary.trim(),
-      dsa_payor: ctx.dsaPayor.trim(),
+      ...(dsaNeeded && ctx.dsa
+        ? { dsa_beneficiary: ctx.dsa.beneficiary.trim(), dsa_payor: ctx.dsa.payor.trim() }
+        : {}),
     },
     creative: {
       name: metaCreativeName(ctx.adCampaignId, ad.id),

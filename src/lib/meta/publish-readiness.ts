@@ -2,6 +2,8 @@ import "server-only";
 import { metaGraphRequest, MetaGraphError } from "./graph";
 import { getMetaAccessToken, getMetaConnectionForBusiness } from "./connections";
 import { listMetaCustomAudiences } from "./custom-audiences";
+import { getDsaSettings } from "./ad-settings";
+import type { DsaDeclaration } from "./dsa";
 import type { CampaignDraft } from "@/app/(dashboard)/mis-negocios/[businessId]/anuncios/create/campaign-types";
 import type {
   ReadinessIssue, ReadinessResult,
@@ -34,6 +36,16 @@ interface RawAdAccount {
 /** 1 = ACTIVE. Anything else cannot run ads. */
 const ACCOUNT_ACTIVE = 1;
 
+/**
+ * account_status names exactly as Meta's Ad Account reference documents them.
+ * Shown so the person can recognise the state in Ads Manager; an unlisted
+ * value is shown as its number, never guessed.
+ */
+const ACCOUNT_STATUS_NAME: Record<number, string> = {
+  1: "ACTIVE", 2: "DISABLED", 3: "UNSETTLED", 7: "PENDING_RISK_REVIEW",
+  8: "PENDING_SETTLEMENT", 9: "IN_GRACE_PERIOD", 100: "PENDING_CLOSURE", 101: "CLOSED",
+};
+
 async function checkAdAccount(
   token: string,
   adAccountId: string,
@@ -51,7 +63,8 @@ async function checkAdAccount(
     if (typeof account.account_status === "number" && account.account_status !== ACCOUNT_ACTIVE) {
       out.push({
         code: "META_AD_ACCOUNT_INACTIVE", section: "meta", severity: "error",
-        message: "La cuenta publicitaria no está activa en Meta.",
+        message: `La cuenta publicitaria no está activa en Meta (estado ${
+          ACCOUNT_STATUS_NAME[account.account_status] ?? account.account_status}).`,
         remediation: "Revísala en el Administrador de anuncios antes de publicar.",
       });
     }
@@ -228,7 +241,23 @@ export async function validateMetaPublishReadiness(params: {
   const { businessId, draft } = params;
 
   const connection = await getMetaConnectionForBusiness(businessId);
-  const issues = pureReadinessIssues(draft, connection);
+
+  // DSA lives in our database, not Meta, so it is checked even when the Meta
+  // calls below cannot run. A read failure is reported, never treated as "no
+  // declaration needed".
+  let dsa: DsaDeclaration | null | undefined;
+  const dsaIssues: ReadinessIssue[] = [];
+  try {
+    dsa = await getDsaSettings(businessId);
+  } catch {
+    dsa = undefined;
+    dsaIssues.push({
+      code: "DSA_CHECK_FAILED", section: "campaign", severity: "warning",
+      message: "No se pudo comprobar la declaración de anunciante y pagador.",
+    });
+  }
+
+  const issues = [...pureReadinessIssues(draft, connection, { dsa }), ...dsaIssues];
 
   // The Meta checks only make sense with a usable credential and an account to
   // ask about. When they cannot run, the pure result already says why.

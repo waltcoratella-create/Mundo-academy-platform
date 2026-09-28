@@ -1,3 +1,5 @@
+import { zonedLocalToUtc } from "@/lib/timezone";
+import { dsaRequiredFor, type DsaDeclaration } from "@/lib/meta/dsa";
 import type { MetaConnection } from "@/lib/meta/connection-types";
 import { connectionReadiness, isTokenExpired } from "@/lib/meta/connection-types";
 import type { CampaignDraft, CampaignGeoLocation } from "./campaign-types";
@@ -263,18 +265,40 @@ function advisoryIssues(draft: CampaignDraft): ReadinessIssue[] {
       { remediation: "Desactívala si quieres que se apliquen." }));
   }
 
-  // The wall clock is stored in the campaign's zone; comparing it to now is
-  // approximate, which is exactly why this is a warning.
-  if (draft.startsAt) {
-    const at = Date.parse(draft.startsAt);
-    if (Number.isFinite(at) && at < Date.now()) {
-      out.push(warn("SCHEDULE_START_IN_PAST", "campaign",
-        "La fecha de inicio ya pasó.",
-        { field: "startsAt", remediation: "Meta empezaría a entregar de inmediato." }));
-    }
-  }
-
   return out;
+}
+
+/**
+ * A start in the past blocks publishing.
+ *
+ * Meta would take it and start delivering the moment the campaign is turned
+ * on, which is not what the person scheduled. We never move the date for
+ * them: they pick a new one. Resolved in the campaign's own zone, so the
+ * comparison is exact rather than "roughly now on the server".
+ */
+function scheduleIssues(draft: CampaignDraft, now: Date): ReadinessIssue[] {
+  if (!draft.startsAt) return [];
+  const utc = zonedLocalToUtc(draft.startsAt, draft.timezone);
+  if (!utc) return [];
+  if (Date.parse(utc) > now.getTime()) return [];
+  return [err("SCHEDULE_START_IN_PAST", "campaign",
+    "La fecha de inicio ya pasó.",
+    { field: "startsAt", remediation: "Elige una fecha y hora de inicio futuras antes de publicar." })];
+}
+
+/**
+ * DSA declaration, when any targeted country requires one.
+ *
+ * `dsa === undefined` means "not checked here" (the pure layer on its own);
+ * `null` means checked and absent.
+ */
+function dsaIssues(draft: CampaignDraft, dsa: DsaDeclaration | null | undefined): ReadinessIssue[] {
+  if (dsa !== null) return [];
+  const needs = draft.audience.includedLocations.some((l) => dsaRequiredFor(l.countryCode));
+  if (!needs) return [];
+  return [err("DSA_MISSING", "campaign",
+    "Falta la declaración de anunciante y pagador exigida para anuncios en la UE.",
+    { remediation: "Complétala en Configuración → Transparencia de anuncios en la UE." })];
 }
 
 /** Destination URL of the campaign itself, when the draft uses one. */
@@ -293,7 +317,8 @@ function destinationIssues(draft: CampaignDraft): ReadinessIssue[] {
 /** Everything decidable without Meta. */
 export function pureReadinessIssues(
   draft: CampaignDraft,
-  connection: MetaConnection | null
+  connection: MetaConnection | null,
+  opts: { now?: Date; dsa?: DsaDeclaration | null } = {}
 ): ReadinessIssue[] {
   return [
     ...connectionIssues(connection),
@@ -304,6 +329,8 @@ export function pureReadinessIssues(
     ...geoIssues(draft),
     ...unresolvedIssues(draft),
     ...creativeIssues(draft),
+    ...scheduleIssues(draft, opts.now ?? new Date()),
+    ...dsaIssues(draft, opts.dsa),
     ...advisoryIssues(draft),
   ];
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { X, AlertCircle, CheckCircle2, Loader2, TriangleAlert } from "lucide-react";
 import type {
   CampaignDraft, CampaignGeoLocation, PaymentLinkOption, ProductOption,
@@ -12,6 +13,7 @@ import {
 import type { ReadinessIssue, ReadinessResult } from "../readiness-types";
 import { READINESS_SECTION_LABEL, groupBySection } from "../readiness-types";
 import { checkPublishReadiness } from "../readiness-actions";
+import { PublishConfirmModal } from "./PublishConfirmModal";
 
 /**
  * Review — the old fourth step, now a side drawer opened from Creatives.
@@ -186,8 +188,8 @@ function PublishNote({
   const message = disconnected
     ? "Conecta tu cuenta publicitaria de Meta para publicar. Por ahora la campaña se guarda como borrador."
     : result.ready
-      ? "La publicación automática todavía no está disponible. Por ahora la campaña se guarda como borrador."
-      : "Resuelve los puntos anteriores para poder publicar. Por ahora la campaña se guarda como borrador.";
+      ? "Al crearla en Meta, la campaña quedará en pausa: no empezará a gastar."
+      : "Resuelve los puntos anteriores para poder crear la campaña en Meta.";
 
   return (
     <div className="adsc-alert" data-tone="amber">
@@ -233,7 +235,16 @@ export function ReviewDrawer({
   onClose,
   onEditStep,
   onSaveDraft,
+  campaignId,
+  dirty = false,
+  publishDisabled = false,
 }: {
+  /** Saved campaign id; publishing needs a stored draft. */
+  campaignId?: string;
+  /** Unsaved edits in the builder: publishing uses the SAVED draft only. */
+  dirty?: boolean;
+  /** Server-side kill switch (META_PUBLISH_DISABLED). */
+  publishDisabled?: boolean;
   open: boolean;
   /** Needed by the readiness action, which re-checks ownership server-side. */
   businessId: string;
@@ -247,6 +258,8 @@ export function ReviewDrawer({
   onSaveDraft: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [readiness, setReadiness] = useState<ReadinessResult | null>(null);
   const [readinessLoading, setReadinessLoading] = useState(false);
   const [readinessError, setReadinessError] = useState<string | null>(null);
@@ -295,6 +308,16 @@ export function ReviewDrawer({
   }, [open, businessId]);
 
   if (!open) return null;
+
+  // The server re-checks every one of these; this only decides whether the
+  // button is worth offering, and says why when it is not.
+  const readyToPublish = Boolean(readiness?.ready && readiness.checkedMeta);
+  const canPublish = Boolean(campaignId) && !dirty && !publishDisabled && readyToPublish;
+  const publishHint =
+    publishDisabled ? "La publicación en Meta está desactivada temporalmente."
+    : !campaignId ? "Guarda el borrador para poder crear la campaña en Meta."
+    : dirty ? "Guarda los cambios antes de crear la campaña en Meta."
+    : null;
 
   const product = products.find((p) => p.id === draft.productId);
   const link = paymentLinks.find((l) => l.id === draft.paymentLinkId);
@@ -425,14 +448,35 @@ export function ReviewDrawer({
           )}
         </div>
 
+        {publishHint && (
+          <p className="cr-ready__note" style={{ padding: "0 20px" }}>{publishHint}</p>
+        )}
+
         <footer className="cr-drawer__foot">
           <button type="button" className="w-btn w-btn--ghost" onClick={onClose} disabled={saving}>
             Seguir editando
           </button>
-          <button type="button" className="w-btn w-btn--primary" onClick={onSaveDraft} disabled={saving}>
-            {saving ? "Guardando…" : "Guardar campaña"}
+          <button type="button" className="w-btn w-btn--ghost" onClick={onSaveDraft} disabled={saving}>
+            {saving ? "Guardando…" : "Guardar borrador"}
+          </button>
+          <button
+            type="button"
+            className="w-btn w-btn--primary"
+            onClick={() => setConfirmOpen(true)}
+            disabled={!canPublish || saving}
+          >
+            Crear campaña en Meta
           </button>
         </footer>
+
+        {confirmOpen && campaignId && (
+          <PublishConfirmModal
+            businessId={businessId}
+            campaignId={campaignId}
+            onClose={() => setConfirmOpen(false)}
+            onPublished={() => { setConfirmOpen(false); onClose(); router.refresh(); }}
+          />
+        )}
       </aside>
     </>
   );

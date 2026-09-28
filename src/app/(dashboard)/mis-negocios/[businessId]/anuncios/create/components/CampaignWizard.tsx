@@ -22,8 +22,6 @@ import { ReviewDrawer } from "./ReviewDrawer";
 const PHASE_FIRST_STEP: Record<string, number> = { campaign: 1, build: 2, creatives: 3 };
 
 /** Message shown once the draft is stored — publishing needs Meta + billing. */
-const PUBLISH_BLOCKED_MESSAGE =
-  "Conecta tu cuenta publicitaria y configura la facturación para publicar esta campaña.";
 
 export interface CampaignWizardProps {
   businessId: string;
@@ -40,6 +38,8 @@ export interface CampaignWizardProps {
   defaultCurrency: string;
   /** Connected Meta ad account, or NO_META_ACCOUNT when there is none. */
   metaAccount: MetaAccountBinding;
+  /** Server-side emergency stop for publishing (META_PUBLISH_DISABLED). */
+  publishDisabled?: boolean;
 }
 
 export function CampaignWizard({
@@ -53,6 +53,7 @@ export function CampaignWizard({
   paymentLinksAvailable,
   defaultCurrency,
   metaAccount,
+  publishDisabled = false,
 }: CampaignWizardProps) {
   const router = useRouter();
   const isEditing = Boolean(campaignId);
@@ -150,7 +151,12 @@ export function CampaignWizard({
     if (!ok) e.preventDefault();
   }
 
-  async function handleSubmit(publishIntent: boolean) {
+  /**
+   * Save the draft. `stayInReview` keeps the review drawer open on an existing
+   * campaign, so saving is the step right before "Crear campaña en Meta"
+   * rather than a detour to a confirmation screen.
+   */
+  async function handleSubmit(stayInReview: boolean) {
     // Saving only asks whether the row can be stored. An unfinished draft —
     // no creatives, no destination, unresolved targeting — is expected and
     // must go through; what is still missing is reported afterwards instead.
@@ -168,15 +174,18 @@ export function CampaignWizard({
     setSaving(true);
     setSaveError(null);
     try {
-      // Both buttons store a draft — Meta is not connected, so nothing can go
-      // live. `publishIntent` only changes the confirmation copy.
+      // Saving never publishes: creating in Meta is its own, confirmed action.
       const res = await saveCampaignDraft({ businessId, campaignId, draft });
       if (!res.ok) {
         setSaveError(res.error);
         return;
       }
       setDirty(false);
-      setDone({ published: publishIntent, localGaps });
+      if (stayInReview && isEditing) {
+        router.refresh();
+        return;
+      }
+      setDone({ published: false, localGaps });
       // Refresh so the new draft is in the dashboard table on return.
       router.refresh();
     } catch {
@@ -208,9 +217,9 @@ export function CampaignWizard({
               {isEditing ? "Cambios guardados" : "Campaña guardada como borrador"}
             </h2>
             <p className="adsc-done__text">
-              {done.published
-                ? PUBLISH_BLOCKED_MESSAGE
-                : "Puedes seguir editándola cuando quieras desde el panel de Anuncios."}
+              {isEditing
+                ? "Para crearla en Meta, abre la revisión y pulsa «Crear campaña en Meta»."
+                : "Puedes seguir editándola y crearla en Meta desde el panel de Anuncios."}
             </p>
             {/* A local count of the draft's own gaps. It deliberately says
                 nothing about the Meta connection, interest validity or
@@ -372,6 +381,9 @@ export function CampaignWizard({
         onClose={() => setReviewOpen(false)}
         onEditStep={(n) => { setReviewOpen(false); goTo(n); }}
         onSaveDraft={() => void handleSubmit(true)}
+        campaignId={campaignId}
+        dirty={dirty}
+        publishDisabled={publishDisabled}
       />
     </>
   );

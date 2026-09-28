@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { Eye, Pencil } from "lucide-react";
 import type { AdCampaign, AdDelivery, AdPlatform } from "../ads-data";
 
 const DELIVERY_LABEL: Record<AdDelivery, string> = {
   draft: "Borrador",
+  // Local lifecycle: the objects exist in Meta, created paused. Live delivery
+  // is read on the campaign's own page, never assumed here.
+  published: "Creada en Meta (en pausa)",
   active: "Activa",
   paused: "Pausada",
   in_review: "En revisión",
@@ -99,15 +102,26 @@ export function CampaignTable({ campaigns, query, emptyLabel, campaignHrefBase }
               <td style={{ color: "var(--gray-9, #8D8D8D)" }}>{c.results}</td>
               <td>{c.costPerResult ?? "—"}</td>
               <td style={{ textAlign: "right" }}>
-                <Switch
-                  on={!!enabled[c.id]}
-                  onToggle={() => setEnabled((s) => ({ ...s, [c.id]: !s[c.id] }))}
-                />
+                {/* No activation from here: a switch on a published row would
+                    read as "turn it on in Meta", which nothing here does. */}
+                {c.delivery === "published" ? (
+                  <span style={{ color: "var(--gray-9, #8D8D8D)" }}>—</span>
+                ) : (
+                  <Switch
+                    on={!!enabled[c.id]}
+                    onToggle={() => setEnabled((s) => ({ ...s, [c.id]: !s[c.id] }))}
+                  />
+                )}
               </td>
               <td style={{ textAlign: "right" }}>
                 {/* Only drafts are editable — nothing is synced to an ad
                     platform yet, so a live campaign has no safe edit path. */}
-                {c.delivery === "draft" && campaignHrefBase ? (
+                {c.delivery === "published" && campaignHrefBase ? (
+                  <Link href={`${campaignHrefBase}/${c.id}/edit`} className="ads-rowaction">
+                    <Eye size={14} strokeWidth={2} aria-hidden="true" />
+                    Ver
+                  </Link>
+                ) : c.delivery === "draft" && campaignHrefBase ? (
                   <Link href={`${campaignHrefBase}/${c.id}/edit`} className="ads-rowaction">
                     <Pencil size={14} strokeWidth={2} aria-hidden="true" />
                     Editar
